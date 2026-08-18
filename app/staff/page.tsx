@@ -1,10 +1,19 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useMemo, FormEvent, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, Search, X } from "lucide-react";
+import { AlertTriangle, Search, X, UserPlus, KeyRound, Eye, EyeOff } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import Pagination from "@/app/components/Pagination";
+import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import { useAuth } from "@/app/components/AuthProvider";
+import WarningPopup from "@/app/components/WarningPopup";
+
+type WarehouseOption = {
+  _id: string;
+  name: string;
+  code: string;
+};
 
 type StaffMember = {
   id: string;
@@ -12,6 +21,7 @@ type StaffMember = {
   email: string;
   role: "ADMIN" | "STAFF";
   warehouse: { id: string; name: string; code: string; address?: string } | null;
+  status?: "ACTIVE" | "INACTIVE";
 };
 
 type StaffInventoryItem = {
@@ -44,6 +54,7 @@ function StaffContent() {
   const initialStatusParam = searchParams.get("status") || "ALL";
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [warehouses, setWarehouses] = useState<WarehouseOption[]>([]);
   const [staffStock, setStaffStock] = useState<StaffInventoryItem[]>([]);
   const [summary, setSummary] = useState<WarehouseSummary | null>(null);
   const [warehouseInfo, setWarehouseInfo] = useState<{ name: string; code: string; address?: string } | null>(null);
@@ -52,10 +63,41 @@ function StaffContent() {
     initialStatusParam === "attention" ? "ATTENTION" : initialStatusParam
   );
   const [searchQuery, setSearchQuery] = useState("");
+  const [staffSearchQuery, setStaffSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
+
+  // Add staff form state
+  const [addName, setAddName] = useState("");
+  const [addEmail, setAddEmail] = useState("");
+  const [addPassword, setAddPassword] = useState("");
+  const [addRole, setAddRole] = useState<"STAFF" | "ADMIN">("STAFF");
+  const [addWarehouseId, setAddWarehouseId] = useState("");
+  const [addLoading, setAddLoading] = useState(false);
+  const [showAddPassword, setShowAddPassword] = useState(false);
+
+  // Edit staff modal state
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editRole, setEditRole] = useState<"STAFF" | "ADMIN">("STAFF");
+  const [editWarehouseId, setEditWarehouseId] = useState("");
+  const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
+  const [editPassword, setEditPassword] = useState("");
+  const [showEditPassword, setShowEditPassword] = useState(false);
+  const [editLoading, setEditLoading] = useState(false);
+
+  // Pagination states
+  const [staffPage, setStaffPage] = useState(1);
+  const [staffPageSize, setStaffPageSize] = useState(10);
+
+  const [stockPage, setStockPage] = useState(1);
+  const [stockPageSize, setStockPageSize] = useState(10);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
 
   useEffect(() => {
     const param = searchParams.get("status");
@@ -66,30 +108,173 @@ function StaffContent() {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    async function fetchStaffView() {
-      try {
-        setLoading(true);
-        const response = await fetch("/api/staff", { cache: "no-store" });
-        const result = await response.json();
-        if (!result.success) return;
+  async function fetchStaffView() {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/staff", { cache: "no-store" });
+      const result = await response.json();
+      if (!result.success) return;
 
-        if (result.role === "ADMIN") {
-          setStaff(result.data || []);
-          return;
-        }
-
-        setStaffStock(result.data.items || []);
-        setSummary(result.data.summary || null);
-        setWarehouseInfo(result.data.warehouse || null);
-      } catch (error) {
-        console.error("Failed to fetch staff page:", error);
-      } finally {
-        setLoading(false);
+      if (result.role === "ADMIN") {
+        setStaff(result.data || []);
+        return;
       }
+
+      setStaffStock(result.data.items || []);
+      setSummary(result.data.summary || null);
+      setWarehouseInfo(result.data.warehouse || null);
+    } catch (error) {
+      console.error("Failed to fetch staff page:", error);
+    } finally {
+      setLoading(false);
     }
+  }
+
+  async function fetchWarehouses() {
+    try {
+      const response = await fetch("/api/warehouses");
+      const result = await response.json();
+      if (result.success) {
+        setWarehouses(result.data || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch warehouses:", error);
+    }
+  }
+
+  useEffect(() => {
     void fetchStaffView();
+    void fetchWarehouses();
   }, []);
+
+  const warehouseOptions: SelectOption[] = useMemo(() => {
+    return warehouses.map((w) => ({
+      value: w._id,
+      label: w.name,
+      subLabel: w.code,
+    }));
+  }, [warehouses]);
+
+  async function handleAddStaffSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!addName.trim() || !addEmail.trim() || !addPassword.trim()) {
+      setWarningMessage("Name, email, and password are required");
+      setWarningOpen(true);
+      return;
+    }
+
+    if (addRole === "STAFF" && !addWarehouseId) {
+      setWarningMessage("Please assign a warehouse for this staff member");
+      setWarningOpen(true);
+      return;
+    }
+
+    setAddLoading(true);
+
+    try {
+      const response = await fetch("/api/staff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: addName.trim(),
+          email: addEmail.trim(),
+          password: addPassword.trim(),
+          role: addRole,
+          warehouseId: addWarehouseId,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        setWarningMessage(result.message || "Failed to create staff member");
+        setWarningOpen(true);
+        return;
+      }
+
+      // Reset form
+      setAddName("");
+      setAddEmail("");
+      setAddPassword("");
+      setAddRole("STAFF");
+      setAddWarehouseId("");
+      await fetchStaffView();
+    } catch (error) {
+      console.error("Failed to create staff:", error);
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
+    } finally {
+      setAddLoading(false);
+    }
+  }
+
+  function openEditModal(member: StaffMember) {
+    setEditId(member.id);
+    setEditName(member.name);
+    setEditEmail(member.email);
+    setEditRole(member.role);
+    setEditWarehouseId(member.warehouse?.id || "");
+    setEditStatus(member.status || "ACTIVE");
+    setEditPassword("");
+    setShowEditPassword(false);
+  }
+
+  async function handleEditStaffSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editId) return;
+
+    if (!editName.trim() || !editEmail.trim()) {
+      setWarningMessage("Name and email are required");
+      setWarningOpen(true);
+      return;
+    }
+
+    if (editRole === "STAFF" && !editWarehouseId) {
+      setWarningMessage("Please assign a warehouse for staff members");
+      setWarningOpen(true);
+      return;
+    }
+
+    if (editPassword && editPassword.length < 6) {
+      setWarningMessage("New password must be at least 6 characters");
+      setWarningOpen(true);
+      return;
+    }
+
+    setEditLoading(true);
+
+    try {
+      const response = await fetch(`/api/staff/${editId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName.trim(),
+          email: editEmail.trim(),
+          role: editRole,
+          warehouseId: editWarehouseId,
+          status: editStatus,
+          password: editPassword.trim() || undefined,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!result.success) {
+        setWarningMessage(result.message || "Failed to update staff member");
+        setWarningOpen(true);
+        return;
+      }
+
+      setEditId(null);
+      await fetchStaffView();
+    } catch (error) {
+      console.error("Failed to edit staff:", error);
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
+    } finally {
+      setEditLoading(false);
+    }
+  }
 
   async function handleDelete() {
     if (!deleteId) return;
@@ -98,14 +283,16 @@ function StaffContent() {
       const response = await fetch(`/api/staff/${deleteId}`, { method: "DELETE" });
       const result = await response.json();
       if (!result.success) {
-        alert(result.message);
+        setWarningMessage(result.message || "Failed to delete staff");
+        setWarningOpen(true);
         return;
       }
       setDeleteId(null);
       setStaff(staff.filter((member) => member.id !== deleteId));
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setDeleteLoading(false);
     }
@@ -122,29 +309,63 @@ function StaffContent() {
     }
   }
 
-  // Filtered items for staff
-  const filteredStaffStock = staffStock.filter((item) => {
-    let matchesStatus = true;
-    if (statusFilter === "AVAILABLE") matchesStatus = item.status === "AVAILABLE";
-    else if (statusFilter === "LOW_STOCK") matchesStatus = item.status === "LOW_STOCK";
-    else if (statusFilter === "OUT_OF_STOCK") matchesStatus = item.status === "OUT_OF_STOCK";
-    else if (statusFilter === "ATTENTION")
-      matchesStatus = item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK";
+  // Filtered staff members for admin
+  const filteredStaff = useMemo(() => {
+    if (!staffSearchQuery.trim()) return staff;
+    const q = staffSearchQuery.toLowerCase().trim();
+    return staff.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q) ||
+        m.role.toLowerCase().includes(q) ||
+        (m.warehouse?.name && m.warehouse.name.toLowerCase().includes(q)) ||
+        (m.warehouse?.code && m.warehouse.code.toLowerCase().includes(q))
+    );
+  }, [staff, staffSearchQuery]);
 
-    let matchesSearch = true;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      matchesSearch =
-        item.productName.toLowerCase().includes(q) ||
-        item.sku.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q) ||
-        item.sellerName.toLowerCase().includes(q) ||
-        item.rackName.toLowerCase().includes(q) ||
-        item.rackCode.toLowerCase().includes(q);
-    }
+  useEffect(() => {
+    setStaffPage(1);
+  }, [staffSearchQuery, staffPageSize]);
 
-    return matchesStatus && matchesSearch;
-  });
+  const paginatedStaff = useMemo(() => {
+    const start = (staffPage - 1) * staffPageSize;
+    return filteredStaff.slice(start, start + staffPageSize);
+  }, [filteredStaff, staffPage, staffPageSize]);
+
+  // Filtered items for staff warehouse
+  const filteredStaffStock = useMemo(() => {
+    return staffStock.filter((item) => {
+      let matchesStatus = true;
+      if (statusFilter === "AVAILABLE") matchesStatus = item.status === "AVAILABLE";
+      else if (statusFilter === "LOW_STOCK") matchesStatus = item.status === "LOW_STOCK";
+      else if (statusFilter === "OUT_OF_STOCK") matchesStatus = item.status === "OUT_OF_STOCK";
+      else if (statusFilter === "ATTENTION")
+        matchesStatus = item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK";
+
+      let matchesSearch = true;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        matchesSearch =
+          item.productName.toLowerCase().includes(q) ||
+          item.sku.toLowerCase().includes(q) ||
+          item.category.toLowerCase().includes(q) ||
+          item.sellerName.toLowerCase().includes(q) ||
+          item.rackName.toLowerCase().includes(q) ||
+          item.rackCode.toLowerCase().includes(q);
+      }
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [staffStock, statusFilter, searchQuery]);
+
+  useEffect(() => {
+    setStockPage(1);
+  }, [statusFilter, searchQuery, stockPageSize]);
+
+  const paginatedStaffStock = useMemo(() => {
+    const start = (stockPage - 1) * stockPageSize;
+    return filteredStaffStock.slice(start, start + stockPageSize);
+  }, [filteredStaffStock, stockPage, stockPageSize]);
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
@@ -153,113 +374,375 @@ function StaffContent() {
           <div>
             <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Staff Management</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Registered staff accounts and their warehouse assignments ({staff.length} staff members)
+              Create, manage, and edit staff accounts and their warehouse assignments ({staff.length} team members)
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-4 py-4 md:px-6">
-              <h2 className="text-lg font-semibold text-slate-800">Team Members</h2>
+          {/* Add Staff Member Form */}
+          <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <UserPlus className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-bold text-slate-800">Add New Staff Member</h2>
+            </div>
+
+            <form
+              onSubmit={handleAddStaffSubmit}
+              className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 items-end"
+            >
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Rahul Kumar"
+                  value={addName}
+                  onChange={(e) => setAddName(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="e.g. rahul@warehouse.com"
+                  value={addEmail}
+                  onChange={(e) => setAddEmail(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Account Password</label>
+                <div className="relative">
+                  <input
+                    type={showAddPassword ? "text" : "password"}
+                    placeholder="Min. 6 characters"
+                    value={addPassword}
+                    onChange={(e) => setAddPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAddPassword(!showAddPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    title={showAddPassword ? "Hide password" : "Show password"}
+                  >
+                    {showAddPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Role</label>
+                <select
+                  value={addRole}
+                  onChange={(e) => setAddRole(e.target.value as "STAFF" | "ADMIN")}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="STAFF">STAFF (Warehouse Access)</option>
+                  <option value="ADMIN">ADMIN (Full System Access)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+                  Assigned Warehouse {addRole === "STAFF" ? "*" : "(Optional)"}
+                </label>
+                <SearchableSelect
+                  options={warehouseOptions}
+                  value={addWarehouseId}
+                  onChange={setAddWarehouseId}
+                  placeholder="Select warehouse..."
+                  required={addRole === "STAFF"}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={addLoading}
+                className="h-[42px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
+              >
+                {addLoading ? "Creating Account..." : "+ Add Staff Account"}
+              </button>
+            </form>
+          </div>
+
+          {/* Team Members List */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="border-b border-slate-100 px-4 py-4 md:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <h2 className="text-lg font-semibold text-slate-800">
+                Team Members ({filteredStaff.length})
+              </h2>
+
+              <input
+                type="text"
+                placeholder="Search staff name, email, warehouse..."
+                value={staffSearchQuery}
+                onChange={(e) => setStaffSearchQuery(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-64"
+              />
             </div>
 
             {/* Desktop table */}
-            <div className="hidden overflow-x-auto md:block">
-              <table className="w-full text-left text-sm">
-                <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500">
-                  <tr>
-                    <th className="px-5 py-3">Name</th>
-                    <th className="px-5 py-3">Email</th>
-                    <th className="px-5 py-3">Role</th>
-                    <th className="px-5 py-3">Assigned Warehouse</th>
-                    <th className="px-5 py-3">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {staff.map((member) => (
-                    <tr key={member.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                      <td className="px-5 py-3 font-medium text-slate-800">{member.name}</td>
-                      <td className="px-5 py-3 text-slate-500">{member.email}</td>
-                      <td className="px-5 py-3">
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                            member.role === "ADMIN" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {member.role}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-slate-600">
-                        {member.warehouse ? (
-                          <div>
-                            <span className="font-semibold text-slate-800">{member.warehouse.name}</span>
-                            <span className="ml-1 text-xs text-slate-400">({member.warehouse.code})</span>
-                          </div>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-5 py-3">
-                        {member.role === "STAFF" && (
-                          <button
-                            onClick={() => setDeleteId(member.id)}
-                            className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
-                          >
-                            Delete
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {staff.length === 0 && (
+            {paginatedStaff.length > 0 && (
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500">
                     <tr>
-                      <td colSpan={5} className="px-5 py-8 text-center text-sm text-slate-400">
-                        No staff users found yet.
-                      </td>
+                      <th className="px-5 py-3">Name</th>
+                      <th className="px-5 py-3">Email</th>
+                      <th className="px-5 py-3">Role</th>
+                      <th className="px-5 py-3">Assigned Warehouse</th>
+                      <th className="px-5 py-3 text-center">Actions</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {paginatedStaff.map((member) => (
+                      <tr key={member.id} className="border-t border-slate-100 hover:bg-slate-50/50">
+                        <td className="px-5 py-3 font-medium text-slate-800">{member.name}</td>
+                        <td className="px-5 py-3 text-slate-500">{member.email}</td>
+                        <td className="px-5 py-3">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              member.role === "ADMIN"
+                                ? "bg-purple-50 text-purple-700 border border-purple-200"
+                                : "bg-blue-50 text-blue-700 border border-blue-200"
+                            }`}
+                          >
+                            {member.role}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-slate-600">
+                          {member.warehouse ? (
+                            <div>
+                              <span className="font-semibold text-slate-800">{member.warehouse.name}</span>
+                              <span className="ml-1 text-xs text-slate-400">({member.warehouse.code})</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-400">-</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => openEditModal(member)}
+                              className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                            >
+                              Edit / Change Password
+                            </button>
+                            {member.role === "STAFF" && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteId(member.id)}
+                                className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                              >
+                                Delete
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Mobile cards */}
-            <div className="space-y-3 p-4 md:hidden">
-              {staff.map((member) => (
-                <div key={member.id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-semibold text-slate-800">{member.name}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{member.email}</p>
-                    </div>
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                        member.role === "ADMIN" ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"
-                      }`}
-                    >
-                      {member.role}
-                    </span>
-                  </div>
-                  {member.warehouse && (
-                    <p className="mt-2 text-xs text-slate-600">
-                      Warehouse: <b>{member.warehouse.name}</b> ({member.warehouse.code})
-                    </p>
-                  )}
-                  {member.role === "STAFF" && (
-                    <div className="mt-3">
-                      <button
-                        onClick={() => setDeleteId(member.id)}
-                        className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
+            {paginatedStaff.length > 0 && (
+              <div className="space-y-3 p-4 md:hidden">
+                {paginatedStaff.map((member) => (
+                  <div key={member.id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-semibold text-slate-800">{member.name}</p>
+                        <p className="mt-0.5 text-xs text-slate-500">{member.email}</p>
+                      </div>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                          member.role === "ADMIN" ? "bg-purple-50 text-purple-700" : "bg-blue-50 text-blue-700"
+                        }`}
                       >
-                        Delete
+                        {member.role}
+                      </span>
+                    </div>
+                    {member.warehouse && (
+                      <p className="mt-2 text-xs text-slate-600">
+                        Warehouse: <b>{member.warehouse.name}</b> ({member.warehouse.code})
+                      </p>
+                    )}
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(member)}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 transition hover:bg-slate-50"
+                      >
+                        Edit / Password
+                      </button>
+                      {member.role === "STAFF" && (
+                        <button
+                          type="button"
+                          onClick={() => setDeleteId(member.id)}
+                          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {filteredStaff.length === 0 && (
+              <p className="py-8 text-center text-sm text-slate-400">No staff members found.</p>
+            )}
+
+            {/* Pagination */}
+            {filteredStaff.length > 0 && (
+              <Pagination
+                currentPage={staffPage}
+                totalItems={filteredStaff.length}
+                pageSize={staffPageSize}
+                onPageChange={(p) => setStaffPage(p)}
+                onPageSizeChange={(s) => setStaffPageSize(s)}
+                pageSizeOptions={[10, 25, 50, 100]}
+              />
+            )}
+          </div>
+
+          {/* Edit Staff & Password Modal */}
+          {editId && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                  <h3 className="text-lg font-bold text-slate-800">Edit Staff Account</h3>
+                  <button
+                    type="button"
+                    onClick={() => setEditId(null)}
+                    className="p-1 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleEditStaffSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Full Name</label>
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      required
+                      className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Email Address</label>
+                    <input
+                      type="email"
+                      value={editEmail}
+                      onChange={(e) => setEditEmail(e.target.value)}
+                      required
+                      className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Role</label>
+                      <select
+                        value={editRole}
+                        onChange={(e) => setEditRole(e.target.value as "STAFF" | "ADMIN")}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="STAFF">STAFF</option>
+                        <option value="ADMIN">ADMIN</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Status</label>
+                      <select
+                        value={editStatus}
+                        onChange={(e) => setEditStatus(e.target.value as "ACTIVE" | "INACTIVE")}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      >
+                        <option value="ACTIVE">ACTIVE</option>
+                        <option value="INACTIVE">INACTIVE</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+                      Assigned Warehouse {editRole === "STAFF" ? "*" : "(Optional)"}
+                    </label>
+                    <SearchableSelect
+                      options={warehouseOptions}
+                      value={editWarehouseId}
+                      onChange={setEditWarehouseId}
+                      placeholder="Select warehouse..."
+                      required={editRole === "STAFF"}
+                    />
+                  </div>
+
+                  {/* Password Reset Section */}
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+                      <KeyRound className="h-3.5 w-3.5 text-blue-600" />
+                      <span>Change / Reset Password (Optional)</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500">
+                      Leave blank to keep the current password. Enter a new password (min. 6 chars) to reset it.
+                    </p>
+                    <div className="relative">
+                      <input
+                        type={showEditPassword ? "text" : "password"}
+                        placeholder="Enter new password (optional)"
+                        value={editPassword}
+                        onChange={(e) => setEditPassword(e.target.value)}
+                        minLength={6}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2 pr-10 text-xs outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowEditPassword(!showEditPassword)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                        title={showEditPassword ? "Hide password" : "Show password"}
+                      >
+                        {showEditPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                       </button>
                     </div>
-                  )}
-                </div>
-              ))}
-              {staff.length === 0 && (
-                <p className="py-8 text-center text-sm text-slate-400">No staff users found yet.</p>
-              )}
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <button
+                      type="submit"
+                      disabled={editLoading}
+                      className="flex-1 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {editLoading ? "Saving Changes..." : "Save Changes"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditId(null)}
+                      className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
-          </div>
+          )}
         </>
       ) : (
         <>
@@ -352,67 +835,17 @@ function StaffContent() {
                 </p>
                 <p className="mt-1 text-sm font-bold text-slate-800">Low & Out</p>
                 <p className="mt-1 text-xl font-extrabold text-amber-700">{summary.attentionCount}</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">critical items</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">needs action</p>
               </button>
             </div>
           )}
 
-          {/* Attention Alert Banner */}
-          {summary && summary.attentionCount > 0 && statusFilter !== "ATTENTION" && (
-            <div className="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2.5">
-                <AlertTriangle className="h-5 w-5 text-amber-600" />
-                <div>
-                  <p className="text-sm font-bold text-amber-900">
-                    {summary.attentionCount} items need attention in this warehouse!
-                  </p>
-                  <p className="text-xs text-amber-700">
-                    {summary.lowStockCount} low stock and {summary.outOfStockCount} out of stock products require restocking.
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setStatusFilter("ATTENTION")}
-                className="self-start rounded-lg bg-amber-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-amber-700 sm:self-auto"
-              >
-                Show {summary.attentionCount} Attention Items &rarr;
-              </button>
-            </div>
-          )}
-
-          {/* Attention Active Banner */}
-          {statusFilter === "ATTENTION" && (
-            <div className="flex flex-col gap-2 rounded-xl border border-amber-300 bg-amber-100/60 p-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2.5">
-                <Search className="h-5 w-5 text-amber-600" />
-                <div>
-                  <p className="text-sm font-bold text-amber-900">
-                    Filtering: Showing only {filteredStaffStock.length} Attention Items (Low Stock & Out of Stock)
-                  </p>
-                  <p className="text-xs text-amber-700">
-                    These items are running out or currently empty in your warehouse.
-                  </p>
-                </div>
-              </div>
-                <button
-                  type="button"
-                  onClick={() => setStatusFilter("ALL")}
-                  className="self-start rounded-lg border border-amber-300 bg-white px-3.5 py-1.5 text-xs font-bold text-amber-900 shadow-sm transition hover:bg-amber-50 sm:self-auto inline-flex items-center gap-1"
-                >
-                  <X className="h-3.5 w-3.5" /> Show All Stock ({staffStock.length})
-                </button>
-            </div>
-          )}
-
-          {/* Full Warehouse Inventory List */}
-          <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-100 px-4 py-4 md:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          {/* Warehouse Stock List for Staff */}
+          <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="border-b border-slate-100 p-4 md:p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-slate-800">
-                  {statusFilter === "ATTENTION"
-                    ? <span className="inline-flex items-center gap-1"><AlertTriangle className="h-4 w-4" /> Attention Items ({filteredStaffStock.length})</span>
-                    : `Stock Inventory (${filteredStaffStock.length})`}
+                  Warehouse Stock Inventory ({filteredStaffStock.length})
                 </h2>
                 {statusFilter !== "ALL" && (
                   <p className="text-xs text-blue-600 mt-0.5 font-medium">
@@ -422,28 +855,40 @@ function StaffContent() {
                       onClick={() => setStatusFilter("ALL")}
                       className="ml-2 text-slate-400 hover:text-slate-700 underline"
                     >
-                      Reset to All
+                      Clear filter
                     </button>
                   </p>
                 )}
               </div>
 
               {/* Search in stock */}
-              <input
-                type="text"
-                placeholder="Search product, SKU, rack, category..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-64"
-              />
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search product, SKU, rack..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="rounded-lg border border-slate-200 pl-8 pr-7 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-56"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
             </div>
 
+            {/* Loading */}
             {loading && (
               <div className="p-8 text-center text-sm text-slate-500">Loading warehouse inventory...</div>
             )}
 
             {/* Desktop table */}
-            {!loading && (
+            {!loading && paginatedStaffStock.length > 0 && (
               <div className="hidden overflow-x-auto md:block">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500">
@@ -458,7 +903,7 @@ function StaffContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredStaffStock.map((item) => {
+                    {paginatedStaffStock.map((item) => {
                       const isLowOrOut = item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK";
 
                       return (
@@ -510,22 +955,15 @@ function StaffContent() {
                         </tr>
                       );
                     })}
-                    {filteredStaffStock.length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="px-5 py-8 text-center text-sm text-slate-400">
-                          No inventory items found matching your filters.
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>
             )}
 
             {/* Mobile cards */}
-            {!loading && (
+            {!loading && paginatedStaffStock.length > 0 && (
               <div className="space-y-3 p-4 md:hidden">
-                {filteredStaffStock.map((item) => {
+                {paginatedStaffStock.map((item) => {
                   const isLowOrOut = item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK";
 
                   return (
@@ -568,10 +1006,26 @@ function StaffContent() {
                     </div>
                   );
                 })}
-                {filteredStaffStock.length === 0 && (
-                  <p className="py-8 text-center text-sm text-slate-400">No inventory records found</p>
-                )}
               </div>
+            )}
+
+            {/* No items */}
+            {!loading && filteredStaffStock.length === 0 && (
+              <p className="py-8 text-center text-sm text-slate-400">
+                No inventory items found matching your filters.
+              </p>
+            )}
+
+            {/* Pagination for staff warehouse items */}
+            {!loading && filteredStaffStock.length > 0 && (
+              <Pagination
+                currentPage={stockPage}
+                totalItems={filteredStaffStock.length}
+                pageSize={stockPageSize}
+                onPageChange={(p) => setStockPage(p)}
+                onPageSizeChange={(s) => setStockPageSize(s)}
+                pageSizeOptions={[10, 25, 50, 100]}
+              />
             )}
           </div>
         </>
@@ -603,6 +1057,11 @@ function StaffContent() {
           </div>
         </div>
       )}
+      <WarningPopup
+        open={warningOpen}
+        message={warningMessage}
+        onClose={() => setWarningOpen(false)}
+      />
     </div>
   );
 }

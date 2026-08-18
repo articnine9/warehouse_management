@@ -13,6 +13,7 @@ import {
   FolderTree,
   Tag,
   ClipboardList,
+  PackageCheck,
   Users,
   LogOut,
   ChevronDown,
@@ -26,6 +27,7 @@ import {
   Mail,
 } from "lucide-react";
 import { useAuth } from "./AuthProvider";
+import NotificationBell from "./NotificationBell";
 
 const iconMap: Record<string, React.ReactNode> = {
   Dashboard: <LayoutDashboard className="h-4 w-4" />,
@@ -37,6 +39,7 @@ const iconMap: Record<string, React.ReactNode> = {
   Categories: <FolderTree className="h-4 w-4" />,
   Products: <Tag className="h-4 w-4" />,
   Inventory: <ClipboardList className="h-4 w-4" />,
+  "Employee Issue": <PackageCheck className="h-4 w-4" />,
   Staff: <Users className="h-4 w-4" />,
   "Staff Management": <Users className="h-4 w-4" />,
   "My Warehouse": <Warehouse className="h-4 w-4" />,
@@ -47,7 +50,7 @@ const iconMap: Record<string, React.ReactNode> = {
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(true);
-  const [settingsOpen, setSettingsOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
@@ -68,8 +71,11 @@ export default function Sidebar() {
     user.role === "ADMIN"
       ? [
           { name: "Dashboard", path: "/dashboard" },
-          { name: "Billing", path: "/billing" },
-          { name: "Search", path: "/search" },
+           { name: "Inventory", path: "/inventory" },
+          { name: "Employee Issue", path: "/employee-issues" },
+          // { name: "Billing", path: "/billing" },
+          // { name: "Search", path: "/search" },
+              { name: "Staff Management", path: "/staff" },
           {
             name: "Settings",
             children: [
@@ -80,11 +86,12 @@ export default function Sidebar() {
               { name: "Inventory", path: "/inventory" },
             ],
           },
-          { name: "Staff Management", path: "/staff" },
+      
         ]
       : [
           { name: "Dashboard", path: "/dashboard" },
           { name: "Billing", path: "/billing" },
+          { name: "Employee Issue", path: "/employee-issues" },
           { name: "Search", path: "/search" },
           { name: "My Warehouse", path: "/staff" },
         ];
@@ -93,6 +100,7 @@ export default function Sidebar() {
     user.role === "ADMIN"
       ? [
           { name: "Home", path: "/dashboard" },
+          { name: "Employee Issue", path: "/employee-issues" },
           { name: "Billing", path: "/billing" },
           { name: "Search", path: "/search" },
           { name: "Settings", path: "/warehouses" },
@@ -101,15 +109,43 @@ export default function Sidebar() {
       : [
           { name: "Home", path: "/dashboard" },
           { name: "Billing", path: "/billing" },
+          { name: "Employee Issue", path: "/employee-issues" },
           { name: "Search", path: "/search" },
           { name: "Warehouse", path: "/staff" },
         ];
 
   return (
     <>
-      {/* ─── MOBILE BOTTOM NAV ─── */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur-sm md:hidden print:hidden">
-        <div className="flex items-center justify-around px-1 py-1">
+      {/* ─── MOBILE TOP APP BAR ─── */}
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 py-2.5 md:hidden print:hidden shadow-xs">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white font-black text-sm shadow-xs">
+            W
+          </div>
+          <div>
+            <h1 className="text-sm font-bold text-slate-800 leading-tight">Warehouse</h1>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+              {user.role}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <button
+            type="button"
+            onClick={() => setProfileModalOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700 active:scale-95 shadow-xs"
+            title="Profile"
+          >
+            {user.name.slice(0, 1).toUpperCase()}
+          </button>
+        </div>
+      </header>
+
+      {/* ─── MOBILE BOTTOM NAV (Smooth Scrollable) ─── */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur-md md:hidden print:hidden shadow-lg">
+        <div className="flex items-center gap-1 overflow-x-auto px-2 py-1 scrollbar-none">
           {mobileItems.map((item) => {
             const isActive =
               item.path === "/warehouses"
@@ -120,27 +156,17 @@ export default function Sidebar() {
               <Link
                 key={item.path}
                 href={item.path}
-                className={`flex flex-col items-center gap-0.5 rounded-lg px-2.5 py-1.5 text-[11px] transition-colors ${
+                className={`relative flex min-w-[64px] flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[11px] font-medium transition-colors shrink-0 ${
                   isActive
-                    ? "text-blue-600 font-semibold"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-blue-50 text-blue-700 font-bold"
+                    : "text-slate-500 hover:text-slate-800"
                 }`}
               >
                 {iconMap[item.name] || <LayoutDashboard className="h-4 w-4" />}
-                <span>{item.name}</span>
+                <span className="truncate">{item.name}</span>
               </Link>
             );
           })}
-
-          {/* Profile Icon in place of direct Logout */}
-          <button
-            type="button"
-            onClick={() => setProfileModalOpen(true)}
-            className="flex flex-col items-center gap-0.5 rounded-lg px-2.5 py-1.5 text-[11px] text-slate-500 transition-colors hover:text-blue-600 active:scale-95"
-          >
-            <UserIcon className="h-4 w-4" />
-            <span>Profile</span>
-          </button>
         </div>
       </nav>
 
@@ -253,12 +279,15 @@ export default function Sidebar() {
               </p>
             </div>
           )}
-          <button
-            onClick={() => setIsOpen(!isOpen)}
-            className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100"
-          >
-            {isOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
-          </button>
+          <div className="flex items-center gap-1.5">
+            {isOpen && <NotificationBell />}
+            <button
+              onClick={() => setIsOpen(!isOpen)}
+              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100"
+            >
+              {isOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
 
         {/* User info */}
@@ -305,7 +334,9 @@ export default function Sidebar() {
                 >
                   {iconMap[item.name] || <Settings className="h-4 w-4" />}
                   {isOpen && (
-                    <span className="flex-1">{item.name}</span>
+                    <span className="flex-1 flex items-center justify-between">
+                      <span>{item.name}</span>
+                    </span>
                   )}
                   {isOpen && hasChildren && (
                     <span className="text-xs text-slate-400">

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:employees": "tsx scripts/seed-employees.ts"
   },
   "dependencies": {
     "lucide-react": "^1.31.0",

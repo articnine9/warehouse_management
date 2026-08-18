@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { X, Search, MapPin, Receipt, Printer, RefreshCw } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import Pagination from "@/app/components/Pagination";
+import WarningPopup from "@/app/components/WarningPopup";
 
 type InventoryItem = {
   _id: string;
@@ -87,11 +89,19 @@ export default function BillingPage() {
   const [itemQuantity, setItemQuantity] = useState("1");
   const [lineItems, setLineItems] = useState<SelectedLineItem[]>([]);
 
+  // Invoices search and pagination state
+  const [invoiceSearchQuery, setInvoiceSearchQuery] = useState("");
+  const [invoicePage, setInvoicePage] = useState(1);
+  const [invoicePageSize, setInvoicePageSize] = useState(10);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const quantityInputRef = useRef<HTMLInputElement>(null);
 
   // Print Modal state
   const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
+
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -184,13 +194,15 @@ export default function BillingPage() {
   // Add line item to bill
   function handleAddLineItem() {
     if (!currentSelectedInv) {
-      alert("Please select a product from inventory");
+      setWarningMessage("Please select a product from inventory");
+      setWarningOpen(true);
       return;
     }
 
     const qty = Number(itemQuantity);
     if (!qty || qty <= 0) {
-      alert("Please enter a valid quantity");
+      setWarningMessage("Please enter a valid quantity");
+      setWarningOpen(true);
       return;
     }
 
@@ -199,9 +211,10 @@ export default function BillingPage() {
     const existingQty = existingIndex >= 0 ? lineItems[existingIndex].quantity : 0;
 
     if (existingQty + qty > currentSelectedInv.quantity) {
-      alert(
+      setWarningMessage(
         `Cannot add ${qty} units. Total requested (${existingQty + qty}) exceeds available stock (${currentSelectedInv.quantity}).`
       );
+      setWarningOpen(true);
       return;
     }
 
@@ -248,12 +261,14 @@ export default function BillingPage() {
     e.preventDefault();
 
     if (!customerName.trim()) {
-      alert("Please enter customer name");
+      setWarningMessage("Please enter customer name");
+      setWarningOpen(true);
       return;
     }
 
     if (lineItems.length === 0) {
-      alert("Please add at least one product to the bill");
+      setWarningMessage("Please add at least one product to the bill");
+      setWarningOpen(true);
       return;
     }
 
@@ -280,7 +295,8 @@ export default function BillingPage() {
       const result = await response.json();
 
       if (!result.success) {
-        alert(result.message || "Failed to generate bill");
+        setWarningMessage(result.message || "Failed to generate bill");
+        setWarningOpen(true);
         return;
       }
 
@@ -297,10 +313,10 @@ export default function BillingPage() {
 
       // Refresh inventory and invoice history
       await fetchInventory();
-      await fetchInvoices();
     } catch (error) {
-      console.error("Billing error:", error);
-      alert("Something went wrong while processing the bill");
+      console.error("Failed to generate bill:", error);
+      setWarningMessage("Something went wrong while processing the bill");
+      setWarningOpen(true);
     } finally {
       setSubmitting(false);
     }
@@ -640,92 +656,175 @@ export default function BillingPage() {
       </div>
 
       {/* Invoice History Section (Hidden on Print) */}
-      <div className="rounded-xl bg-white shadow-sm border border-slate-200 print:hidden">
-        <div className="border-b border-slate-100 px-4 py-4 md:px-6 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
-          <div>
-            <h2 className="text-lg font-semibold text-slate-800">Recent Invoices</h2>
-            <p className="text-xs text-slate-500 mt-0.5">View and reprint past sales invoices</p>
-          </div>
-          <button onClick={fetchInvoices} className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1">
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
-          </button>
-        </div>
+      {(() => {
+        const filteredInvoices = invoices.filter((inv) => {
+          if (!invoiceSearchQuery.trim()) return true;
+          const q = invoiceSearchQuery.toLowerCase().trim();
+          return (
+            inv.invoiceNumber.toLowerCase().includes(q) ||
+            inv.customerName.toLowerCase().includes(q) ||
+            (inv.customerPhone && inv.customerPhone.toLowerCase().includes(q)) ||
+            (inv.paymentMethod && inv.paymentMethod.toLowerCase().includes(q))
+          );
+        });
 
-        {/* Desktop table */}
-        <div className="hidden overflow-x-auto md:block">
-          <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500 border-b border-slate-200">
-              <tr>
-                <th className="px-5 py-3">Invoice #</th>
-                <th className="px-5 py-3">Date</th>
-                <th className="px-5 py-3">Customer</th>
-                <th className="px-5 py-3">Items</th>
-                <th className="px-5 py-3">Payment</th>
-                <th className="px-5 py-3 text-right">Total</th>
-                <th className="px-5 py-3 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.map((inv) => (
-                <tr key={inv._id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                  <td className="px-5 py-3 font-bold text-blue-600">{inv.invoiceNumber}</td>
-                  <td className="px-5 py-3 text-slate-500 text-xs">
-                    {new Date(inv.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  </td>
-                  <td className="px-5 py-3 font-medium text-slate-800">
-                    {inv.customerName}
-                    {inv.customerPhone && <span className="block text-xs text-slate-400">{inv.customerPhone}</span>}
-                  </td>
-                  <td className="px-5 py-3 text-slate-600">{inv.items.length} items</td>
-                  <td className="px-5 py-3">
-                    <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">{inv.paymentMethod}</span>
-                  </td>
-                  <td className="px-5 py-3 text-right font-bold text-slate-800">₹{inv.grandTotal.toLocaleString("en-IN")}</td>
-                   <td className="px-5 py-3 text-center">
-                     <button type="button" onClick={() => setActiveInvoice(inv)}
-                       className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-50 inline-flex items-center gap-1">
-                       <Printer className="h-3.5 w-3.5" /> Print
-                     </button>
-                   </td>
-                </tr>
-              ))}
-              {!loading && invoices.length === 0 && (
-                <tr><td colSpan={7} className="px-5 py-10 text-center text-sm text-slate-400">No invoices generated yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        const start = (invoicePage - 1) * invoicePageSize;
+        const paginatedInvoices = filteredInvoices.slice(start, start + invoicePageSize);
 
-        {/* Mobile cards */}
-        <div className="space-y-3 p-4 md:hidden">
-          {invoices.map((inv) => (
-            <div key={inv._id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="font-bold text-blue-600 text-sm">{inv.invoiceNumber}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {new Date(inv.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                  </p>
-                </div>
-                <span className="font-bold text-slate-800 text-sm">₹{inv.grandTotal.toLocaleString("en-IN")}</span>
+        return (
+          <div className="rounded-xl bg-white shadow-sm border border-slate-200 print:hidden overflow-hidden">
+            <div className="border-b border-slate-100 px-4 py-4 md:px-6 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center">
+              <div>
+                <h2 className="text-lg font-semibold text-slate-800">
+                  Recent Invoices ({filteredInvoices.length})
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">View and reprint past sales invoices</p>
               </div>
-              <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
-                <span>{inv.customerName} • {inv.items.length} items</span>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{inv.paymentMethod}</span>
-              </div>
-              <div className="mt-2">
-                <button type="button" onClick={() => setActiveInvoice(inv)}
-                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 transition hover:bg-blue-50 inline-flex items-center gap-1">
-                  <Printer className="h-3.5 w-3.5" /> View / Print
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  placeholder="Search invoice #, customer..."
+                  value={invoiceSearchQuery}
+                  onChange={(e) => {
+                    setInvoiceSearchQuery(e.target.value);
+                    setInvoicePage(1);
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-56"
+                />
+
+                <button
+                  type="button"
+                  onClick={fetchInvoices}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-800 inline-flex items-center gap-1 shrink-0 px-2 py-1.5 rounded-lg hover:bg-blue-50 transition"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" /> Refresh
                 </button>
               </div>
             </div>
-          ))}
-          {!loading && invoices.length === 0 && (
-            <p className="py-8 text-center text-sm text-slate-400">No invoices generated yet.</p>
-          )}
-        </div>
-      </div>
+
+            {/* Desktop table */}
+            {paginatedInvoices.length > 0 && (
+              <div className="hidden overflow-x-auto md:block">
+                <table className="w-full text-left text-sm">
+                  <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500 border-b border-slate-200">
+                    <tr>
+                      <th className="px-5 py-3">Invoice #</th>
+                      <th className="px-5 py-3">Date</th>
+                      <th className="px-5 py-3">Customer</th>
+                      <th className="px-5 py-3">Items</th>
+                      <th className="px-5 py-3">Payment</th>
+                      <th className="px-5 py-3 text-right">Total</th>
+                      <th className="px-5 py-3 text-center">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {paginatedInvoices.map((inv) => (
+                      <tr key={inv._id} className="border-t border-slate-100 hover:bg-slate-50/50">
+                        <td className="px-5 py-3 font-bold text-blue-600">{inv.invoiceNumber}</td>
+                        <td className="px-5 py-3 text-slate-500 text-xs">
+                          {new Date(inv.createdAt).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="px-5 py-3 font-medium text-slate-800">
+                          {inv.customerName}
+                          {inv.customerPhone && (
+                            <span className="block text-xs text-slate-400">{inv.customerPhone}</span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3 text-slate-600">{inv.items.length} items</td>
+                        <td className="px-5 py-3">
+                          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                            {inv.paymentMethod}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3 text-right font-bold text-slate-800">
+                          ₹{inv.grandTotal.toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-5 py-3 text-center">
+                          <button
+                            type="button"
+                            onClick={() => setActiveInvoice(inv)}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-50 inline-flex items-center gap-1"
+                          >
+                            <Printer className="h-3.5 w-3.5" /> Print
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {/* Mobile cards */}
+            {paginatedInvoices.length > 0 && (
+              <div className="space-y-3 p-4 md:hidden">
+                {paginatedInvoices.map((inv) => (
+                  <div key={inv._id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-3">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="font-bold text-blue-600 text-sm">{inv.invoiceNumber}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {new Date(inv.createdAt).toLocaleDateString("en-IN", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </div>
+                      <span className="font-bold text-slate-800 text-sm">
+                        ₹{inv.grandTotal.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                      <span>
+                        {inv.customerName} • {inv.items.length} items
+                      </span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                        {inv.paymentMethod}
+                      </span>
+                    </div>
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setActiveInvoice(inv)}
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 transition hover:bg-blue-50 inline-flex items-center gap-1"
+                      >
+                        <Printer className="h-3.5 w-3.5" /> View / Print
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Empty state */}
+            {filteredInvoices.length === 0 && (
+              <p className="py-8 text-center text-sm text-slate-400">
+                {loading ? "Loading invoices..." : "No invoices found."}
+              </p>
+            )}
+
+            {/* Pagination */}
+            {filteredInvoices.length > 0 && (
+              <Pagination
+                currentPage={invoicePage}
+                totalItems={filteredInvoices.length}
+                pageSize={invoicePageSize}
+                onPageChange={(p) => setInvoicePage(p)}
+                onPageSizeChange={(s) => setInvoicePageSize(s)}
+                pageSizeOptions={[10, 25, 50, 100]}
+              />
+            )}
+          </div>
+        );
+      })()}
 
       {/* Invoice Print & Preview Modal */}
       {activeInvoice && (
@@ -885,6 +984,12 @@ export default function BillingPage() {
         </div>
       )}
       </div>
+
+      <WarningPopup
+        open={warningOpen}
+        message={warningMessage}
+        onClose={() => setWarningOpen(false)}
+      />
     </ProtectedPage>
   );
 }

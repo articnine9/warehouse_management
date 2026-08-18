@@ -6,7 +6,7 @@ import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
 import Invoice from "@/models/Invoice";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
@@ -16,7 +16,47 @@ export async function GET() {
     void Rack;
     void Inventory;
 
-    const invoices = await Invoice.find().sort({ createdAt: -1 });
+    const { searchParams } = new URL(request.url);
+    const query = searchParams.get("q") || searchParams.get("search");
+    const pageParam = searchParams.get("page");
+    const limitParam = searchParams.get("limit");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const filter: Record<string, any> = {};
+
+    if (query?.trim()) {
+      const regex = { $regex: query.trim(), $options: "i" };
+      filter.$or = [
+        { invoiceNumber: regex },
+        { customerName: regex },
+        { customerPhone: regex },
+        { paymentMethod: regex },
+      ];
+    }
+
+    if (pageParam || limitParam) {
+      const page = Math.max(1, parseInt(pageParam || "1", 10));
+      const limit = Math.min(100, Math.max(1, parseInt(limitParam || "10", 10)));
+      const skip = (page - 1) * limit;
+
+      const [total, invoices] = await Promise.all([
+        Invoice.countDocuments(filter),
+        Invoice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      ]);
+
+      return Response.json({
+        success: true,
+        data: invoices,
+        pagination: {
+          total,
+          page,
+          limit,
+          totalPages: Math.ceil(total / limit),
+        },
+      });
+    }
+
+    const invoices = await Invoice.find(filter).sort({ createdAt: -1 });
 
     return Response.json({
       success: true,

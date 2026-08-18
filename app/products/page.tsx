@@ -1,9 +1,12 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { FolderTree } from "lucide-react";
+import { FormEvent, useEffect, useState, useMemo } from "react";
+import { FolderTree, History } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
+import Pagination from "@/app/components/Pagination";
 import Link from "next/link";
+import WarningPopup from "@/app/components/WarningPopup";
 
 type Product = {
   _id: string;
@@ -14,6 +17,8 @@ type Product = {
   price?: number;
   description?: string;
   status: "ACTIVE" | "INACTIVE";
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 type Category = {
@@ -29,6 +34,10 @@ export default function ProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [addLoading, setAddLoading] = useState(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
@@ -49,6 +58,9 @@ export default function ProductsPage() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
 
   async function fetchProducts() {
     try {
@@ -78,10 +90,29 @@ export default function ProductsPage() {
   }
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchProducts();
     void fetchCategories();
   }, []);
+
+  // Category select options
+  const categoryOptions: SelectOption[] = useMemo(() => {
+    return categories.map((c) => ({
+      value: c.name,
+      label: c.name,
+      subLabel: c.code,
+    }));
+  }, [categories]);
+
+  const filterCategoryOptions: SelectOption[] = useMemo(() => {
+    return [
+      { value: "ALL", label: "All Categories" },
+      ...categories.map((c) => ({
+        value: c.name,
+        label: c.name,
+        subLabel: c.code,
+      })),
+    ];
+  }, [categories]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -101,7 +132,8 @@ export default function ProductsPage() {
       });
       const result = await response.json();
       if (!result.success) {
-        alert(result.message);
+        setWarningMessage(result.message || "Failed to add product");
+        setWarningOpen(true);
         return;
       }
       setName("");
@@ -113,7 +145,8 @@ export default function ProductsPage() {
       await fetchProducts();
     } catch (error) {
       console.error("Failed to create product:", error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setAddLoading(false);
     }
@@ -150,14 +183,16 @@ export default function ProductsPage() {
       });
       const result = await response.json();
       if (!result.success) {
-        alert(result.message);
+        setWarningMessage(result.message || "Failed to update product");
+        setWarningOpen(true);
         return;
       }
       setEditId(null);
       await fetchProducts();
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setEditLoading(false);
     }
@@ -172,30 +207,45 @@ export default function ProductsPage() {
       });
       const result = await response.json();
       if (!result.success) {
-        alert(result.message);
+        setWarningMessage(result.message || "Failed to delete product");
+        setWarningOpen(true);
         return;
       }
       setDeleteId(null);
       await fetchProducts();
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setDeleteLoading(false);
     }
   }
 
-  const filteredProducts = products.filter((p) => {
-    const matchesCategory =
-      selectedCategoryFilter === "ALL" || p.category === selectedCategoryFilter;
-    const matchesSearch =
-      !searchQuery.trim() ||
-      p.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-      p.sku.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-      (p.sellerName &&
-        p.sellerName.toLowerCase().includes(searchQuery.toLowerCase().trim()));
-    return matchesCategory && matchesSearch;
-  });
+  const filteredProducts = useMemo(() => {
+    return products.filter((p) => {
+      const matchesCategory =
+        selectedCategoryFilter === "ALL" || p.category === selectedCategoryFilter;
+      const matchesSearch =
+        !searchQuery.trim() ||
+        p.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+        p.sku.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
+        (p.sellerName &&
+          p.sellerName.toLowerCase().includes(searchQuery.toLowerCase().trim()));
+      return matchesCategory && matchesSearch;
+    });
+  }, [products, selectedCategoryFilter, searchQuery]);
+
+  // Reset page on filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [selectedCategoryFilter, searchQuery, pageSize]);
+
+  // Paginated records
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(start, start + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
 
   return (
     <ProtectedPage allowedRoles={["ADMIN"]}>
@@ -214,6 +264,12 @@ export default function ProductsPage() {
             className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 self-start sm:self-auto"
           >
             <FolderTree className="h-4 w-4" /> Manage Categories
+          </Link>
+          <Link
+            href="/product-history"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 self-start sm:self-auto"
+          >
+            <History className="h-4 w-4" /> Product History
           </Link>
         </div>
 
@@ -267,79 +323,91 @@ export default function ProductsPage() {
           <h2 className="text-lg font-semibold text-slate-800">Add Product</h2>
           <form
             onSubmit={handleSubmit}
-            className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"
+            className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 items-end"
           >
-            <input
-              type="text"
-              placeholder="Product name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Product Name</label>
+              <input
+                type="text"
+                placeholder="Product name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
 
-            <input
-              type="text"
-              placeholder="SKU (e.g. LAP001)"
-              value={sku}
-              onChange={(e) => setSku(e.target.value)}
-              required
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">SKU Code</label>
+              <input
+                type="text"
+                placeholder="SKU (e.g. LAP001)"
+                value={sku}
+                onChange={(e) => setSku(e.target.value)}
+                required
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
 
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            >
-              <option value="">-- Select Category --</option>
-              {categories.map((c) => (
-                <option key={c._id} value={c.name}>
-                  {c.name} ({c.code})
-                </option>
-              ))}
-            </select>
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Category</label>
+              <SearchableSelect
+                options={categoryOptions}
+                value={category}
+                onChange={setCategory}
+                placeholder="Search category..."
+              />
+            </div>
 
-            <input
-              type="text"
-              placeholder="Seller name"
-              value={sellerName}
-              onChange={(e) => setSellerName(e.target.value)}
-              required
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Seller Name</label>
+              <input
+                type="text"
+                placeholder="Seller name"
+                value={sellerName}
+                onChange={(e) => setSellerName(e.target.value)}
+                required
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
 
-            <input
-              type="number"
-              placeholder="Price (₹)"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              min="0"
-              step="0.01"
-              required
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Price (₹)</label>
+              <input
+                type="number"
+                placeholder="Price (₹)"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                min="0"
+                step="0.01"
+                required
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
 
-            <input
-              type="text"
-              placeholder="Description (Optional)"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
+            <div>
+              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Description (Optional)</label>
+              <input
+                type="text"
+                placeholder="Description (Optional)"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
 
             <button
               type="submit"
               disabled={addLoading}
-              className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 md:col-span-2 lg:col-span-3"
+              className="h-[42px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 md:col-span-2 lg:col-span-3"
             >
-              {addLoading ? "Adding..." : "Add Product"}
+              {addLoading ? "Adding..." : "+ Add Product"}
             </button>
           </form>
         </div>
 
         {/* Product list */}
-        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="border-b border-slate-100 px-4 py-4 md:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-lg font-semibold text-slate-800">
               Product List ({filteredProducts.length})
@@ -356,18 +424,15 @@ export default function ProductsPage() {
               />
 
               {/* Category Filter */}
-              <select
-                value={selectedCategoryFilter}
-                onChange={(e) => setSelectedCategoryFilter(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
-              >
-                <option value="ALL">All Categories</option>
-                {categories.map((c) => (
-                  <option key={c._id} value={c.name}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <div className="w-full sm:w-48">
+                <SearchableSelect
+                  options={filterCategoryOptions}
+                  value={selectedCategoryFilter}
+                  onChange={(val) => setSelectedCategoryFilter(val || "ALL")}
+                  placeholder="All Categories"
+                  allowClear={false}
+                />
+              </div>
             </div>
           </div>
 
@@ -379,7 +444,7 @@ export default function ProductsPage() {
           )}
 
           {/* Desktop table */}
-          {!loading && (
+          {!loading && paginatedProducts.length > 0 && (
             <div className="hidden overflow-x-auto lg:block">
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500">
@@ -389,13 +454,14 @@ export default function ProductsPage() {
                     <th className="px-5 py-3">Category</th>
                     <th className="px-5 py-3">Seller</th>
                     <th className="px-5 py-3">Price</th>
-                    <th className="px-5 py-3">Description</th>
+                    <th className="px-5 py-3">Created</th>
+                    <th className="px-5 py-3">Updated</th>
                     <th className="px-5 py-3">Status</th>
                     <th className="px-5 py-3">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredProducts.map((product) => (
+                  {paginatedProducts.map((product) => (
                     <tr
                       key={product._id}
                       className="border-t border-slate-100 hover:bg-slate-50/50"
@@ -421,8 +487,23 @@ export default function ProductsPage() {
                           ? `₹${product.price.toLocaleString("en-IN")}`
                           : "-"}
                       </td>
-                      <td className="max-w-[200px] truncate px-5 py-3 text-slate-500">
-                        {product.description || "-"}
+                      <td className="px-5 py-3 text-slate-500">
+                        {product.createdAt
+                          ? new Date(product.createdAt).toLocaleDateString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })
+                          : "-"}
+                      </td>
+                      <td className="px-5 py-3 text-slate-500">
+                        {product.updatedAt
+                          ? new Date(product.updatedAt).toLocaleDateString("en-IN", {
+                              day: "2-digit",
+                              month: "short",
+                              year: "numeric",
+                            })
+                          : "-"}
                       </td>
                       <td className="px-5 py-3">
                         <span
@@ -453,25 +534,15 @@ export default function ProductsPage() {
                       </td>
                     </tr>
                   ))}
-                  {filteredProducts.length === 0 && (
-                    <tr>
-                      <td
-                        colSpan={8}
-                        className="px-5 py-10 text-center text-sm text-slate-400"
-                      >
-                        No products found.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
             </div>
           )}
 
           {/* Mobile / tablet cards */}
-          {!loading && (
+          {!loading && paginatedProducts.length > 0 && (
             <div className="space-y-3 p-4 lg:hidden">
-              {filteredProducts.map((product) => (
+              {paginatedProducts.map((product) => (
                 <div
                   key={product._id}
                   className="rounded-lg border border-slate-100 bg-slate-50/50 p-4"
@@ -507,12 +578,17 @@ export default function ProductsPage() {
                         ₹{product.price.toLocaleString("en-IN")}
                       </span>
                     )}
+                    {product.createdAt && (
+                      <span>
+                        Created: {new Date(product.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                      </span>
+                    )}
+                    {product.updatedAt && product.updatedAt !== product.createdAt && (
+                      <span>
+                        Updated: {new Date(product.updatedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                      </span>
+                    )}
                   </div>
-                  {product.description && (
-                    <p className="mt-1 truncate text-xs text-slate-400">
-                      {product.description}
-                    </p>
-                  )}
                   <div className="mt-3 flex gap-2">
                     <button
                       onClick={() => openEdit(product)}
@@ -529,12 +605,26 @@ export default function ProductsPage() {
                   </div>
                 </div>
               ))}
-              {filteredProducts.length === 0 && (
-                <p className="py-8 text-center text-sm text-slate-400">
-                  No products found
-                </p>
-              )}
             </div>
+          )}
+
+          {/* No products found */}
+          {!loading && filteredProducts.length === 0 && (
+            <div className="p-8 text-center text-sm text-slate-400">
+              No products found matching your search.
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!loading && filteredProducts.length > 0 && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={filteredProducts.length}
+              pageSize={pageSize}
+              onPageChange={(p) => setCurrentPage(p)}
+              onPageSizeChange={(s) => setPageSize(s)}
+              pageSizeOptions={[10, 25, 50, 100]}
+            />
           )}
         </div>
 
@@ -544,71 +634,91 @@ export default function ProductsPage() {
             <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-xl">
               <h3 className="text-lg font-semibold text-slate-800">Edit Product</h3>
               <form onSubmit={handleEditSubmit} className="mt-5 space-y-3">
-                <input
-                  type="text"
-                  placeholder="Product name"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-                <input
-                  type="text"
-                  placeholder="SKU"
-                  value={editSku}
-                  onChange={(e) => setEditSku(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Product Name</label>
+                  <input
+                    type="text"
+                    placeholder="Product name"
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    required
+                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
 
-                <select
-                  value={editCategory}
-                  onChange={(e) => setEditCategory(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="">-- Select Category --</option>
-                  {categories.map((c) => (
-                    <option key={c._id} value={c.name}>
-                      {c.name} ({c.code})
-                    </option>
-                  ))}
-                </select>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">SKU</label>
+                  <input
+                    type="text"
+                    placeholder="SKU"
+                    value={editSku}
+                    onChange={(e) => setEditSku(e.target.value)}
+                    required
+                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
 
-                <input
-                  type="text"
-                  placeholder="Seller name"
-                  value={editSellerName}
-                  onChange={(e) => setEditSellerName(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-                <input
-                  type="number"
-                  placeholder="Price"
-                  value={editPrice}
-                  onChange={(e) => setEditPrice(e.target.value)}
-                  min="0"
-                  step="0.01"
-                  required
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-                <input
-                  type="text"
-                  placeholder="Description"
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-                <select
-                  value={editStatus}
-                  onChange={(e) =>
-                    setEditStatus(e.target.value as "ACTIVE" | "INACTIVE")
-                  }
-                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="ACTIVE">ACTIVE</option>
-                  <option value="INACTIVE">INACTIVE</option>
-                </select>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Category</label>
+                  <SearchableSelect
+                    options={categoryOptions}
+                    value={editCategory}
+                    onChange={setEditCategory}
+                    placeholder="Search category..."
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Seller Name</label>
+                  <input
+                    type="text"
+                    placeholder="Seller name"
+                    value={editSellerName}
+                    onChange={(e) => setEditSellerName(e.target.value)}
+                    required
+                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Price (₹)</label>
+                  <input
+                    type="number"
+                    placeholder="Price"
+                    value={editPrice}
+                    onChange={(e) => setEditPrice(e.target.value)}
+                    min="0"
+                    step="0.01"
+                    required
+                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Description</label>
+                  <input
+                    type="text"
+                    placeholder="Description"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Status</label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) =>
+                      setEditStatus(e.target.value as "ACTIVE" | "INACTIVE")
+                    }
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  >
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="INACTIVE">INACTIVE</option>
+                  </select>
+                </div>
+
                 <div className="flex gap-3 pt-2">
                   <button
                     type="submit"
@@ -660,6 +770,12 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+
+      <WarningPopup
+        open={warningOpen}
+        message={warningMessage}
+        onClose={() => setWarningOpen(false)}
+      />
     </ProtectedPage>
   );
 }

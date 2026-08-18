@@ -139,3 +139,102 @@ export async function GET() {
     );
   }
 }
+
+export async function POST(request: Request) {
+  try {
+    await connectDB();
+    const currentUser = await requireSessionUser();
+
+    if (currentUser.role !== "ADMIN") {
+      return Response.json(
+        { success: false, message: "Only administrators can create staff accounts" },
+        { status: 403 }
+      );
+    }
+
+    const body = await request.json();
+    const name = body.name?.trim();
+    const email = body.email?.trim().toLowerCase();
+    const password = body.password?.trim();
+    const role = body.role === "ADMIN" ? "ADMIN" : "STAFF";
+    const warehouseId = body.warehouseId?.trim();
+
+    if (!name || !email || !password) {
+      return Response.json(
+        { success: false, message: "Name, email, and password are required" },
+        { status: 400 }
+      );
+    }
+
+    if (password.length < 6) {
+      return Response.json(
+        { success: false, message: "Password must be at least 6 characters" },
+        { status: 400 }
+      );
+    }
+
+    if (role === "STAFF" && !warehouseId) {
+      return Response.json(
+        { success: false, message: "Please assign a warehouse for staff members" },
+        { status: 400 }
+      );
+    }
+
+    if (warehouseId) {
+      const warehouse = await Warehouse.findById(warehouseId);
+      if (!warehouse) {
+        return Response.json(
+          { success: false, message: "Selected warehouse does not exist" },
+          { status: 404 }
+        );
+      }
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return Response.json(
+        { success: false, message: "An account with this email already exists" },
+        { status: 409 }
+      );
+    }
+
+    const { hashPassword } = await import("@/lib/auth");
+    const passwordHash = await hashPassword(password);
+
+    const user = await User.create({
+      name,
+      email,
+      passwordHash,
+      role,
+      warehouseId: warehouseId || undefined,
+      status: "ACTIVE",
+    });
+
+    const populatedUser = await User.findById(user._id)
+      .select("-passwordHash")
+      .populate("warehouseId", "name code address");
+
+    return Response.json({
+      success: true,
+      message: "Staff account created successfully",
+      data: toSafeUser(populatedUser!),
+    });
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return Response.json(
+        { success: false, message: "Not authenticated" },
+        { status: 401 }
+      );
+    }
+
+    console.error("POST /api/staff error:", error);
+    return Response.json(
+      {
+        success: false,
+        message: "Failed to create staff account",
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 }
+    );
+  }
+}

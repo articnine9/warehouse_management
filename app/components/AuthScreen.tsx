@@ -8,24 +8,17 @@ import {
   Receipt,
   Search,
   AlertTriangle,
+  Lock,
 } from "lucide-react";
 import { useAuth } from "./AuthProvider";
-
-type Warehouse = {
-  _id: string;
-  name: string;
-  code: string;
-};
+import WarningPopup from "./WarningPopup";
 
 export default function AuthScreen() {
-  const [mode, setMode] = useState<"login" | "register">("login");
-  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
   const { user, loading: authLoading, refreshUser } = useAuth();
   const router = useRouter();
 
@@ -35,53 +28,29 @@ export default function AuthScreen() {
     }
   }, [authLoading, router, user]);
 
-  useEffect(() => {
-    if (mode !== "register") {
-      return;
-    }
-
-    async function fetchWarehouses() {
-      try {
-        const response = await fetch("/api/warehouses");
-        const result = await response.json();
-
-        if (result.success) {
-          setWarehouses(result.data);
-        }
-      } catch (error) {
-        console.error("Failed to fetch warehouses:", error);
-      }
-    }
-
-    void fetchWarehouses();
-  }, [mode]);
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLoading(true);
-    setMessage("");
-
-    const endpoint =
-      mode === "login" ? "/api/auth/login" : "/api/auth/register";
+    setWarningMessage("");
+    setWarningOpen(false);
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name,
           email,
           password,
-          warehouseId,
         }),
       });
 
       const result = await response.json();
 
       if (!result.success) {
-        setMessage(result.message || "Request failed");
+        setWarningMessage(result.message || "Invalid email or password");
+        setWarningOpen(true);
         return;
       }
 
@@ -90,7 +59,8 @@ export default function AuthScreen() {
       router.refresh();
     } catch (error) {
       console.error("Authentication error:", error);
-      setMessage("Something went wrong");
+      setWarningMessage("Something went wrong. Please try again.");
+      setWarningOpen(true);
     } finally {
       setLoading(false);
     }
@@ -125,7 +95,7 @@ export default function AuthScreen() {
               Manage your warehouse operations with ease
             </h1>
             <p className="text-lg leading-relaxed text-blue-100">
-              Admin and staff collaboration platform for tracking inventory, managing stock, generating bills, and monitoring warehouse performance.
+              Internal portal for administrators and authorized warehouse staff to track inventory, manage stock, generate invoices, and handle dispatch.
             </p>
           </div>
         </div>
@@ -160,62 +130,21 @@ export default function AuthScreen() {
         </div>
 
         <div className="w-full max-w-md">
-          {/* Tab switcher */}
-          <div className="flex rounded-xl bg-slate-100 p-1">
-            <button
-              type="button"
-              onClick={() => setMode("login")}
-              className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
-                mode === "login"
-                  ? "bg-white text-slate-800 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              Login
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("register")}
-              className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-all ${
-                mode === "register"
-                  ? "bg-white text-slate-800 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              Register
-            </button>
-          </div>
-
           {/* Heading */}
-          <div className="mt-8">
+          <div>
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600 mb-3">
+              <Lock className="h-3.5 w-3.5" /> Staff & Admin Portal
+            </div>
             <h2 className="text-2xl font-bold text-slate-800">
-              {mode === "login" ? "Welcome back" : "Create account"}
+              Sign in to your account
             </h2>
             <p className="mt-2 text-sm text-slate-500">
-              {mode === "login"
-                ? "Sign in to your warehouse account."
-                : "Register a new staff account."}
+              Enter your authorized email and password to access the system.
             </p>
           </div>
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            {mode === "register" && (
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Full name
-                </label>
-                <input
-                  type="text"
-                  placeholder="Enter your full name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  required
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-            )}
-
             <div>
               <label className="mb-1.5 block text-sm font-medium text-slate-700">
                 Email address
@@ -244,32 +173,12 @@ export default function AuthScreen() {
               />
             </div>
 
-            {mode === "register" && (
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Assigned warehouse
-                </label>
-                <select
-                  value={warehouseId}
-                  onChange={(event) => setWarehouseId(event.target.value)}
-                  required
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="">Select warehouse</option>
-                  {warehouses.map((warehouse) => (
-                    <option key={warehouse._id} value={warehouse._id}>
-                      {warehouse.name} ({warehouse.code})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {message && (
-              <div className="flex items-center gap-2 rounded-xl bg-red-50 border border-red-100 px-4 py-3 text-sm text-red-700">
-                <AlertTriangle className="h-4 w-4" />
-                {message}
-              </div>
+            {warningOpen && (
+              <WarningPopup
+                open={warningOpen}
+                message={warningMessage}
+                onClose={() => setWarningOpen(false)}
+              />
             )}
 
             <button
@@ -277,21 +186,14 @@ export default function AuthScreen() {
               disabled={loading}
               className="w-full rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-60"
             >
-              {loading
-                ? mode === "login"
-                  ? "Signing in..."
-                  : "Creating account..."
-                : mode === "login"
-                ? "Sign in"
-                : "Create account"}
+              {loading ? "Signing in..." : "Sign in"}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs text-slate-400">
-            {mode === "login"
-              ? "Don't have an account? Switch to Register tab."
-              : "Already have an account? Switch to Login tab."}
-          </p>
+          <div className="mt-6 rounded-xl border border-slate-100 bg-slate-50/80 p-3.5 text-center text-xs text-slate-500">
+            <p className="font-medium text-slate-600">Need staff account access?</p>
+            <p className="mt-0.5 text-slate-400">Staff accounts and passwords are created and managed by the System Administrator.</p>
+          </div>
         </div>
       </div>
     </div>

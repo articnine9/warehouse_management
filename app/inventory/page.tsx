@@ -1,8 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useState, Suspense } from "react";
+import { FormEvent, useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
+import Pagination from "@/app/components/Pagination";
+import WarningPopup from "@/app/components/WarningPopup";
 
 type Product = { _id: string; name: string; sku: string; category?: string; price?: number };
 type Warehouse = { _id: string; name: string; code: string };
@@ -30,6 +33,10 @@ function InventoryContent() {
   const [selectedWarehouseFilter, setSelectedWarehouseFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
   // Form states
   const [productId, setProductId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
@@ -48,6 +55,9 @@ function InventoryContent() {
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
 
   async function fetchProducts() {
     const r = await fetch("/api/products");
@@ -81,7 +91,6 @@ function InventoryContent() {
   }
 
   useEffect(() => {
-    // Update status filter if URL query param changes
     const param = searchParams.get("status");
     if (param) {
       setStatusFilter(param);
@@ -89,18 +98,67 @@ function InventoryContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchProducts();
     void fetchWarehouses();
     void fetchRacks();
     void fetchInventory();
   }, []);
 
-  const filteredRacks = racks.filter((rack) => rack.warehouseId._id === warehouseId);
-  const editFilteredRacks = racks.filter((rack) => rack.warehouseId._id === editWarehouseId);
+  const filteredRacks = racks.filter((rack) => rack.warehouseId?._id === warehouseId);
+  const editFilteredRacks = racks.filter((rack) => rack.warehouseId?._id === editWarehouseId);
+
+  // Searchable Select Options
+  const productOptions: SelectOption[] = useMemo(() => {
+    return products.map((p) => ({
+      value: p._id,
+      label: p.name,
+      subLabel: `SKU: ${p.sku}`,
+      badge: p.price != null ? `₹${p.price.toLocaleString("en-IN")}` : undefined,
+    }));
+  }, [products]);
+
+  const warehouseOptions: SelectOption[] = useMemo(() => {
+    return warehouses.map((w) => ({
+      value: w._id,
+      label: w.name,
+      subLabel: w.code,
+    }));
+  }, [warehouses]);
+
+  const filterWarehouseOptions: SelectOption[] = useMemo(() => {
+    return [
+      { value: "ALL", label: "All Warehouses" },
+      ...warehouses.map((w) => ({
+        value: w._id,
+        label: w.name,
+        subLabel: w.code,
+      })),
+    ];
+  }, [warehouses]);
+
+  const rackOptions: SelectOption[] = useMemo(() => {
+    return filteredRacks.map((r) => ({
+      value: r._id,
+      label: r.name,
+      subLabel: r.code,
+    }));
+  }, [filteredRacks]);
+
+  const editRackOptions: SelectOption[] = useMemo(() => {
+    return editFilteredRacks.map((r) => ({
+      value: r._id,
+      label: r.name,
+      subLabel: r.code,
+    }));
+  }, [editFilteredRacks]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!productId || !warehouseId || !rackId) {
+      setWarningMessage("Please select product, warehouse, and rack");
+      setWarningOpen(true);
+      return;
+    }
     setLoading(true);
     try {
       const response = await fetch("/api/inventory", {
@@ -115,7 +173,8 @@ function InventoryContent() {
       });
       const result = await response.json();
       if (!result.success) {
-        alert(result.message);
+        setWarningMessage(result.message || "Failed to add inventory");
+        setWarningOpen(true);
         return;
       }
       setProductId("");
@@ -125,7 +184,8 @@ function InventoryContent() {
       await fetchInventory();
     } catch (error) {
       console.error("Failed to create inventory:", error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setLoading(false);
     }
@@ -133,15 +193,19 @@ function InventoryContent() {
 
   function openEdit(item: Inventory) {
     setEditId(item._id);
-    setEditProductId(item.productId._id);
-    setEditWarehouseId(item.warehouseId._id);
-    setEditRackId(item.rackId._id);
+    setEditProductId(item.productId?._id || "");
+    setEditWarehouseId(item.warehouseId?._id || "");
+    setEditRackId(item.rackId?._id || "");
     setEditQuantity(item.quantity.toString());
   }
 
   async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!editId) return;
+    if (!editId || !editProductId || !editWarehouseId || !editRackId) {
+      setWarningMessage("Please select product, warehouse, and rack");
+      setWarningOpen(true);
+      return;
+    }
     setEditLoading(true);
     try {
       const response = await fetch(`/api/inventory/${editId}`, {
@@ -156,14 +220,16 @@ function InventoryContent() {
       });
       const result = await response.json();
       if (!result.success) {
-        alert(result.message);
+        setWarningMessage(result.message || "Failed to update inventory");
+        setWarningOpen(true);
         return;
       }
       setEditId(null);
       await fetchInventory();
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setEditLoading(false);
     }
@@ -178,14 +244,16 @@ function InventoryContent() {
       });
       const result = await response.json();
       if (!result.success) {
-        alert(result.message);
+        setWarningMessage(result.message || "Failed to delete inventory");
+        setWarningOpen(true);
         return;
       }
       setDeleteId(null);
       await fetchInventory();
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setDeleteLoading(false);
     }
@@ -209,40 +277,53 @@ function InventoryContent() {
   const lowOutCount = lowStockCount + outOfStockCount;
 
   // Filtered inventory list
-  const filteredInventory = inventory.filter((item) => {
-    // Status Filter
-    let matchesStatus = true;
-    if (statusFilter === "AVAILABLE") matchesStatus = item.status === "AVAILABLE";
-    else if (statusFilter === "LOW_STOCK") matchesStatus = item.status === "LOW_STOCK";
-    else if (statusFilter === "OUT_OF_STOCK") matchesStatus = item.status === "OUT_OF_STOCK";
-    else if (statusFilter === "LOW_OUT")
-      matchesStatus = item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK";
+  const filteredInventory = useMemo(() => {
+    return inventory.filter((item) => {
+      // Status Filter
+      let matchesStatus = true;
+      if (statusFilter === "AVAILABLE") matchesStatus = item.status === "AVAILABLE";
+      else if (statusFilter === "LOW_STOCK") matchesStatus = item.status === "LOW_STOCK";
+      else if (statusFilter === "OUT_OF_STOCK") matchesStatus = item.status === "OUT_OF_STOCK";
+      else if (statusFilter === "LOW_OUT")
+        matchesStatus = item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK";
 
-    // Warehouse Filter
-    let matchesWarehouse = true;
-    if (selectedWarehouseFilter !== "ALL") {
-      matchesWarehouse = item.warehouseId?._id === selectedWarehouseFilter;
-    }
+      // Warehouse Filter
+      let matchesWarehouse = true;
+      if (selectedWarehouseFilter !== "ALL") {
+        matchesWarehouse = item.warehouseId?._id === selectedWarehouseFilter;
+      }
 
-    // Search Query
-    let matchesSearch = true;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      const pName = item.productId?.name?.toLowerCase() || "";
-      const pSku = item.productId?.sku?.toLowerCase() || "";
-      const wName = item.warehouseId?.name?.toLowerCase() || "";
-      const rName = item.rackId?.name?.toLowerCase() || "";
-      const rCode = item.rackId?.code?.toLowerCase() || "";
-      matchesSearch =
-        pName.includes(q) ||
-        pSku.includes(q) ||
-        wName.includes(q) ||
-        rName.includes(q) ||
-        rCode.includes(q);
-    }
+      // Search Query
+      let matchesSearch = true;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const pName = item.productId?.name?.toLowerCase() || "";
+        const pSku = item.productId?.sku?.toLowerCase() || "";
+        const wName = item.warehouseId?.name?.toLowerCase() || "";
+        const rName = item.rackId?.name?.toLowerCase() || "";
+        const rCode = item.rackId?.code?.toLowerCase() || "";
+        matchesSearch =
+          pName.includes(q) ||
+          pSku.includes(q) ||
+          wName.includes(q) ||
+          rName.includes(q) ||
+          rCode.includes(q);
+      }
 
-    return matchesStatus && matchesWarehouse && matchesSearch;
-  });
+      return matchesStatus && matchesWarehouse && matchesSearch;
+    });
+  }, [inventory, statusFilter, selectedWarehouseFilter, searchQuery]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter, selectedWarehouseFilter, searchQuery, pageSize]);
+
+  // Paginated records
+  const paginatedInventory = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredInventory.slice(start, start + pageSize);
+  }, [filteredInventory, currentPage, pageSize]);
 
   const inputCls =
     "rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20";
@@ -332,66 +413,69 @@ function InventoryContent() {
       {/* Add inventory form */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-800">Add Stock to Location</h2>
-        <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
-          <select value={productId} onChange={(e) => setProductId(e.target.value)} required className={inputCls}>
-            <option value="">Select Product</option>
-            {products.map((p) => (
-              <option key={p._id} value={p._id}>
-                {p.name} ({p.sku})
-              </option>
-            ))}
-          </select>
-          <select
-            value={warehouseId}
-            onChange={(e) => {
-              setWarehouseId(e.target.value);
-              setRackId("");
-            }}
-            required
-            className={inputCls}
-          >
-            <option value="">Select Warehouse</option>
-            {warehouses.map((w) => (
-              <option key={w._id} value={w._id}>
-                {w.name} ({w.code})
-              </option>
-            ))}
-          </select>
-          <select
-            value={rackId}
-            onChange={(e) => setRackId(e.target.value)}
-            required
-            disabled={!warehouseId}
-            className={`${inputCls} disabled:bg-slate-50 disabled:text-slate-400`}
-          >
-            <option value="">{warehouseId ? "Select Rack" : "Select Warehouse First"}</option>
-            {filteredRacks.map((r) => (
-              <option key={r._id} value={r._id}>
-                {r.name} ({r.code})
-              </option>
-            ))}
-          </select>
-          <input
-            type="number"
-            min="0"
-            placeholder="Quantity"
-            value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
-            required
-            className={inputCls}
-          />
+        <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 items-end">
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Product</label>
+            <SearchableSelect
+              options={productOptions}
+              value={productId}
+              onChange={setProductId}
+              placeholder="Search & select product..."
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Warehouse</label>
+            <SearchableSelect
+              options={warehouseOptions}
+              value={warehouseId}
+              onChange={(wId) => {
+                setWarehouseId(wId);
+                setRackId("");
+              }}
+              placeholder="Search & select warehouse..."
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Rack Location</label>
+            <SearchableSelect
+              options={rackOptions}
+              value={rackId}
+              onChange={setRackId}
+              placeholder={warehouseId ? "Search & select rack..." : "Select warehouse first"}
+              disabled={!warehouseId}
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Quantity</label>
+            <input
+              type="number"
+              min="0"
+              placeholder="Quantity"
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              required
+              className={`w-full ${inputCls}`}
+            />
+          </div>
+
           <button
             type="submit"
             disabled={loading}
-            className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 md:col-span-2 lg:col-span-1"
+            className="h-[42px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
           >
-            {loading ? "Adding..." : "Add Inventory"}
+            {loading ? "Adding..." : "+ Add Stock Entry"}
           </button>
         </form>
       </div>
 
       {/* Inventory list */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="border-b border-slate-100 px-4 py-4 md:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-800">
@@ -422,18 +506,15 @@ function InventoryContent() {
             />
 
             {/* Warehouse Filter */}
-            <select
-              value={selectedWarehouseFilter}
-              onChange={(e) => setSelectedWarehouseFilter(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 outline-none focus:border-blue-500"
-            >
-              <option value="ALL">All Warehouses</option>
-              {warehouses.map((w) => (
-                <option key={w._id} value={w._id}>
-                  {w.name} ({w.code})
-                </option>
-              ))}
-            </select>
+            <div className="w-full sm:w-48">
+              <SearchableSelect
+                options={filterWarehouseOptions}
+                value={selectedWarehouseFilter}
+                onChange={(val) => setSelectedWarehouseFilter(val || "ALL")}
+                placeholder="All Warehouses"
+                allowClear={false}
+              />
+            </div>
           </div>
         </div>
 
@@ -443,7 +524,7 @@ function InventoryContent() {
         )}
 
         {/* Desktop table */}
-        {!fetching && (
+        {!fetching && paginatedInventory.length > 0 && (
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500">
@@ -457,16 +538,16 @@ function InventoryContent() {
                 </tr>
               </thead>
               <tbody>
-                {filteredInventory.map((item) => (
+                {paginatedInventory.map((item) => (
                   <tr key={item._id} className="border-t border-slate-100 hover:bg-slate-50/50">
                     <td className="px-5 py-3 font-medium text-slate-800">
-                      {item.productId.name}{" "}
-                      <span className="text-xs text-slate-400">({item.productId.sku})</span>
+                      {item.productId?.name || "Unknown"}{" "}
+                      <span className="text-xs text-slate-400">({item.productId?.sku || "-"})</span>
                     </td>
-                    <td className="px-5 py-3 text-slate-600">{item.warehouseId.name}</td>
+                    <td className="px-5 py-3 text-slate-600">{item.warehouseId?.name || "-"}</td>
                     <td className="px-5 py-3 text-slate-600">
-                      {item.rackId.name}{" "}
-                      <span className="text-xs text-slate-400">({item.rackId.code})</span>
+                      {item.rackId?.name || "-"}{" "}
+                      <span className="text-xs text-slate-400">({item.rackId?.code || "-"})</span>
                     </td>
                     <td className="px-5 py-3 font-semibold text-slate-800">{item.quantity}</td>
                     <td className="px-5 py-3">
@@ -492,36 +573,29 @@ function InventoryContent() {
                     </td>
                   </tr>
                 ))}
-                {filteredInventory.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-5 py-10 text-center text-sm text-slate-400">
-                      No inventory records found matching your filters.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
         )}
 
         {/* Mobile cards */}
-        {!fetching && (
+        {!fetching && paginatedInventory.length > 0 && (
           <div className="space-y-3 p-4 md:hidden">
-            {filteredInventory.map((item) => (
+            {paginatedInventory.map((item) => (
               <div key={item._id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-semibold text-slate-800">{item.productId.name}</p>
-                    <p className="mt-0.5 text-xs text-slate-500">{item.productId.sku}</p>
+                    <p className="font-semibold text-slate-800">{item.productId?.name || "Unknown"}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{item.productId?.sku || "-"}</p>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusBadge(item.status)}`}>
                     {item.status.replace("_", " ")}
                   </span>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                  <span>Warehouse: {item.warehouseId.name}</span>
+                  <span>Warehouse: {item.warehouseId?.name || "-"}</span>
                   <span>
-                    Rack: {item.rackId.name} ({item.rackId.code})
+                    Rack: {item.rackId?.name || "-"} ({item.rackId?.code || "-"})
                   </span>
                   <span className="font-semibold text-slate-700">Qty: {item.quantity}</span>
                 </div>
@@ -541,10 +615,26 @@ function InventoryContent() {
                 </div>
               </div>
             ))}
-            {filteredInventory.length === 0 && (
-              <p className="py-8 text-center text-sm text-slate-400">No inventory records found</p>
-            )}
           </div>
+        )}
+
+        {/* No results */}
+        {!fetching && filteredInventory.length === 0 && (
+          <div className="p-10 text-center text-sm text-slate-400">
+            No inventory records found matching your filters.
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {!fetching && filteredInventory.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            totalItems={filteredInventory.length}
+            pageSize={pageSize}
+            onPageChange={(page) => setCurrentPage(page)}
+            onPageSizeChange={(size) => setPageSize(size)}
+            pageSizeOptions={[10, 25, 50, 100]}
+          />
         )}
       </div>
 
@@ -554,58 +644,56 @@ function InventoryContent() {
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-800">Edit Inventory</h3>
             <form onSubmit={handleEditSubmit} className="mt-5 space-y-3">
-              <select
-                value={editProductId}
-                onChange={(e) => setEditProductId(e.target.value)}
-                required
-                className={`w-full ${inputCls}`}
-              >
-                <option value="">Select Product</option>
-                {products.map((p) => (
-                  <option key={p._id} value={p._id}>
-                    {p.name} ({p.sku})
-                  </option>
-                ))}
-              </select>
-              <select
-                value={editWarehouseId}
-                onChange={(e) => {
-                  setEditWarehouseId(e.target.value);
-                  setEditRackId("");
-                }}
-                required
-                className={`w-full ${inputCls}`}
-              >
-                <option value="">Select Warehouse</option>
-                {warehouses.map((w) => (
-                  <option key={w._id} value={w._id}>
-                    {w.name} ({w.code})
-                  </option>
-                ))}
-              </select>
-              <select
-                value={editRackId}
-                onChange={(e) => setEditRackId(e.target.value)}
-                required
-                disabled={!editWarehouseId}
-                className={`w-full ${inputCls} disabled:bg-slate-50`}
-              >
-                <option value="">{editWarehouseId ? "Select Rack" : "Select Warehouse First"}</option>
-                {editFilteredRacks.map((r) => (
-                  <option key={r._id} value={r._id}>
-                    {r.name} ({r.code})
-                  </option>
-                ))}
-              </select>
-              <input
-                type="number"
-                min="0"
-                placeholder="Quantity"
-                value={editQuantity}
-                onChange={(e) => setEditQuantity(e.target.value)}
-                required
-                className={`w-full ${inputCls}`}
-              />
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Product</label>
+                <SearchableSelect
+                  options={productOptions}
+                  value={editProductId}
+                  onChange={setEditProductId}
+                  placeholder="Search & select product..."
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Warehouse</label>
+                <SearchableSelect
+                  options={warehouseOptions}
+                  value={editWarehouseId}
+                  onChange={(wId) => {
+                    setEditWarehouseId(wId);
+                    setEditRackId("");
+                  }}
+                  placeholder="Search & select warehouse..."
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Rack Location</label>
+                <SearchableSelect
+                  options={editRackOptions}
+                  value={editRackId}
+                  onChange={setEditRackId}
+                  placeholder={editWarehouseId ? "Search & select rack..." : "Select warehouse first"}
+                  disabled={!editWarehouseId}
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Quantity</label>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Quantity"
+                  value={editQuantity}
+                  onChange={(e) => setEditQuantity(e.target.value)}
+                  required
+                  className={`w-full ${inputCls}`}
+                />
+              </div>
+
               <div className="flex gap-3 pt-2">
                 <button
                   type="submit"
@@ -653,6 +741,11 @@ function InventoryContent() {
           </div>
         </div>
       )}
+      <WarningPopup
+        open={warningOpen}
+        message={warningMessage}
+        onClose={() => setWarningOpen(false)}
+      />
     </div>
   );
 }

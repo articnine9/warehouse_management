@@ -5,11 +5,80 @@ import {
   requireSessionUser,
   toSafeUser,
 } from "@/lib/auth";
+import EmployeeIssue from "@/models/EmployeeIssue";
 import Inventory from "@/models/Inventory";
 import Product from "@/models/Product";
 import Rack from "@/models/Rack";
 import User from "@/models/User";
 import Warehouse from "@/models/Warehouse";
+import { getServiceCycleInfo } from "@/lib/serviceCycle";
+
+type ServiceAlert = {
+  issueId: string;
+  issueNumber: string;
+  itemIndex: number;
+  employeeName: string;
+  employeePhone?: string;
+  employeeDepartment?: string;
+  productName: string;
+  sku: string;
+  serialNumber?: string;
+  serviceStage: string;
+  serviceDate: string;
+  holdingStatus: string;
+  isOverdue: boolean;
+  daysRemaining: number;
+};
+
+/**
+ * Items whose recurring service cycle is due soon or already overdue.
+ * Powers the notification bell.
+ */
+async function buildServiceAlerts(warehouseId?: unknown): Promise<ServiceAlert[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const filter: Record<string, any> = {};
+  if (warehouseId) {
+    filter["items.warehouseId"] = warehouseId;
+  }
+
+  const issues = await EmployeeIssue.find(filter).sort({ createdAt: -1 }).limit(300);
+  const alerts: ServiceAlert[] = [];
+
+  for (const issue of issues) {
+    issue.items.forEach((item, itemIndex) => {
+      if (item.holdingStatus === "RETURNED") return;
+      if (warehouseId && item.warehouseId?.toString() !== warehouseId.toString()) return;
+
+      const cycle = getServiceCycleInfo({
+        intervalMonths: item.serviceIntervalMonths,
+        lastServiceDate: item.lastServiceDate,
+        issuedAt: issue.createdAt,
+      });
+
+      if (!cycle.nextServiceDate || cycle.daysRemaining === null) return;
+      if (!cycle.isOverdue && !cycle.isDueSoon) return;
+
+      alerts.push({
+        issueId: issue._id.toString(),
+        issueNumber: issue.issueNumber,
+        itemIndex,
+        employeeName: issue.employeeName,
+        employeePhone: issue.employeePhone,
+        employeeDepartment: issue.employeeDepartment,
+        productName: item.productName,
+        sku: item.sku,
+        serialNumber: item.serialNumber,
+        serviceStage: `Service #${(item.serviceCount || 0) + 1} • ${cycle.intervalLabel}`,
+        serviceDate: cycle.nextServiceDate.toISOString(),
+        holdingStatus: item.holdingStatus || "ACTIVE",
+        isOverdue: cycle.isOverdue,
+        daysRemaining: cycle.daysRemaining,
+      });
+    });
+  }
+
+  return alerts.sort((a, b) => a.daysRemaining - b.daysRemaining).slice(0, 25);
+}
 
 export async function GET() {
   try {
@@ -25,6 +94,7 @@ export async function GET() {
         inventoryItems,
         lowStockCount,
         staffCount,
+        serviceAlerts,
       ] = await Promise.all([
         Warehouse.countDocuments(),
         Rack.countDocuments(),
@@ -41,6 +111,7 @@ export async function GET() {
           status: { $in: ["LOW_STOCK", "OUT_OF_STOCK"] },
         }),
         User.countDocuments({ role: "STAFF" }),
+        buildServiceAlerts(),
       ]);
 
       return Response.json({
@@ -59,6 +130,7 @@ export async function GET() {
             { label: "Staff", value: staffCount },
             { label: "Low / Out", value: lowStockCount },
           ],
+          serviceAlerts,
         },
       });
     }
@@ -76,7 +148,7 @@ export async function GET() {
       );
     }
 
-    const [inventoryItems, lowStockItems, distinctProducts] = await Promise.all([
+    const [inventoryItems, lowStockItems, distinctProducts, serviceAlerts] = await Promise.all([
       Inventory.aggregate([
         {
           $match: {
@@ -99,6 +171,7 @@ export async function GET() {
         .sort({ quantity: 1 })
         .limit(5),
       Inventory.distinct("productId", { warehouseId }),
+      buildServiceAlerts(warehouseId),
     ]);
 
     return Response.json({
@@ -135,6 +208,7 @@ export async function GET() {
           quantity: item.quantity,
           status: item.status,
         })),
+        serviceAlerts,
       },
     });
   } catch (error) {

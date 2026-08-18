@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
 import Product from "@/models/Product";
+import ProductHistory from "@/models/ProductHistory";
 
 export async function PUT(
   request: Request,
@@ -19,6 +20,21 @@ export async function PUT(
     }
 
     const body = await request.json();
+
+    const oldProduct = await Product.findById(id).lean();
+    if (!oldProduct) {
+      return Response.json(
+        { success: false, message: "Product not found" },
+        { status: 404 }
+      );
+    }
+
+    const oldValues = oldProduct as unknown as Record<string, unknown>;
+    const changedFields = Object.keys(body).filter((key) => {
+      const oldVal = oldValues[key];
+      const newVal = body[key];
+      return JSON.stringify(oldVal) !== JSON.stringify(newVal);
+    });
 
     const product = await Product.findByIdAndUpdate(
       id,
@@ -40,6 +56,17 @@ export async function PUT(
         { success: false, message: "Product not found" },
         { status: 404 }
       );
+    }
+
+    if (changedFields.length > 0) {
+      await ProductHistory.create({
+        productId: product._id,
+        action: "UPDATED",
+        changedBy: user.id,
+        changedFields,
+        oldValues: oldValues as Record<string, unknown>,
+        newValues: body as Record<string, unknown>,
+      });
     }
 
     return Response.json({ success: true, data: product });
@@ -81,7 +108,7 @@ export async function PUT(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -96,7 +123,7 @@ export async function DELETE(
       );
     }
 
-    const product = await Product.findByIdAndDelete(id);
+    const product = await Product.findById(id).lean();
 
     if (!product) {
       return Response.json(
@@ -104,6 +131,17 @@ export async function DELETE(
         { status: 404 }
       );
     }
+
+    const productObj = product as unknown as Record<string, unknown>;
+
+    await Product.findByIdAndDelete(id);
+
+    await ProductHistory.create({
+      productId: product._id,
+      action: "DELETED",
+      changedBy: user.id,
+      oldValues: productObj,
+    });
 
     return Response.json({ success: true, message: "Product deleted" });
   } catch (error) {

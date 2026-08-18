@@ -5,7 +5,7 @@ import Product from "@/models/Product";
 import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
         await connectDB();
         void Product;
@@ -13,13 +13,86 @@ export async function GET() {
         void Rack;
 
         const user = await requireSessionUser();
+        const { searchParams } = new URL(request.url);
 
         const staffWarehouseId = getUserWarehouseId(user);
-        const filter =
-            user.role === "STAFF" && staffWarehouseId
-                ? { warehouseId: staffWarehouseId }
-                : {};
+        const warehouseParam = searchParams.get("warehouseId");
+        const statusParam = searchParams.get("status");
+        const queryParam = searchParams.get("q") || searchParams.get("search");
 
+        // Build filter
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const filter: Record<string, any> = {};
+
+        // Role restriction for staff
+        if (user.role === "STAFF" && staffWarehouseId) {
+            filter.warehouseId = staffWarehouseId;
+        } else if (warehouseParam && warehouseParam !== "ALL") {
+            filter.warehouseId = warehouseParam;
+        }
+
+        // Status filter
+        if (statusParam && statusParam !== "ALL") {
+            if (statusParam === "LOW_OUT") {
+                filter.status = { $in: ["LOW_STOCK", "OUT_OF_STOCK"] };
+            } else {
+                filter.status = statusParam;
+            }
+        }
+
+        // If search query is provided, find matching product IDs or rack IDs
+        if (queryParam?.trim()) {
+            const regex = new RegExp(queryParam.trim(), "i");
+            const [matchingProducts, matchingRacks, matchingWarehouses] = await Promise.all([
+                Product.find({ $or: [{ name: regex }, { sku: regex }, { sellerName: regex }, { category: regex }] }).select("_id"),
+                Rack.find({ $or: [{ name: regex }, { code: regex }] }).select("_id"),
+                Warehouse.find({ $or: [{ name: regex }, { code: regex }] }).select("_id"),
+            ]);
+
+            const pIds = matchingProducts.map((p) => p._id);
+            const rIds = matchingRacks.map((r) => r._id);
+            const wIds = matchingWarehouses.map((w) => w._id);
+
+            filter.$or = [
+                { productId: { $in: pIds } },
+                { rackId: { $in: rIds } },
+                { warehouseId: { $in: wIds } },
+            ];
+        }
+
+        const pageParam = searchParams.get("page");
+        const limitParam = searchParams.get("limit");
+
+        // If pagination parameters are specified
+        if (pageParam || limitParam) {
+            const page = Math.max(1, parseInt(pageParam || "1", 10));
+            const limit = Math.min(100, Math.max(1, parseInt(limitParam || "10", 10)));
+            const skip = (page - 1) * limit;
+
+            const [total, inventory] = await Promise.all([
+                Inventory.countDocuments(filter),
+                Inventory.find(filter)
+                    .populate("productId", "name sku price sellerName category")
+                    .populate("warehouseId", "name code")
+                    .populate("rackId", "name code")
+                    .sort({ createdAt: -1 })
+                    .skip(skip)
+                    .limit(limit),
+            ]);
+
+            return Response.json({
+                success: true,
+                data: inventory,
+                pagination: {
+                    total,
+                    page,
+                    limit,
+                    totalPages: Math.ceil(total / limit),
+                },
+            });
+        }
+
+        // Return all records (used for selection dropdowns / backward compatibility)
         const inventory = await Inventory.find(filter)
             .populate("productId", "name sku price sellerName category")
             .populate("warehouseId", "name code")
