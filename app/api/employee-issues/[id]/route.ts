@@ -205,7 +205,50 @@ export async function PUT(
       changes.push(`service #${nextServiceNumber} recorded`);
     }
 
-    // 4. Remarks
+    // 4. Renewal of reusable product period
+    const isRenewAction = action === "RENEW_ITEM" || action === "RENEW";
+    if (isRenewAction) {
+      const extendDays = Math.max(1, Number(body.extendedDays) || Number(body.extendDays) || 30);
+      const currentDue = item.returnDueDate ? new Date(item.returnDueDate) : new Date();
+      const baseDate = currentDue.getTime() < Date.now() ? new Date() : currentDue;
+      const newDueDate = new Date(baseDate.getTime() + extendDays * 86400000);
+      const nextRenewalNum = (item.renewalCount || 0) + 1;
+      const now = new Date();
+
+      item.returnDueDate = newDueDate;
+      item.returnDueDays = extendDays;
+      item.lastRenewedDate = now;
+      item.renewalCount = nextRenewalNum;
+      item.holdingStatus = "ACTIVE";
+      item.renewalHistory = [
+        ...(item.renewalHistory || []),
+        {
+          renewalNumber: nextRenewalNum,
+          renewedAt: now,
+          extendedDays: extendDays,
+          newDueDate,
+          notes: trimmedNotes || `Renewed for ${extendDays} days`,
+          performedBy: currentUser.name,
+        },
+      ];
+      changes.push(
+        `period renewed for +${extendDays} days (new due: ${newDueDate.toLocaleDateString("en-IN")})`
+      );
+    }
+
+    // 5. Explicit returnDueDays update
+    if (body.returnDueDays !== undefined && !isRenewAction) {
+      const days = Number(body.returnDueDays);
+      if (Number.isFinite(days) && days > 0) {
+        item.returnDueDays = days;
+        if (!item.returnDueDate) {
+          item.returnDueDate = new Date(Date.now() + days * 86400000);
+        }
+        changes.push(`return period set to ${days} days`);
+      }
+    }
+
+    // 6. Remarks
     if (trimmedNotes !== undefined) {
       item.serviceNotes = trimmedNotes;
     }

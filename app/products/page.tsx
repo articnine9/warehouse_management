@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { FolderTree, History } from "lucide-react";
+import { FolderTree, History, RotateCcw, Box, Tag } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
@@ -13,6 +13,8 @@ type Product = {
   name: string;
   sku: string;
   category?: string;
+  productType?: "REUSABLE" | "NON_REUSABLE";
+  returnDays?: number;
   sellerName?: string;
   price?: number;
   description?: string;
@@ -31,6 +33,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("ALL");
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState<"ALL" | "REUSABLE" | "NON_REUSABLE">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [addLoading, setAddLoading] = useState(false);
@@ -42,6 +45,8 @@ export default function ProductsPage() {
   const [name, setName] = useState("");
   const [sku, setSku] = useState("");
   const [category, setCategory] = useState("");
+  const [productType, setProductType] = useState<"NON_REUSABLE" | "REUSABLE">("NON_REUSABLE");
+  const [returnDays, setReturnDays] = useState("30");
   const [description, setDescription] = useState("");
   const [sellerName, setSellerName] = useState("");
   const [price, setPrice] = useState("");
@@ -50,6 +55,8 @@ export default function ProductsPage() {
   const [editName, setEditName] = useState("");
   const [editSku, setEditSku] = useState("");
   const [editCategory, setEditCategory] = useState("");
+  const [editProductType, setEditProductType] = useState<"NON_REUSABLE" | "REUSABLE">("NON_REUSABLE");
+  const [editReturnDays, setEditReturnDays] = useState("30");
   const [editDescription, setEditDescription] = useState("");
   const [editSellerName, setEditSellerName] = useState("");
   const [editPrice, setEditPrice] = useState("");
@@ -125,6 +132,8 @@ export default function ProductsPage() {
           name,
           sku,
           category,
+          productType,
+          returnDays: productType === "REUSABLE" ? Math.max(1, Number(returnDays) || 30) : 0,
           sellerName,
           price: Number(price),
           description,
@@ -139,6 +148,8 @@ export default function ProductsPage() {
       setName("");
       setSku("");
       setCategory("");
+      setProductType("NON_REUSABLE");
+      setReturnDays("30");
       setSellerName("");
       setPrice("");
       setDescription("");
@@ -157,6 +168,8 @@ export default function ProductsPage() {
     setEditName(product.name);
     setEditSku(product.sku);
     setEditCategory(product.category || "");
+    setEditProductType(product.productType || "NON_REUSABLE");
+    setEditReturnDays(product.returnDays?.toString() || "30");
     setEditDescription(product.description || "");
     setEditSellerName(product.sellerName || "");
     setEditPrice(product.price?.toString() || "");
@@ -175,6 +188,8 @@ export default function ProductsPage() {
           name: editName,
           sku: editSku,
           category: editCategory,
+          productType: editProductType,
+          returnDays: editProductType === "REUSABLE" ? Math.max(1, Number(editReturnDays) || 30) : 0,
           sellerName: editSellerName,
           price: Number(editPrice),
           description: editDescription,
@@ -226,20 +241,23 @@ export default function ProductsPage() {
     return products.filter((p) => {
       const matchesCategory =
         selectedCategoryFilter === "ALL" || p.category === selectedCategoryFilter;
+      const matchesType =
+        selectedTypeFilter === "ALL" ||
+        (selectedTypeFilter === "REUSABLE" ? p.productType === "REUSABLE" : p.productType !== "REUSABLE");
       const matchesSearch =
         !searchQuery.trim() ||
         p.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
         p.sku.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
         (p.sellerName &&
           p.sellerName.toLowerCase().includes(searchQuery.toLowerCase().trim()));
-      return matchesCategory && matchesSearch;
+      return matchesCategory && matchesType && matchesSearch;
     });
-  }, [products, selectedCategoryFilter, searchQuery]);
+  }, [products, selectedCategoryFilter, selectedTypeFilter, searchQuery]);
 
   // Reset page on filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCategoryFilter, searchQuery, pageSize]);
+  }, [selectedCategoryFilter, selectedTypeFilter, searchQuery, pageSize]);
 
   // Paginated records
   const paginatedProducts = useMemo(() => {
@@ -273,6 +291,67 @@ export default function ProductsPage() {
           </Link>
         </div>
 
+        {/* ─── Classification Type Quick Cards (Reusable vs Normal) ─── */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <button
+            type="button"
+            onClick={() => setSelectedTypeFilter("ALL")}
+            className={`text-left rounded-xl border p-4 shadow-sm transition ${
+              selectedTypeFilter === "ALL"
+                ? "border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20"
+                : "border-slate-200 bg-white hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-500 uppercase">All Catalog</span>
+              <Box className="h-4 w-4 text-blue-600" />
+            </div>
+            <p className="mt-1 text-base font-bold text-slate-800">Total Products</p>
+            <p className="mt-1 text-2xl font-extrabold text-blue-600">{products.length}</p>
+            <p className="text-[11px] text-slate-500 mt-1">Complete product repository</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedTypeFilter("REUSABLE")}
+            className={`text-left rounded-xl border p-4 shadow-sm transition ${
+              selectedTypeFilter === "REUSABLE"
+                ? "border-indigo-500 bg-indigo-50/70 ring-2 ring-indigo-500/20"
+                : "border-slate-200 bg-white hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-indigo-800 uppercase">Returnable Assets</span>
+              <RotateCcw className="h-4 w-4 text-indigo-600" />
+            </div>
+            <p className="mt-1 text-base font-bold text-slate-800">Reusable Products</p>
+            <p className="mt-1 text-2xl font-extrabold text-indigo-600">
+              {products.filter((p) => p.productType === "REUSABLE").length}
+            </p>
+            <p className="text-[11px] text-indigo-700 font-medium mt-1">Assets / tools with return & renewal tracking</p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSelectedTypeFilter("NON_REUSABLE")}
+            className={`text-left rounded-xl border p-4 shadow-sm transition ${
+              selectedTypeFilter === "NON_REUSABLE"
+                ? "border-slate-500 bg-slate-100 ring-2 ring-slate-400/20"
+                : "border-slate-200 bg-white hover:border-slate-300"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-600 uppercase">Standard Items</span>
+              <Tag className="h-4 w-4 text-slate-600" />
+            </div>
+            <p className="mt-1 text-base font-bold text-slate-800">Normal Consumables</p>
+            <p className="mt-1 text-2xl font-extrabold text-slate-700">
+              {products.filter((p) => p.productType !== "REUSABLE").length}
+            </p>
+            <p className="text-[11px] text-slate-500 mt-1">Standard stock items (No return required)</p>
+          </button>
+        </div>
+
         {/* Category overview cards */}
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
           <div
@@ -284,7 +363,7 @@ export default function ProductsPage() {
             }`}
           >
             <p className="text-xs font-semibold text-slate-500">ALL</p>
-            <p className="mt-1 text-sm font-bold text-slate-800">All Products</p>
+            <p className="mt-1 text-sm font-bold text-slate-800">All Categories</p>
             <p className="mt-1 text-xl font-extrabold text-blue-600">
               {products.length}
             </p>
@@ -359,6 +438,85 @@ export default function ProductsPage() {
               />
             </div>
 
+            {/* Product Type (Reusable vs Normal) */}
+            <div className="md:col-span-2 lg:col-span-3 rounded-xl bg-slate-50 p-3.5 border border-slate-200/80">
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-2">Product Classification / Type</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setProductType("NON_REUSABLE")}
+                  className={`flex flex-col text-left p-3 rounded-lg border transition ${
+                    productType === "NON_REUSABLE"
+                      ? "border-blue-600 bg-blue-50/70 ring-2 ring-blue-600/20"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-slate-800">
+                    <Box className="h-4 w-4 text-slate-600" /> Normal / Consumable Item
+                  </span>
+                  <span className="text-[11px] text-slate-500 mt-0.5">
+                    Regular consumable or standard stock item (No return/renewal required).
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setProductType("REUSABLE")}
+                  className={`flex flex-col text-left p-3 rounded-lg border transition ${
+                    productType === "REUSABLE"
+                      ? "border-indigo-600 bg-indigo-50/70 ring-2 ring-indigo-600/20"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5 text-xs font-bold text-indigo-900">
+                    <RotateCcw className="h-4 w-4 text-indigo-600" /> Reusable / Returnable Asset
+                  </span>
+                  <span className="text-[11px] text-slate-500 mt-0.5">
+                    Asset / tool / device requiring return or renewal after specified days.
+                  </span>
+                </button>
+              </div>
+
+              {productType === "REUSABLE" && (
+                <div className="mt-3 pt-3 border-t border-slate-200/70">
+                  <label className="block text-xs font-bold text-indigo-950 mb-1">
+                    Default Return / Renewal Period (in Days) *
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 30"
+                      value={returnDays}
+                      onChange={(e) => setReturnDays(e.target.value)}
+                      required={productType === "REUSABLE"}
+                      className="w-32 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold outline-none focus:border-indigo-600"
+                    />
+                    <span className="text-xs text-slate-500">Days</span>
+                    <div className="flex flex-wrap gap-1.5 ml-2">
+                      {[7, 15, 30, 60, 90, 180, 365].map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => setReturnDays(d.toString())}
+                          className={`rounded-md px-2 py-1 text-[11px] font-semibold border transition ${
+                            returnDays === d.toString()
+                              ? "bg-indigo-600 text-white border-indigo-600"
+                              : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          {d}d
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-1.5">
+                    When this product is issued, the holder must return it or renew the period before these days elapse.
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Seller Name</label>
               <input
@@ -409,22 +567,66 @@ export default function ProductsPage() {
         {/* Product list */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="border-b border-slate-100 px-4 py-4 md:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-lg font-semibold text-slate-800">
-              Product List ({filteredProducts.length})
-            </h2>
+            <div>
+              <h2 className="text-lg font-semibold text-slate-800">
+                Product List ({filteredProducts.length})
+              </h2>
+              {selectedTypeFilter !== "ALL" && (
+                <p className="text-xs text-blue-600 mt-0.5">
+                  Type: {selectedTypeFilter === "REUSABLE" ? "Reusable Products" : "Normal Products"}
+                </p>
+              )}
+            </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              {/* Type Filter Buttons */}
+              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTypeFilter("ALL")}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                    selectedTypeFilter === "ALL"
+                      ? "bg-white text-slate-800 shadow-xs"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  All ({products.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTypeFilter("REUSABLE")}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                    selectedTypeFilter === "REUSABLE"
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  Reusable ({products.filter((p) => p.productType === "REUSABLE").length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTypeFilter("NON_REUSABLE")}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                    selectedTypeFilter === "NON_REUSABLE"
+                      ? "bg-white text-slate-800 shadow-xs"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  Normal ({products.filter((p) => p.productType !== "REUSABLE").length})
+                </button>
+              </div>
+
               {/* Search input in list */}
               <input
                 type="text"
                 placeholder="Filter by name, SKU, seller..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-56"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-48"
               />
 
               {/* Category Filter */}
-              <div className="w-full sm:w-48">
+              <div className="w-full sm:w-44">
                 <SearchableSelect
                   options={filterCategoryOptions}
                   value={selectedCategoryFilter}
@@ -450,12 +652,12 @@ export default function ProductsPage() {
                 <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500">
                   <tr>
                     <th className="px-5 py-3">Product</th>
+                    <th className="px-5 py-3">Type / Validity</th>
                     <th className="px-5 py-3">SKU</th>
                     <th className="px-5 py-3">Category</th>
                     <th className="px-5 py-3">Seller</th>
                     <th className="px-5 py-3">Price</th>
                     <th className="px-5 py-3">Created</th>
-                    <th className="px-5 py-3">Updated</th>
                     <th className="px-5 py-3">Status</th>
                     <th className="px-5 py-3">Actions</th>
                   </tr>
@@ -468,6 +670,17 @@ export default function ProductsPage() {
                     >
                       <td className="px-5 py-3 font-medium text-slate-800">
                         {product.name}
+                      </td>
+                      <td className="px-5 py-3">
+                        {product.productType === "REUSABLE" ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-xs font-bold text-indigo-700">
+                            <RotateCcw className="h-3 w-3" /> Reusable ({product.returnDays || 30}d)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+                            Normal
+                          </span>
+                        )}
                       </td>
                       <td className="px-5 py-3 text-slate-600">{product.sku}</td>
                       <td className="px-5 py-3">
@@ -490,15 +703,6 @@ export default function ProductsPage() {
                       <td className="px-5 py-3 text-slate-500">
                         {product.createdAt
                           ? new Date(product.createdAt).toLocaleDateString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })
-                          : "-"}
-                      </td>
-                      <td className="px-5 py-3 text-slate-500">
-                        {product.updatedAt
-                          ? new Date(product.updatedAt).toLocaleDateString("en-IN", {
                               day: "2-digit",
                               month: "short",
                               year: "numeric",
@@ -564,28 +768,24 @@ export default function ProductsPage() {
                       {product.status}
                     </span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 items-center">
+                    {product.productType === "REUSABLE" ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 font-bold text-indigo-700">
+                        <RotateCcw className="h-3 w-3" /> Reusable ({product.returnDays || 30}d)
+                      </span>
+                    ) : (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
+                        Normal
+                      </span>
+                    )}
                     {product.category && (
                       <span className="rounded-full bg-blue-50 px-2 py-0.5 font-medium text-blue-700">
                         Category: {product.category}
                       </span>
                     )}
-                    {product.sellerName && (
-                      <span>Seller: {product.sellerName}</span>
-                    )}
                     {product.price != null && (
                       <span className="font-semibold text-slate-700">
                         ₹{product.price.toLocaleString("en-IN")}
-                      </span>
-                    )}
-                    {product.createdAt && (
-                      <span>
-                        Created: {new Date(product.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                      </span>
-                    )}
-                    {product.updatedAt && product.updatedAt !== product.createdAt && (
-                      <span>
-                        Updated: {new Date(product.updatedAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
                       </span>
                     )}
                   </div>
@@ -666,6 +866,49 @@ export default function ProductsPage() {
                     onChange={setEditCategory}
                     placeholder="Search category..."
                   />
+                </div>
+
+                {/* Edit Product Type */}
+                <div className="rounded-lg bg-slate-50 p-3 border border-slate-200">
+                  <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Product Type</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEditProductType("NON_REUSABLE")}
+                      className={`flex items-center justify-center gap-1.5 p-2 rounded-md text-xs font-bold border ${
+                        editProductType === "NON_REUSABLE"
+                          ? "bg-blue-600 text-white border-blue-600"
+                          : "bg-white text-slate-700 border-slate-200"
+                      }`}
+                    >
+                      <Box className="h-3.5 w-3.5" /> Normal Item
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditProductType("REUSABLE")}
+                      className={`flex items-center justify-center gap-1.5 p-2 rounded-md text-xs font-bold border ${
+                        editProductType === "REUSABLE"
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-white text-slate-700 border-slate-200"
+                      }`}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Reusable Asset
+                    </button>
+                  </div>
+                  {editProductType === "REUSABLE" && (
+                    <div className="mt-2.5 pt-2 border-t border-slate-200">
+                      <label className="block text-[11px] font-bold text-indigo-950 mb-1">
+                        Return / Renewal Period (Days)
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={editReturnDays}
+                        onChange={(e) => setEditReturnDays(e.target.value)}
+                        className="w-full rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 <div>

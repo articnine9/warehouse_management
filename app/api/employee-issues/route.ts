@@ -1,7 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
 import { getUserWarehouseId, requireSessionUser } from "@/lib/auth";
 import Employee from "@/models/Employee";
-import EmployeeIssue from "@/models/EmployeeIssue";
+import EmployeeIssue, { IEmployeeIssueItem } from "@/models/EmployeeIssue";
 import Inventory from "@/models/Inventory";
 import Product from "@/models/Product";
 import Rack from "@/models/Rack";
@@ -167,7 +167,7 @@ export async function POST(request: Request) {
     }
 
     const staffWarehouseId = getUserWarehouseId(currentUser);
-    const issueItems = [];
+    const issueItems: IEmployeeIssueItem[] = [];
     let totalQuantity = 0;
     let totalValue = 0;
 
@@ -243,11 +243,30 @@ export async function POST(request: Request) {
 
       const serviceIntervalMonths = Number(item.serviceIntervalMonths) || 0;
 
+      const isReusable =
+        product.productType === "REUSABLE" ||
+        item.productType === "REUSABLE" ||
+        Number(item.returnDueDays) > 0;
+      const returnDueDays = isReusable
+        ? Math.max(1, Number(item.returnDueDays) || Number(product.returnDays) || 30)
+        : 0;
+      const returnDueDate = isReusable
+        ? item.returnDueDate
+          ? new Date(item.returnDueDate)
+          : new Date(Date.now() + returnDueDays * 86400000)
+        : undefined;
+
       issueItems.push({
         inventoryId: inventory._id,
         productId: product._id,
         productName: product.name || "Product",
         sku: product.sku || "N/A",
+        productType: isReusable ? "REUSABLE" : "NON_REUSABLE",
+        returnDueDays,
+        returnDueDate,
+        lastRenewedDate: undefined,
+        renewalCount: 0,
+        renewalHistory: [],
         warehouseId: warehouse._id,
         warehouseName: warehouse.name || "Warehouse",
         rackId: rack._id,

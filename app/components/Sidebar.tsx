@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   Building2,
   Mail,
+  Menu,
 } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import NotificationBell from "./NotificationBell";
@@ -52,6 +53,8 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
   const pathname = usePathname();
   const { user, loading, logout } = useAuth();
 
@@ -64,18 +67,17 @@ export default function Sidebar() {
     "/racks",
     "/categories",
     "/products",
-    "/inventory",
   ].some((p) => pathname === p);
 
   const menuItems =
     user.role === "ADMIN"
       ? [
           { name: "Dashboard", path: "/dashboard" },
-           { name: "Inventory", path: "/inventory" },
+          { name: "Inventory", path: "/inventory" },
           { name: "Employee Issue", path: "/employee-issues" },
           // { name: "Billing", path: "/billing" },
           // { name: "Search", path: "/search" },
-              { name: "Staff Management", path: "/staff" },
+          { name: "Staff Management", path: "/staff" },
           {
             name: "Settings",
             children: [
@@ -83,50 +85,43 @@ export default function Sidebar() {
               { name: "Racks", path: "/racks" },
               { name: "Categories", path: "/categories" },
               { name: "Products", path: "/products" },
-              { name: "Inventory", path: "/inventory" },
             ],
           },
-      
         ]
       : [
           { name: "Dashboard", path: "/dashboard" },
-          { name: "Billing", path: "/billing" },
+          { name: "Inventory", path: "/inventory" },
           { name: "Employee Issue", path: "/employee-issues" },
-          { name: "Search", path: "/search" },
+          // { name: "Billing", path: "/billing" },
+          // { name: "Search", path: "/search" },
           { name: "My Warehouse", path: "/staff" },
-        ];
-
-  const mobileItems =
-    user.role === "ADMIN"
-      ? [
-          { name: "Home", path: "/dashboard" },
-          { name: "Employee Issue", path: "/employee-issues" },
-          { name: "Billing", path: "/billing" },
-          { name: "Search", path: "/search" },
-          { name: "Settings", path: "/warehouses" },
-          { name: "Staff", path: "/staff" },
-        ]
-      : [
-          { name: "Home", path: "/dashboard" },
-          { name: "Billing", path: "/billing" },
-          { name: "Employee Issue", path: "/employee-issues" },
-          { name: "Search", path: "/search" },
-          { name: "Warehouse", path: "/staff" },
         ];
 
   return (
     <>
       {/* ─── MOBILE TOP APP BAR ─── */}
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 py-2.5 md:hidden print:hidden shadow-xs">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white font-black text-sm shadow-xs">
-            W
-          </div>
-          <div>
-            <h1 className="text-sm font-bold text-slate-800 leading-tight">Warehouse</h1>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
-              {user.role}
-            </span>
+      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-md px-3.5 py-2.5 md:hidden print:hidden shadow-xs">
+        <div className="flex items-center gap-2.5">
+          {/* Hamburger Menu Button */}
+          <button
+            type="button"
+            onClick={() => setMobileDrawerOpen(true)}
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 active:scale-95 transition hover:bg-slate-100 shadow-2xs"
+            title="Open Navigation Menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white font-black text-sm shadow-xs">
+              W
+            </div>
+            <div>
+              <h1 className="text-sm font-bold text-slate-800 leading-tight">Warehouse</h1>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
+                {user.role}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -143,34 +138,132 @@ export default function Sidebar() {
         </div>
       </header>
 
-      {/* ─── MOBILE BOTTOM NAV (Smooth Scrollable) ─── */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur-md md:hidden print:hidden shadow-lg">
-        <div className="flex items-center gap-1 overflow-x-auto px-2 py-1 scrollbar-none">
-          {mobileItems.map((item) => {
-            const isActive =
-              item.path === "/warehouses"
-                ? isSettingsActive
-                : pathname === item.path;
+      {/* ─── MOBILE SLIDE-OVER SIDEBAR DRAWER ─── */}
+      {mobileDrawerOpen && (
+        <div className="fixed inset-0 z-50 flex md:hidden">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs animate-in fade-in duration-200"
+            onClick={() => setMobileDrawerOpen(false)}
+          />
 
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                className={`relative flex min-w-[64px] flex-1 flex-col items-center gap-0.5 rounded-xl px-2 py-1.5 text-[11px] font-medium transition-colors shrink-0 ${
-                  isActive
-                    ? "bg-blue-50 text-blue-700 font-bold"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
+          {/* Drawer Panel */}
+          <div className="relative z-10 flex h-full w-4/5 max-w-xs flex-col bg-white border-r border-slate-200 shadow-2xl animate-in slide-in-from-left duration-200">
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 p-4">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white font-black text-sm shadow-xs">
+                  W
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-slate-800">Warehouse Suite</h2>
+                  <span className="text-[10px] font-bold uppercase text-blue-600">
+                    {user.role} Portal
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileDrawerOpen(false)}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
               >
-                {iconMap[item.name] || <LayoutDashboard className="h-4 w-4" />}
-                <span className="truncate">{item.name}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-      {/* ─── MOBILE PROFILE MODAL / BOTTOM SHEET ─── */}
+            {/* User Info Bar */}
+            <div className="border-b border-slate-100 px-4 py-3 bg-slate-50/70">
+              <p className="text-xs font-bold text-slate-800">{user.name}</p>
+              <p className="text-[11px] text-slate-500 truncate">{user.email}</p>
+              {user.warehouse && (
+                <p className="mt-1 rounded bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 inline-block">
+                  {user.warehouse.name} ({user.warehouse.code})
+                </p>
+              )}
+            </div>
+
+            {/* Nav Menu */}
+            <nav className="flex-1 space-y-1.5 overflow-y-auto p-3 text-xs">
+              {menuItems.map((item) => {
+                const isActive = item.path ? pathname === item.path : isSettingsActive;
+                const hasChildren = "children" in item && item.children;
+
+                return (
+                  <div key={item.path || item.name}>
+                    <Link
+                      href={hasChildren ? "#" : item.path}
+                      onClick={
+                        hasChildren
+                          ? () => setSettingsOpen(!settingsOpen)
+                          : () => setMobileDrawerOpen(false)
+                      }
+                      className={`flex items-center justify-between rounded-xl px-3 py-2.5 font-semibold transition ${
+                        isActive
+                          ? "bg-blue-50 text-blue-700 font-bold"
+                          : "text-slate-700 hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {iconMap[item.name] || <Settings className="h-4 w-4" />}
+                        <span>{item.name}</span>
+                      </div>
+                      {hasChildren && (
+                        <span className="text-slate-400">
+                          {settingsOpen ? (
+                            <ChevronDown className="h-4 w-4" />
+                          ) : (
+                            <ChevronRight className="h-4 w-4" />
+                          )}
+                        </span>
+                      )}
+                    </Link>
+
+                    {hasChildren && settingsOpen && (
+                      <div className="ml-4 mt-1 space-y-1 border-l-2 border-slate-100 pl-3">
+                        {item.children.map((child) => {
+                          const childActive = pathname === child.path;
+                          return (
+                            <Link
+                              key={child.path}
+                              href={child.path}
+                              onClick={() => setMobileDrawerOpen(false)}
+                              className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition ${
+                                childActive
+                                  ? "bg-blue-50 text-blue-700 font-bold"
+                                  : "text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              {iconMap[child.name] || <Settings className="h-3.5 w-3.5" />}
+                              <span>{child.name}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </nav>
+
+            {/* Logout */}
+            <div className="border-t border-slate-100 p-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setMobileDrawerOpen(false);
+                  void logout();
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-50 py-2.5 text-xs font-bold text-red-600 hover:bg-red-100"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Log Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MOBILE PROFILE MODAL ─── */}
       {profileModalOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4 md:hidden">
           <div className="w-full max-w-md rounded-t-2xl sm:rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl animate-in slide-in-from-bottom duration-200">

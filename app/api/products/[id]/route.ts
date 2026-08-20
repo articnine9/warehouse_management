@@ -43,6 +43,8 @@ export async function PUT(
         sku: body.sku,
         category: body.category,
         categoryId: body.categoryId,
+        productType: body.productType === "REUSABLE" ? "REUSABLE" : "NON_REUSABLE",
+        returnDays: body.productType === "REUSABLE" ? Math.max(1, Number(body.returnDays) || 30) : 0,
         sellerName: body.sellerName,
         price: Number(body.price),
         description: body.description,

@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bell, CheckCircle2, Wrench, AlertTriangle, X, ArrowRight, RefreshCw } from "lucide-react";
+import {
+  Bell,
+  CheckCircle2,
+  Wrench,
+  AlertTriangle,
+  AlertOctagon,
+  X,
+  ArrowRight,
+  RefreshCw,
+  RotateCcw,
+  Package,
+  Calendar,
+  Layers,
+} from "lucide-react";
 import Link from "next/link";
 
 type ServiceAlert = {
@@ -21,13 +34,60 @@ type ServiceAlert = {
   daysRemaining: number;
 };
 
+type ReusableAlert = {
+  issueId: string;
+  issueNumber: string;
+  itemIndex: number;
+  employeeName: string;
+  employeePhone?: string;
+  employeeDepartment?: string;
+  productName: string;
+  sku: string;
+  serialNumber?: string;
+  returnDueDays: number;
+  returnDueDate: string;
+  renewalCount: number;
+  holdingStatus: string;
+  isOverdue: boolean;
+  daysRemaining: number;
+};
+
+type StockAlert = {
+  id: string;
+  productId: string;
+  warehouseId: string;
+  rackId: string;
+  productName: string;
+  sku: string;
+  warehouseName: string;
+  rackName: string;
+  quantity: number;
+  status: "LOW_STOCK" | "OUT_OF_STOCK";
+};
+
+type TabType = "ALL" | "REUSABLE" | "STOCK" | "SERVICE";
+
 export default function NotificationBell() {
-  const [alerts, setAlerts] = useState<ServiceAlert[]>([]);
+  const [serviceAlerts, setServiceAlerts] = useState<ServiceAlert[]>([]);
+  const [reusableAlerts, setReusableAlerts] = useState<ReusableAlert[]>([]);
+  const [stockAlerts, setStockAlerts] = useState<StockAlert[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [selectedAlert, setSelectedAlert] = useState<ServiceAlert | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>("ALL");
+
+  // Service Modal state
+  const [selectedServiceAlert, setSelectedServiceAlert] = useState<ServiceAlert | null>(null);
   const [serviceNotes, setServiceNotes] = useState("");
   const [markingService, setMarkingService] = useState(false);
+
+  // Reusable Renewal Modal state
+  const [selectedReusableAlert, setSelectedReusableAlert] = useState<ReusableAlert | null>(null);
+  const [renewDays, setRenewDays] = useState("30");
+  const [renewNotes, setRenewNotes] = useState("");
+  const [renewing, setRenewing] = useState(false);
+
+  // Returning state
+  const [returningItem, setReturningItem] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -36,11 +96,13 @@ export default function NotificationBell() {
       setLoading(true);
       const res = await fetch("/api/dashboard", { cache: "no-store" });
       const json = await res.json();
-      if (json.success && json.data?.serviceAlerts) {
-        setAlerts(json.data.serviceAlerts);
+      if (json.success && json.data) {
+        setServiceAlerts(json.data.serviceAlerts || []);
+        setReusableAlerts(json.data.reusableAlerts || []);
+        setStockAlerts(json.data.stockAlerts || []);
       }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to fetch notification alerts:", err);
     } finally {
       setLoading(false);
     }
@@ -67,14 +129,14 @@ export default function NotificationBell() {
   }, []);
 
   async function handleMarkServiceDone() {
-    if (!selectedAlert) return;
+    if (!selectedServiceAlert) return;
     setMarkingService(true);
     try {
-      const res = await fetch(`/api/employee-issues/${selectedAlert.issueId}`, {
+      const res = await fetch(`/api/employee-issues/${selectedServiceAlert.issueId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          itemIndex: selectedAlert.itemIndex,
+          itemIndex: selectedServiceAlert.itemIndex,
           action: "COMPLETE_SERVICE",
           serviceNotes: serviceNotes.trim() || undefined,
         }),
@@ -82,7 +144,7 @@ export default function NotificationBell() {
 
       const data = await res.json();
       if (data.success) {
-        setSelectedAlert(null);
+        setSelectedServiceAlert(null);
         setServiceNotes("");
         await fetchAlerts();
       } else {
@@ -96,6 +158,70 @@ export default function NotificationBell() {
     }
   }
 
+  async function handleRenewItem() {
+    if (!selectedReusableAlert) return;
+    setRenewing(true);
+    try {
+      const res = await fetch(`/api/employee-issues/${selectedReusableAlert.issueId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemIndex: selectedReusableAlert.itemIndex,
+          action: "RENEW_ITEM",
+          extendedDays: Math.max(1, Number(renewDays) || 30),
+          serviceNotes: renewNotes.trim() || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setSelectedReusableAlert(null);
+        setRenewNotes("");
+        setRenewDays("30");
+        await fetchAlerts();
+      } else {
+        alert(data.message || "Failed to renew item");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong");
+    } finally {
+      setRenewing(false);
+    }
+  }
+
+  async function handleReturnItem(alertTarget: ReusableAlert) {
+    if (!confirm(`Return "${alertTarget.productName}" from ${alertTarget.employeeName} back to warehouse inventory?`)) {
+      return;
+    }
+    setReturningItem(true);
+    try {
+      const res = await fetch(`/api/employee-issues/${alertTarget.issueId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemIndex: alertTarget.itemIndex,
+          action: "RETURN",
+          serviceNotes: "Returned via Notification Center",
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        await fetchAlerts();
+      } else {
+        alert(data.message || "Failed to return item");
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong");
+    } finally {
+      setReturningItem(false);
+    }
+  }
+
+  const totalCount = serviceAlerts.length + reusableAlerts.length + stockAlerts.length;
+
   return (
     <div ref={dropdownRef} className="relative inline-block">
       {/* 🔔 Permanent Bell Icon Button */}
@@ -103,34 +229,34 @@ export default function NotificationBell() {
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 hover:text-slate-800 active:scale-95 shadow-xs"
-        title="Notifications & Service Alerts"
+        title="Notifications Center"
       >
-        <Bell className={`h-4 w-4 ${alerts.length > 0 ? "text-amber-600" : "text-slate-500"}`} />
-        {alerts.length > 0 && (
+        <Bell className={`h-4 w-4 ${totalCount > 0 ? "text-amber-600" : "text-slate-500"}`} />
+        {totalCount > 0 && (
           <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-extrabold text-white shadow-xs animate-pulse">
-            {alerts.length}
+            {totalCount > 99 ? "99+" : totalCount}
           </span>
         )}
       </button>
 
-      {/* 📋 Responsive Notification Drawer / Modal */}
+      {/* 📋 Responsive Notification Drawer */}
       {isOpen && (
         <>
-          {/* Backdrop for mobile & small screens */}
+          {/* Backdrop for mobile */}
           <div
             className="fixed inset-0 z-40 bg-black/30 backdrop-blur-2xs md:hidden"
             onClick={() => setIsOpen(false)}
           />
 
-          <div className="fixed inset-x-3 top-14 z-50 mx-auto max-w-sm sm:max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl md:absolute md:inset-auto md:left-0 md:top-full md:mt-2 md:w-88 md:max-w-none animate-in fade-in zoom-in-95 duration-150">
+          <div className="fixed inset-x-3 top-14 z-50 mx-auto max-w-sm sm:max-w-md rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl md:absolute md:inset-auto md:left-0 md:top-full md:mt-2 md:w-[420px] md:max-w-none animate-in fade-in zoom-in-95 duration-150">
             {/* Header */}
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center gap-2">
                 <Bell className="h-4 w-4 text-blue-600" />
                 <span className="font-bold text-sm text-slate-800">Notifications</span>
-                {alerts.length > 0 && (
-                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold text-amber-800">
-                    {alerts.length} Due
+                {totalCount > 0 && (
+                  <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-extrabold text-red-800">
+                    {totalCount} Alerts
                   </span>
                 )}
               </div>
@@ -152,38 +278,216 @@ export default function NotificationBell() {
               </div>
             </div>
 
+            {/* Filter Tabs */}
+            <div className="mt-2 flex gap-1 border-b border-slate-100 pb-2 overflow-x-auto text-[11px]">
+              <button
+                type="button"
+                onClick={() => setActiveTab("ALL")}
+                className={`rounded-lg px-2.5 py-1 font-semibold transition shrink-0 ${
+                  activeTab === "ALL"
+                    ? "bg-slate-800 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                All ({totalCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("REUSABLE")}
+                className={`rounded-lg px-2.5 py-1 font-semibold transition shrink-0 ${
+                  activeTab === "REUSABLE"
+                    ? "bg-indigo-600 text-white"
+                    : "text-indigo-700 hover:bg-indigo-50"
+                }`}
+              >
+                Return/Renew ({reusableAlerts.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("STOCK")}
+                className={`rounded-lg px-2.5 py-1 font-semibold transition shrink-0 ${
+                  activeTab === "STOCK"
+                    ? "bg-amber-600 text-white"
+                    : "text-amber-700 hover:bg-amber-50"
+                }`}
+              >
+                Stock ({stockAlerts.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("SERVICE")}
+                className={`rounded-lg px-2.5 py-1 font-semibold transition shrink-0 ${
+                  activeTab === "SERVICE"
+                    ? "bg-blue-600 text-white"
+                    : "text-blue-700 hover:bg-blue-50"
+                }`}
+              >
+                Service ({serviceAlerts.length})
+              </button>
+            </div>
+
             {/* Alerts List */}
-            <div className="mt-2.5 max-h-72 space-y-2 overflow-y-auto pr-1 text-xs">
-              {alerts.length > 0 ? (
-                alerts.map((alert, idx) => (
+            <div className="mt-2.5 max-h-80 space-y-2.5 overflow-y-auto pr-1 text-xs">
+              {/* 1. Reusable Return / Renewal Alerts */}
+              {(activeTab === "ALL" || activeTab === "REUSABLE") &&
+                reusableAlerts.map((alert, idx) => (
                   <div
-                    key={`${alert.issueId}-${alert.itemIndex}-${idx}`}
-                    onClick={() => {
-                      setSelectedAlert(alert);
-                      setIsOpen(false);
-                    }}
-                    className={`cursor-pointer rounded-xl p-3 border transition hover:shadow-xs ${alert.isOverdue
-                        ? "bg-red-50/70 border-red-200/80 hover:bg-red-50"
-                        : "bg-amber-50/70 border-amber-200/80 hover:bg-amber-50"
-                      }`}
+                    key={`reusable-${alert.issueId}-${alert.itemIndex}-${idx}`}
+                    className={`rounded-xl p-3 border transition ${
+                      alert.isOverdue
+                        ? "bg-red-50/80 border-red-200 text-red-950"
+                        : "bg-indigo-50/70 border-indigo-200 text-indigo-950"
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-1">
-                      <span className="font-bold text-slate-800 text-xs truncate">
-                        {alert.productName}
-                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="rounded-md bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
+                            Reusable Due
+                          </span>
+                          <span className="font-bold text-slate-800 truncate text-xs">
+                            {alert.productName}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-1">
+                          Holder: <b>{alert.employeeName}</b> {alert.employeeDepartment && `(${alert.employeeDepartment})`}
+                        </p>
+                      </div>
                       <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold ${alert.isOverdue
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                          alert.isOverdue
                             ? "bg-red-600 text-white"
-                            : "bg-amber-500 text-white"
-                          }`}
+                            : "bg-indigo-700 text-white"
+                        }`}
+                      >
+                        {alert.isOverdue
+                          ? `OVERDUE (${Math.abs(alert.daysRemaining)}d)`
+                          : `${alert.daysRemaining} DAYS LEFT`}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-600 pt-1.5 border-t border-slate-200/60">
+                      <span>
+                        Due: <b>{new Date(alert.returnDueDate).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</b>
+                        {alert.renewalCount > 0 && ` • Renewed ${alert.renewalCount}x`}
+                      </span>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedReusableAlert(alert);
+                            setRenewDays(alert.returnDueDays?.toString() || "30");
+                            setRenewNotes("");
+                          }}
+                          className="rounded-md bg-indigo-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-indigo-700 active:scale-95 flex items-center gap-0.5"
+                        >
+                          <RotateCcw className="h-3 w-3" /> Renew
+                        </button>
+                        <button
+                          type="button"
+                          disabled={returningItem}
+                          onClick={() => handleReturnItem(alert)}
+                          className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-50 active:scale-95"
+                        >
+                          Return
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+              {/* 2. Stock Alerts (Low Stock / Out of Stock) */}
+              {(activeTab === "ALL" || activeTab === "STOCK") &&
+                stockAlerts.map((stock) => (
+                  <div
+                    key={`stock-${stock.id}`}
+                    className={`rounded-xl p-3 border transition hover:shadow-xs ${
+                      stock.status === "OUT_OF_STOCK"
+                        ? "bg-red-50/70 border-red-200"
+                        : "bg-amber-50/70 border-amber-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-1">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className={`rounded-md px-1.5 py-0.5 text-[9px] font-bold text-white uppercase ${
+                              stock.status === "OUT_OF_STOCK" ? "bg-red-600" : "bg-amber-600"
+                            }`}
+                          >
+                            {stock.status.replace("_", " ")}
+                          </span>
+                          <span className="font-bold text-slate-800 truncate text-xs">
+                            {stock.productName}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-1">
+                          Location: <b>{stock.warehouseName}</b> • {stock.rackName}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                          stock.status === "OUT_OF_STOCK"
+                            ? "bg-red-600 text-white"
+                            : "bg-amber-600 text-white"
+                        }`}
+                      >
+                        {stock.quantity === 0 ? "0 LEFT" : `${stock.quantity} UNITS LEFT`}
+                      </span>
+                    </div>
+
+                    <div className="mt-2 pt-2 border-t border-slate-200/50 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-400">SKU: {stock.sku}</span>
+                      <Link
+                        href={`/inventory?productId=${stock.productId}&warehouseId=${stock.warehouseId}&rackId=${stock.rackId}&restock=true`}
+                        onClick={() => setIsOpen(false)}
+                        className="rounded-md bg-white border border-slate-300 px-2 py-1 text-[10px] font-bold text-blue-600 hover:bg-blue-50 transition shadow-2xs flex items-center gap-1"
+                      >
+                        Restock Inventory →
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+
+              {/* 3. Service Maintenance Alerts */}
+              {(activeTab === "ALL" || activeTab === "SERVICE") &&
+                serviceAlerts.map((alert, idx) => (
+                  <div
+                    key={`service-${alert.issueId}-${alert.itemIndex}-${idx}`}
+                    onClick={() => setSelectedServiceAlert(alert)}
+                    className={`cursor-pointer rounded-xl p-3 border transition hover:shadow-xs ${
+                      alert.isOverdue
+                        ? "bg-red-50/70 border-red-200 hover:bg-red-50"
+                        : "bg-blue-50/70 border-blue-200 hover:bg-blue-50"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-1">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="rounded-md bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
+                            Service Due
+                          </span>
+                          <span className="font-bold text-slate-800 text-xs truncate">
+                            {alert.productName}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-slate-600 mt-1">
+                          Holder: <b>{alert.employeeName}</b> ({alert.employeeDepartment})
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                          alert.isOverdue
+                            ? "bg-red-600 text-white"
+                            : "bg-blue-600 text-white"
+                        }`}
                       >
                         {alert.isOverdue ? "OVERDUE" : "DUE SOON"}
                       </span>
                     </div>
 
-                    <p className="text-[11px] text-slate-600 mt-1">
-                      Holder: <b>{alert.employeeName}</b> ({alert.employeeDepartment})
-                    </p>
                     <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5 pt-1.5 border-t border-slate-200/40">
                       <span className="font-semibold text-slate-700">{alert.serviceStage}</span>
                       <span>
@@ -193,12 +497,16 @@ export default function NotificationBell() {
                       </span>
                     </div>
                   </div>
-                ))
-              ) : (
-                <div className="py-7 text-center space-y-1">
+                ))}
+
+              {/* Empty state */}
+              {totalCount === 0 && (
+                <div className="py-8 text-center space-y-1.5">
                   <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
-                  <p className="font-semibold text-slate-700 text-xs">All products up to date!</p>
-                  <p className="text-[11px] text-slate-400">No services are overdue or due in the next 30 days.</p>
+                  <p className="font-semibold text-slate-700 text-xs">All clear & up to date!</p>
+                  <p className="text-[11px] text-slate-400">
+                    No reusable items expiring, no low stocks, and no overdue services.
+                  </p>
                 </div>
               )}
             </div>
@@ -210,7 +518,7 @@ export default function NotificationBell() {
                 onClick={() => setIsOpen(false)}
                 className="text-slate-500 hover:text-blue-600 font-medium"
               >
-                View Product History
+                Employee Issues
               </Link>
               <button
                 type="button"
@@ -224,21 +532,21 @@ export default function NotificationBell() {
         </>
       )}
 
-      {/* 🛠️ Service Completion Modal */}
-      {selectedAlert && (
+      {/* 🔄 Reusable Renewal Modal */}
+      {selectedReusableAlert && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
-          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl space-y-4">
+          <div className="w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div className="flex items-center gap-2">
-                <Wrench className="h-5 w-5 text-blue-600" />
+                <RotateCcw className="h-5 w-5 text-indigo-600" />
                 <div>
-                  <h3 className="text-base font-bold text-slate-800">Service Due Details</h3>
-                  <p className="text-xs text-slate-400">Issue #{selectedAlert.issueNumber}</p>
+                  <h3 className="text-base font-bold text-slate-800">Renew Reusable Period</h3>
+                  <p className="text-xs text-slate-400">Issue #{selectedReusableAlert.issueNumber}</p>
                 </div>
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedAlert(null)}
+                onClick={() => setSelectedReusableAlert(null)}
                 className="p-1 text-slate-400 hover:text-slate-600"
               >
                 <X className="h-5 w-5" />
@@ -248,31 +556,157 @@ export default function NotificationBell() {
             <div className="space-y-2 text-xs bg-slate-50 p-3.5 rounded-xl">
               <div className="flex justify-between">
                 <span className="text-slate-500">Employee:</span>
-                <span className="font-bold text-slate-800">{selectedAlert.employeeName} ({selectedAlert.employeeDepartment})</span>
+                <span className="font-bold text-slate-800">
+                  {selectedReusableAlert.employeeName} ({selectedReusableAlert.employeeDepartment})
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Product:</span>
-                <span className="font-bold text-slate-800">{selectedAlert.productName}</span>
+                <span className="font-bold text-slate-800">{selectedReusableAlert.productName}</span>
               </div>
-              {selectedAlert.serialNumber !== "-" && (
+              <div className="flex justify-between">
+                <span className="text-slate-500">Current Due Date:</span>
+                <span className="font-bold text-slate-800">
+                  {new Date(selectedReusableAlert.returnDueDate).toLocaleDateString("en-IN")}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Current Status:</span>
+                <span
+                  className={`font-extrabold ${
+                    selectedReusableAlert.isOverdue ? "text-red-600" : "text-amber-600"
+                  }`}
+                >
+                  {selectedReusableAlert.isOverdue
+                    ? `Overdue by ${Math.abs(selectedReusableAlert.daysRemaining)} days`
+                    : `${selectedReusableAlert.daysRemaining} days remaining`}
+                </span>
+              </div>
+            </div>
+
+            {/* Renewal Days Selection */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                Extend Period by (Days) *
+              </label>
+              <div className="flex flex-wrap gap-2 items-center">
+                <input
+                  type="number"
+                  min="1"
+                  value={renewDays}
+                  onChange={(e) => setRenewDays(e.target.value)}
+                  className="w-28 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold outline-none focus:border-indigo-600"
+                />
+                <span className="text-xs text-slate-500">Days</span>
+                <div className="flex flex-wrap gap-1 ml-auto">
+                  {[7, 15, 30, 60, 90].map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setRenewDays(d.toString())}
+                      className={`rounded-md px-2 py-1 text-[11px] font-semibold border ${
+                        renewDays === d.toString()
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-white text-slate-600 border-slate-200"
+                      }`}
+                    >
+                      +{d}d
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Remarks */}
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                Renewal Remarks / Purpose (Optional)
+              </label>
+              <textarea
+                rows={2}
+                placeholder="e.g. Project extended by 30 days..."
+                value={renewNotes}
+                onChange={(e) => setRenewNotes(e.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-xs outline-none focus:border-indigo-600"
+              />
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                disabled={renewing}
+                onClick={handleRenewItem}
+                className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                {renewing ? "Renewing..." : `✓ Renew Period for +${renewDays} Days`}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedReusableAlert(null)}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🛠️ Service Completion Modal */}
+      {selectedServiceAlert && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
+          <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <Wrench className="h-5 w-5 text-blue-600" />
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Service Due Details</h3>
+                  <p className="text-xs text-slate-400">Issue #{selectedServiceAlert.issueNumber}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedServiceAlert(null)}
+                className="p-1 text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2 text-xs bg-slate-50 p-3.5 rounded-xl">
+              <div className="flex justify-between">
+                <span className="text-slate-500">Employee:</span>
+                <span className="font-bold text-slate-800">
+                  {selectedServiceAlert.employeeName} ({selectedServiceAlert.employeeDepartment})
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Product:</span>
+                <span className="font-bold text-slate-800">{selectedServiceAlert.productName}</span>
+              </div>
+              {selectedServiceAlert.serialNumber && selectedServiceAlert.serialNumber !== "-" && (
                 <div className="flex justify-between">
                   <span className="text-slate-500">Serial No:</span>
-                  <span className="font-semibold text-blue-700">{selectedAlert.serialNumber}</span>
+                  <span className="font-semibold text-blue-700">{selectedServiceAlert.serialNumber}</span>
                 </div>
               )}
               <div className="flex justify-between">
                 <span className="text-slate-500">Service Stage:</span>
-                <span className="font-bold text-amber-700">{selectedAlert.serviceStage}</span>
+                <span className="font-bold text-amber-700">{selectedServiceAlert.serviceStage}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Due Date:</span>
                 <span className="font-bold text-slate-800">
-                  {new Date(selectedAlert.serviceDate).toLocaleDateString("en-IN")}
+                  {new Date(selectedServiceAlert.serviceDate).toLocaleDateString("en-IN")}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-500">Status:</span>
-                <span className="font-extrabold text-emerald-700">{selectedAlert.holdingStatus}</span>
+                <span className="font-extrabold text-emerald-700">
+                  {selectedServiceAlert.holdingStatus}
+                </span>
               </div>
             </div>
 
@@ -300,7 +734,7 @@ export default function NotificationBell() {
               </button>
               <button
                 type="button"
-                onClick={() => setSelectedAlert(null)}
+                onClick={() => setSelectedServiceAlert(null)}
                 className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
               >
                 Cancel

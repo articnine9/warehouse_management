@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { PackageCheck, Search, Trash2, X, Wrench } from "lucide-react";
+import { PackageCheck, Search, Trash2, X, Wrench, RotateCcw, Box } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import ServiceCycleBadge from "@/app/components/ServiceCycleBadge";
@@ -37,6 +37,8 @@ export default function EmployeeIssuesPage() {
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const [itemQuantity, setItemQuantity] = useState("1");
   const [itemSerial, setItemSerial] = useState("");
+  const [itemProductType, setItemProductType] = useState<"NON_REUSABLE" | "REUSABLE">("NON_REUSABLE");
+  const [itemReturnDueDays, setItemReturnDueDays] = useState("30");
   const [itemWarrantyMonths, setItemWarrantyMonths] = useState("12");
   const [itemServiceInterval, setItemServiceInterval] = useState("3"); // default 3 months
   const [customInterval, setCustomInterval] = useState("");
@@ -46,8 +48,10 @@ export default function EmployeeIssuesPage() {
 
   const [reason, setReason] = useState<EmployeeIssue["reason"]>("STAFF_USE");
   const [notes, setNotes] = useState("");
+  const [selectedLookupEmployeeId, setSelectedLookupEmployeeId] = useState("");
   const [issueSearchQuery, setIssueSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [issueTypeFilter, setIssueTypeFilter] = useState("ALL");
   const [issuePage, setIssuePage] = useState(1);
   const [issuePageSize, setIssuePageSize] = useState(10);
 
@@ -150,11 +154,75 @@ export default function EmployeeIssuesPage() {
     });
   }, [availableInventories, productSearchQuery]);
 
+  const lookupEmployee = useMemo(() => {
+    return employees.find((e) => e.id === selectedLookupEmployeeId) || null;
+  }, [employees, selectedLookupEmployeeId]);
+
+  const lookupEmployeeStats = useMemo(() => {
+    if (!selectedLookupEmployeeId) return null;
+    const empIssues = issues.filter(
+      (i) =>
+        i.employeeId === selectedLookupEmployeeId ||
+        (lookupEmployee && i.employeeName.toLowerCase() === lookupEmployee.name.toLowerCase())
+    );
+    let totalItemsIssued = 0;
+    let totalActiveUnits = 0;
+    let totalReturnedUnits = 0;
+    let totalValue = 0;
+    let reusableDueCount = 0;
+
+    const nowTime = new Date().setHours(0, 0, 0, 0);
+
+    for (const issue of empIssues) {
+      for (const it of issue.items) {
+        totalItemsIssued += it.quantity || 1;
+        if (it.holdingStatus === "RETURNED") {
+          totalReturnedUnits += it.quantity || 1;
+        } else {
+          totalActiveUnits += it.quantity || 1;
+          totalValue += (it.unitPrice || 0) * (it.quantity || 1);
+          if (it.returnDueDate) {
+            const dueTime = new Date(it.returnDueDate).setHours(0, 0, 0, 0);
+            const daysRemaining = Math.round((dueTime - nowTime) / 86400000);
+            if (daysRemaining <= 7) {
+              reusableDueCount++;
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      totalIssues: empIssues.length,
+      totalItemsIssued,
+      totalActiveUnits,
+      totalReturnedUnits,
+      totalValue,
+      reusableDueCount,
+    };
+  }, [issues, selectedLookupEmployeeId, lookupEmployee]);
+
   const filteredIssues = useMemo(() => {
     return issues.filter((issue) => {
+      if (selectedLookupEmployeeId) {
+        const matchId = issue.employeeId === selectedLookupEmployeeId;
+        const matchName =
+          lookupEmployee &&
+          issue.employeeName.toLowerCase() === lookupEmployee.name.toLowerCase();
+        if (!matchId && !matchName) return false;
+      }
+
       if (statusFilter !== "ALL") {
         const hasStatus = issue.items.some((it) => it.holdingStatus === statusFilter);
         if (!hasStatus) return false;
+      }
+
+      if (issueTypeFilter === "REUSABLE") {
+        const hasReusable = issue.items.some((it) => it.productType === "REUSABLE");
+        if (!hasReusable) return false;
+      } else if (issueTypeFilter === "NON_REUSABLE") {
+        const hasNormal = issue.items.some((it) => it.productType !== "REUSABLE");
+        if (!hasNormal) return false;
       }
 
       if (!issueSearchQuery.trim()) return true;
@@ -177,7 +245,7 @@ export default function EmployeeIssuesPage() {
 
       return matchIssue || matchItem;
     });
-  }, [issues, issueSearchQuery, statusFilter]);
+  }, [issues, issueSearchQuery, statusFilter, issueTypeFilter, selectedLookupEmployeeId]);
 
   const paginatedIssues = useMemo(() => {
     const start = (issuePage - 1) * issuePageSize;
@@ -209,6 +277,9 @@ export default function EmployeeIssuesPage() {
     setProductSearchQuery(`${inventory.productId.name} (${inventory.productId.sku})`);
     setProductDropdownOpen(false);
     setItemQuantity("1");
+    const isReusable = inventory.productId.productType === "REUSABLE";
+    setItemProductType(isReusable ? "REUSABLE" : "NON_REUSABLE");
+    setItemReturnDueDays(inventory.productId.returnDays?.toString() || "30");
     setTimeout(() => {
       quantityInputRef.current?.focus();
       quantityInputRef.current?.select();
@@ -260,10 +331,21 @@ export default function EmployeeIssuesPage() {
       endDate = ed.toISOString().slice(0, 10);
     }
 
+    const isReusable = itemProductType === "REUSABLE";
+    const returnDueDays = isReusable ? Math.max(1, Number(itemReturnDueDays) || 30) : 0;
+    const returnDueDate = isReusable
+      ? new Date(Date.now() + returnDueDays * 86400000).toISOString().slice(0, 10)
+      : undefined;
+
     const newItem: SelectedLineItem = {
       inventoryId: currentSelectedInventory._id,
       productName: currentSelectedInventory.productId.name,
       sku: currentSelectedInventory.productId.sku,
+      productType: isReusable ? "REUSABLE" : "NON_REUSABLE",
+      returnDueDays,
+      returnDueDate,
+      renewalCount: 0,
+      renewalHistory: [],
       warehouseName: currentSelectedInventory.warehouseId.name,
       rackName: currentSelectedInventory.rackId.name,
       unitPrice,
@@ -555,6 +637,69 @@ export default function EmployeeIssuesPage() {
                 </div>
               </div>
 
+              {/* Product Classification & Return Period (Auto-inherited from product definition) */}
+              {currentSelectedInventory && (
+                <div
+                  className={`rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border ${
+                    itemProductType === "REUSABLE"
+                      ? "bg-indigo-50/80 border-indigo-200"
+                      : "bg-slate-50 border-slate-200"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                      {itemProductType === "REUSABLE" ? (
+                        <>
+                          <RotateCcw className="h-4 w-4 text-indigo-600" />
+                          <span className="text-indigo-950 font-bold">Reusable Asset</span>
+                          <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-800">
+                            Return / Renewal Tracking Enabled
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <Box className="h-4 w-4 text-slate-600" />
+                          <span className="text-slate-800 font-bold">Normal / Consumable Item</span>
+                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
+                            No return required
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  </div>
+
+                  {itemProductType === "REUSABLE" && (
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <label className="text-[11px] font-bold text-indigo-950">Return Validity:</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={itemReturnDueDays}
+                        onChange={(e) => setItemReturnDueDays(e.target.value)}
+                        className="w-20 rounded-md border border-indigo-200 bg-white px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:border-indigo-600"
+                      />
+                      <span className="text-xs text-indigo-900 font-medium">Days</span>
+                      <div className="flex gap-1">
+                        {[7, 14, 30, 60, 90].map((d) => (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => setItemReturnDueDays(d.toString())}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${
+                              itemReturnDueDays === d.toString()
+                                ? "bg-indigo-600 text-white border-indigo-600"
+                                : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                            }`}
+                          >
+                            {d}d
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Service Interval & Warranty */}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 pt-1">
                 <div>
@@ -639,6 +784,7 @@ export default function EmployeeIssuesPage() {
                   <thead className="bg-slate-50 text-[11px] font-semibold uppercase text-slate-500 border-b border-slate-200">
                     <tr>
                       <th className="px-4 py-2.5">Product & SKU</th>
+                      <th className="px-4 py-2.5">Type & Return Due</th>
                       <th className="px-4 py-2.5">Serial No</th>
                       <th className="px-4 py-2.5">Qty</th>
                       <th className="px-4 py-2.5">Service Interval</th>
@@ -652,6 +798,17 @@ export default function EmployeeIssuesPage() {
                         <td className="px-4 py-2.5 font-medium text-slate-800">
                           {item.productName}
                           <span className="block text-[10px] text-slate-400">SKU: {item.sku}</span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          {item.productType === "REUSABLE" ? (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                              <RotateCcw className="h-2.5 w-2.5" /> Reusable ({item.returnDueDays || 30}d)
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
+                              Normal
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-2.5 text-slate-600">{item.serialNumber || "-"}</td>
                         <td className="px-4 py-2.5 font-bold text-slate-800">{item.quantity}</td>
@@ -715,12 +872,63 @@ export default function EmployeeIssuesPage() {
                 Issued Product History & Custody ({filteredIssues.length})
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Monitor products held by employees, recurring service cycles, and holding status (Active / Inactive).
+                Monitor products held by employees, reusable return/renewal periods, recurring service cycles, and custody status.
               </p>
             </div>
 
             {/* Filter controls */}
             <div className="flex flex-wrap items-center gap-2">
+              {/* Employee Lookup Dropdown */}
+              <select
+                value={selectedLookupEmployeeId}
+                onChange={(e) => setSelectedLookupEmployeeId(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 font-semibold text-slate-700"
+              >
+                <option value="">All Employees</option>
+                {employees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.employeeCode} - {emp.name} ({emp.department || "General"})
+                  </option>
+                ))}
+              </select>
+
+              {/* Product Type Filter Toggle */}
+              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
+                <button
+                  type="button"
+                  onClick={() => setIssueTypeFilter("ALL")}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                    issueTypeFilter === "ALL"
+                      ? "bg-white text-slate-800 shadow-2xs"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  All Types
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIssueTypeFilter("REUSABLE")}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition flex items-center gap-1 ${
+                    issueTypeFilter === "REUSABLE"
+                      ? "bg-indigo-600 text-white shadow-2xs"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  <RotateCcw className="h-3 w-3" /> Reusable
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIssueTypeFilter("NON_REUSABLE")}
+                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                    issueTypeFilter === "NON_REUSABLE"
+                      ? "bg-white text-slate-800 shadow-2xs"
+                      : "text-slate-500 hover:text-slate-700"
+                  }`}
+                >
+                  Normal
+                </button>
+              </div>
+
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
@@ -754,6 +962,62 @@ export default function EmployeeIssuesPage() {
             </div>
           </div>
 
+          {/* Employee Asset Custody & Profile Summary Banner */}
+          {lookupEmployee && lookupEmployeeStats && (
+            <div className="m-4 rounded-xl border border-blue-200 bg-gradient-to-r from-blue-50/90 via-indigo-50/50 to-white p-4 shadow-sm space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-100/80 pb-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-600 font-bold text-white shadow-xs">
+                    {lookupEmployee.name.slice(0, 1).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-bold text-slate-800 text-base">{lookupEmployee.name}</h3>
+                      <span className="rounded-md bg-blue-100 px-2 py-0.5 text-xs font-bold text-blue-700">
+                        {lookupEmployee.employeeCode}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5 flex flex-wrap gap-x-2">
+                      <span>Dept: <b>{lookupEmployee.department || "General"}</b></span>
+                      {lookupEmployee.designation && <span>• Desig: <b>{lookupEmployee.designation}</b></span>}
+                      {lookupEmployee.phone && <span>• Phone: <b>{lookupEmployee.phone}</b></span>}
+                      {lookupEmployee.email && <span>• Email: <b>{lookupEmployee.email}</b></span>}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLookupEmployeeId("")}
+                  className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition self-start sm:self-auto flex items-center gap-1 shadow-2xs"
+                >
+                  <X className="h-3.5 w-3.5" /> Clear Employee Filter
+                </button>
+              </div>
+
+              {/* Metrics Strip */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div className="rounded-lg bg-white p-2.5 border border-slate-100 shadow-2xs">
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Active In Custody</span>
+                  <span className="font-bold text-emerald-700 text-base">{lookupEmployeeStats.totalActiveUnits} units</span>
+                </div>
+                <div className="rounded-lg bg-white p-2.5 border border-slate-100 shadow-2xs">
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Returned to Stock</span>
+                  <span className="font-bold text-slate-700 text-base">{lookupEmployeeStats.totalReturnedUnits} units</span>
+                </div>
+                <div className="rounded-lg bg-white p-2.5 border border-slate-100 shadow-2xs">
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Return / Renew Due</span>
+                  <span className={`font-bold text-base ${lookupEmployeeStats.reusableDueCount > 0 ? "text-amber-600" : "text-slate-700"}`}>
+                    {lookupEmployeeStats.reusableDueCount} items
+                  </span>
+                </div>
+                <div className="rounded-lg bg-white p-2.5 border border-slate-100 shadow-2xs">
+                  <span className="text-slate-400 block text-[10px] font-bold uppercase">Held Asset Value</span>
+                  <span className="font-bold text-blue-700 text-base">₹{lookupEmployeeStats.totalValue.toLocaleString("en-IN")}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Desktop Table */}
           {paginatedIssues.length > 0 && (
             <div className="hidden overflow-x-auto md:block">
@@ -762,10 +1026,10 @@ export default function EmployeeIssuesPage() {
                   <tr>
                     <th className="px-5 py-3">Issue # & Date</th>
                     <th className="px-5 py-3">Employee (Holder)</th>
-                    <th className="px-5 py-3">Product & Serial</th>
+                    <th className="px-5 py-3">Product & Type</th>
                     <th className="px-5 py-3 text-center">Status</th>
+                    <th className="px-5 py-3">Return / Renew Due</th>
                     <th className="px-5 py-3">Service Cycle</th>
-                    <th className="px-5 py-3 text-center">Completed</th>
                     <th className="px-5 py-3 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -778,6 +1042,14 @@ export default function EmployeeIssuesPage() {
                         year: "numeric",
                       });
 
+                      const isReusable = item.productType === "REUSABLE" || Boolean(item.returnDueDate);
+                      let returnDaysLeft: number | null = null;
+                      if (isReusable && item.returnDueDate) {
+                        const dueTime = new Date(item.returnDueDate).setHours(0, 0, 0, 0);
+                        const nowTime = new Date().setHours(0, 0, 0, 0);
+                        returnDaysLeft = Math.round((dueTime - nowTime) / 86400000);
+                      }
+
                       return (
                         <tr key={`${issue._id}-${itemIdx}`} className="hover:bg-slate-50/70 transition">
                           <td className="px-5 py-3.5">
@@ -785,7 +1057,26 @@ export default function EmployeeIssuesPage() {
                             <span className="text-[11px] text-slate-400">{issuedDate}</span>
                           </td>
                           <td className="px-5 py-3.5">
-                            <p className="font-semibold text-slate-800">{issue.employeeName}</p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (issue.employeeId) {
+                                  setSelectedLookupEmployeeId(issue.employeeId);
+                                } else {
+                                  const found = employees.find(
+                                    (e) => e.name.toLowerCase() === issue.employeeName.toLowerCase()
+                                  );
+                                  if (found) setSelectedLookupEmployeeId(found.id);
+                                }
+                              }}
+                              className="font-semibold text-slate-800 text-left hover:text-blue-600 hover:underline transition flex items-center gap-1 group"
+                              title="Click to view all assets held by this employee"
+                            >
+                              <span>{issue.employeeName}</span>
+                              <span className="text-[10px] text-blue-600 opacity-0 group-hover:opacity-100 transition flex items-center gap-0.5">
+                                <Search className="h-2.5 w-2.5" /> View Products
+                              </span>
+                            </button>
                             <p className="text-[11px] text-slate-400">
                               {issue.employeeDepartment || "-"} • {issue.employeePhone || "-"}
                             </p>
@@ -795,9 +1086,16 @@ export default function EmployeeIssuesPage() {
                               {item.productName}{" "}
                               <span className="font-bold text-blue-600">({item.quantity} units)</span>
                             </p>
-                            <p className="text-[11px] text-slate-400">
-                              SKU: {item.sku} {item.serialNumber && `• SN: ${item.serialNumber}`}
-                            </p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <span className="text-[11px] text-slate-400">
+                                SKU: {item.sku} {item.serialNumber && `• SN: ${item.serialNumber}`}
+                              </span>
+                              {isReusable && (
+                                <span className="rounded bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 text-[9px] font-bold text-indigo-700">
+                                  Reusable
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="px-5 py-3.5 text-center">
                             <span
@@ -816,6 +1114,43 @@ export default function EmployeeIssuesPage() {
                               {item.holdingStatus || "ACTIVE"}
                             </span>
                           </td>
+
+                          {/* Return / Renew Due Column */}
+                          <td className="px-5 py-3.5">
+                            {item.holdingStatus === "RETURNED" ? (
+                              <span className="text-slate-400 text-xs">Item Returned</span>
+                            ) : isReusable && item.returnDueDate ? (
+                              <div>
+                                <p className="font-bold text-xs text-slate-800">
+                                  {new Date(item.returnDueDate).toLocaleDateString("en-IN", {
+                                    day: "2-digit",
+                                    month: "short",
+                                    year: "numeric",
+                                  })}
+                                </p>
+                                {returnDaysLeft !== null && (
+                                  <span
+                                    className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold mt-0.5 ${
+                                      returnDaysLeft < 0
+                                        ? "bg-red-100 text-red-700"
+                                        : returnDaysLeft <= 7
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-emerald-50 text-emerald-700"
+                                    }`}
+                                  >
+                                    {returnDaysLeft < 0
+                                      ? `Overdue by ${Math.abs(returnDaysLeft)}d`
+                                      : returnDaysLeft === 0
+                                      ? "Due Today"
+                                      : `${returnDaysLeft}d remaining`}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 text-xs">Standard Item</span>
+                            )}
+                          </td>
+
                           <td className="px-5 py-3.5">
                             <ServiceCycleBadge
                               intervalMonths={item.serviceIntervalMonths}
@@ -824,11 +1159,7 @@ export default function EmployeeIssuesPage() {
                               hideDueDate={item.holdingStatus === "RETURNED"}
                             />
                           </td>
-                          <td className="px-5 py-3.5 text-center">
-                            <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 font-bold text-slate-700">
-                              {item.serviceCount || 0} times
-                            </span>
-                          </td>
+
                           <td className="px-5 py-3.5 text-center">
                             <div className="flex items-center justify-center gap-1.5">
                               <button
@@ -870,8 +1201,26 @@ export default function EmployeeIssuesPage() {
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="font-bold text-slate-800">{item.productName}</p>
-                          <p className="text-xs text-slate-500">
-                            Holder: <b>{issue.employeeName}</b> ({issue.employeeDepartment || "-"})
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Holder:{" "}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (issue.employeeId) {
+                                  setSelectedLookupEmployeeId(issue.employeeId);
+                                } else {
+                                  const found = employees.find(
+                                    (e) => e.name.toLowerCase() === issue.employeeName.toLowerCase()
+                                  );
+                                  if (found) setSelectedLookupEmployeeId(found.id);
+                                }
+                              }}
+                              className="font-bold text-blue-600 underline hover:text-blue-800"
+                              title="Click to view all assets held by this employee"
+                            >
+                              {issue.employeeName}
+                            </button>{" "}
+                            ({issue.employeeDepartment || "-"})
                           </p>
                         </div>
                         <div className="flex items-center gap-1.5">

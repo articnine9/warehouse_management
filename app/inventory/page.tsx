@@ -2,12 +2,21 @@
 
 import { FormEvent, useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { AlertTriangle, RotateCcw } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 
-type Product = { _id: string; name: string; sku: string; category?: string; price?: number };
+type Product = {
+  _id: string;
+  name: string;
+  sku: string;
+  category?: string;
+  price?: number;
+  productType?: "REUSABLE" | "NON_REUSABLE";
+  returnDays?: number;
+};
 type Warehouse = { _id: string; name: string; code: string };
 type Rack = { _id: string; name: string; code: string; warehouseId: { _id: string; name: string; code: string } };
 type Inventory = {
@@ -30,6 +39,7 @@ function InventoryContent() {
 
   // Filtering state
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusParam);
+  const [productTypeFilter, setProductTypeFilter] = useState<string>("ALL");
   const [selectedWarehouseFilter, setSelectedWarehouseFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -95,7 +105,29 @@ function InventoryContent() {
     if (param) {
       setStatusFilter(param);
     }
-  }, [searchParams]);
+
+    const pParam = searchParams.get("productId");
+    const wParam = searchParams.get("warehouseId");
+    const rParam = searchParams.get("rackId");
+    const isRestock = searchParams.get("restock");
+
+    if (pParam) setProductId(pParam);
+    if (wParam) setWarehouseId(wParam);
+    if (rParam) setRackId(rParam);
+
+    if (pParam || wParam || isRestock) {
+      setTimeout(() => {
+        const el = document.getElementById("inventory-form-container");
+        if (el) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+        const qtyInput = document.getElementById("inventory-qty-input");
+        if (qtyInput) {
+          qtyInput.focus();
+        }
+      }, 350);
+    }
+  }, [searchParams, products, warehouses, racks]);
 
   useEffect(() => {
     void fetchProducts();
@@ -104,8 +136,21 @@ function InventoryContent() {
     void fetchInventory();
   }, []);
 
-  const filteredRacks = racks.filter((rack) => rack.warehouseId?._id === warehouseId);
-  const editFilteredRacks = racks.filter((rack) => rack.warehouseId?._id === editWarehouseId);
+  const filteredRacks = useMemo(() => {
+    if (!warehouseId) return [];
+    return racks.filter((rack) => {
+      const wId = typeof rack.warehouseId === "object" && rack.warehouseId ? rack.warehouseId._id : rack.warehouseId;
+      return String(wId) === String(warehouseId);
+    });
+  }, [racks, warehouseId]);
+
+  const editFilteredRacks = useMemo(() => {
+    if (!editWarehouseId) return [];
+    return racks.filter((rack) => {
+      const wId = typeof rack.warehouseId === "object" && rack.warehouseId ? rack.warehouseId._id : rack.warehouseId;
+      return String(wId) === String(editWarehouseId);
+    });
+  }, [racks, editWarehouseId]);
 
   // Searchable Select Options
   const productOptions: SelectOption[] = useMemo(() => {
@@ -310,14 +355,22 @@ function InventoryContent() {
           rCode.includes(q);
       }
 
-      return matchesStatus && matchesWarehouse && matchesSearch;
+      // Product Type Filter (Reusable vs Normal)
+      let matchesType = true;
+      if (productTypeFilter === "REUSABLE") {
+        matchesType = item.productId?.productType === "REUSABLE";
+      } else if (productTypeFilter === "NON_REUSABLE") {
+        matchesType = item.productId?.productType !== "REUSABLE";
+      }
+
+      return matchesStatus && matchesWarehouse && matchesSearch && matchesType;
     });
-  }, [inventory, statusFilter, selectedWarehouseFilter, searchQuery]);
+  }, [inventory, statusFilter, selectedWarehouseFilter, searchQuery, productTypeFilter]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, selectedWarehouseFilter, searchQuery, pageSize]);
+  }, [statusFilter, selectedWarehouseFilter, searchQuery, productTypeFilter, pageSize]);
 
   // Paginated records
   const paginatedInventory = useMemo(() => {
@@ -411,9 +464,44 @@ function InventoryContent() {
       </div>
 
       {/* Add inventory form */}
-      <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
-        <h2 className="text-lg font-semibold text-slate-800">Add Stock to Location</h2>
-        <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 items-end">
+      <div id="inventory-form-container" className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm scroll-mt-20">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-3">
+          <h2 className="text-lg font-semibold text-slate-800">
+            {searchParams.get("restock") ? "Restock Product Stock" : "Add Stock to Location"}
+          </h2>
+          {searchParams.get("restock") && (
+            <span className="rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-bold w-fit">
+              Restock Action Active
+            </span>
+          )}
+        </div>
+
+        {/* Quick Restock Alert Banner */}
+        {/* {searchParams.get("restock") && (
+          <div className="mb-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50/50 border border-amber-200 p-3.5 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+              <div>
+                <span className="font-extrabold uppercase tracking-wide text-amber-900">Restock Mode:</span>{" "}
+                Product, Warehouse & Rack have been <b>automatically pre-filled</b>. Enter the incoming quantity below to restock!
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setProductId("");
+                setWarehouseId("");
+                setRackId("");
+                setQuantity("");
+              }}
+              className="text-[11px] font-bold text-amber-800 underline hover:text-amber-950 shrink-0"
+            >
+              Clear Pre-fill
+            </button>
+          </div>
+        )} */}
+
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 items-end">
           <div>
             <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Product</label>
             <SearchableSelect
@@ -452,11 +540,14 @@ function InventoryContent() {
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Quantity</label>
+            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+              {searchParams.get("restock") ? "Quantity to Add (Restock Units)" : "Quantity"}
+            </label>
             <input
+              id="inventory-qty-input"
               type="number"
-              min="0"
-              placeholder="Quantity"
+              min="1"
+              placeholder={searchParams.get("restock") ? "Enter restock quantity (e.g. 50)" : "Quantity"}
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
               required
@@ -467,9 +558,17 @@ function InventoryContent() {
           <button
             type="submit"
             disabled={loading}
-            className="h-[42px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
+            className={`h-[42px] rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50 ${
+              searchParams.get("restock")
+                ? "bg-amber-600 hover:bg-amber-700"
+                : "bg-blue-600 hover:bg-blue-700"
+            }`}
           >
-            {loading ? "Adding..." : "+ Add Stock Entry"}
+            {loading
+              ? "Saving..."
+              : searchParams.get("restock")
+              ? "+ Add Restocked Units"
+              : "+ Add Stock Entry"}
           </button>
         </form>
       </div>
@@ -496,6 +595,43 @@ function InventoryContent() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            {/* Product Type Filter Toggle */}
+            <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 shrink-0">
+              <button
+                type="button"
+                onClick={() => setProductTypeFilter("ALL")}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                  productTypeFilter === "ALL"
+                    ? "bg-white text-slate-800 shadow-2xs"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                All ({inventory.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setProductTypeFilter("REUSABLE")}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition flex items-center gap-1 ${
+                  productTypeFilter === "REUSABLE"
+                    ? "bg-indigo-600 text-white shadow-2xs"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                <RotateCcw className="h-3 w-3" /> Reusable ({inventory.filter((i) => i.productId?.productType === "REUSABLE").length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setProductTypeFilter("NON_REUSABLE")}
+                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                  productTypeFilter === "NON_REUSABLE"
+                    ? "bg-white text-slate-800 shadow-2xs"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                Normal ({inventory.filter((i) => i.productId?.productType !== "REUSABLE").length})
+              </button>
+            </div>
+
             {/* Search input in list */}
             <input
               type="text"
@@ -530,6 +666,7 @@ function InventoryContent() {
               <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500">
                 <tr>
                   <th className="px-5 py-3">Product</th>
+                  <th className="px-5 py-3">Type</th>
                   <th className="px-5 py-3">Warehouse</th>
                   <th className="px-5 py-3">Rack</th>
                   <th className="px-5 py-3">Quantity</th>
@@ -543,6 +680,17 @@ function InventoryContent() {
                     <td className="px-5 py-3 font-medium text-slate-800">
                       {item.productId?.name || "Unknown"}{" "}
                       <span className="text-xs text-slate-400">({item.productId?.sku || "-"})</span>
+                    </td>
+                    <td className="px-5 py-3">
+                      {item.productId?.productType === "REUSABLE" ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xs font-bold text-indigo-700">
+                          <RotateCcw className="h-2.5 w-2.5" /> Reusable ({item.productId?.returnDays || 30}d)
+                        </span>
+                      ) : (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                          Normal
+                        </span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-slate-600">{item.warehouseId?.name || "-"}</td>
                     <td className="px-5 py-3 text-slate-600">
@@ -585,7 +733,14 @@ function InventoryContent() {
               <div key={item._id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
                 <div className="flex items-start justify-between">
                   <div>
-                    <p className="font-semibold text-slate-800">{item.productId?.name || "Unknown"}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-semibold text-slate-800">{item.productId?.name || "Unknown"}</p>
+                      {item.productId?.productType === "REUSABLE" && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.2 text-[10px] font-bold text-indigo-700">
+                          <RotateCcw className="h-2.5 w-2.5" /> Reusable ({item.productId?.returnDays || 30}d)
+                        </span>
+                      )}
+                    </div>
                     <p className="mt-0.5 text-xs text-slate-500">{item.productId?.sku || "-"}</p>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusBadge(item.status)}`}>

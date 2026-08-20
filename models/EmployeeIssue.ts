@@ -7,11 +7,26 @@ export interface IServiceRecord {
   performedBy?: string;
 }
 
+export interface IRenewalRecord {
+  renewalNumber: number;
+  renewedAt: Date;
+  extendedDays: number;
+  newDueDate: Date;
+  notes?: string;
+  performedBy?: string;
+}
+
 export interface IEmployeeIssueItem {
   inventoryId: mongoose.Types.ObjectId;
   productId: mongoose.Types.ObjectId;
   productName: string;
   sku: string;
+  productType?: "REUSABLE" | "NON_REUSABLE";
+  returnDueDays?: number;
+  returnDueDate?: Date;
+  lastRenewedDate?: Date;
+  renewalCount?: number;
+  renewalHistory?: IRenewalRecord[];
   warehouseId: mongoose.Types.ObjectId;
   warehouseName: string;
   rackId: mongoose.Types.ObjectId;
@@ -61,6 +76,18 @@ const serviceRecordSchema = new Schema<IServiceRecord>(
   { _id: false }
 );
 
+const renewalRecordSchema = new Schema<IRenewalRecord>(
+  {
+    renewalNumber: { type: Number, required: true },
+    renewedAt: { type: Date, default: Date.now },
+    extendedDays: { type: Number, required: true },
+    newDueDate: { type: Date, required: true },
+    notes: { type: String, trim: true },
+    performedBy: { type: String, trim: true },
+  },
+  { _id: false }
+);
+
 const employeeIssueItemSchema = new Schema<IEmployeeIssueItem>(
   {
     inventoryId: {
@@ -82,6 +109,29 @@ const employeeIssueItemSchema = new Schema<IEmployeeIssueItem>(
       type: String,
       required: true,
       trim: true,
+    },
+    productType: {
+      type: String,
+      enum: ["REUSABLE", "NON_REUSABLE"],
+      default: "NON_REUSABLE",
+    },
+    returnDueDays: {
+      type: Number,
+      default: 0,
+    },
+    returnDueDate: {
+      type: Date,
+    },
+    lastRenewedDate: {
+      type: Date,
+    },
+    renewalCount: {
+      type: Number,
+      default: 0,
+    },
+    renewalHistory: {
+      type: [renewalRecordSchema],
+      default: [],
     },
     warehouseId: {
       type: Schema.Types.ObjectId,

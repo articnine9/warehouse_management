@@ -72,7 +72,7 @@ export async function GET(request: Request) {
             const [total, inventory] = await Promise.all([
                 Inventory.countDocuments(filter),
                 Inventory.find(filter)
-                    .populate("productId", "name sku price sellerName category")
+                    .populate("productId", "name sku price sellerName category productType returnDays")
                     .populate("warehouseId", "name code")
                     .populate("rackId", "name code")
                     .sort({ createdAt: -1 })
@@ -94,7 +94,7 @@ export async function GET(request: Request) {
 
         // Return all records (used for selection dropdowns / backward compatibility)
         const inventory = await Inventory.find(filter)
-            .populate("productId", "name sku price sellerName category")
+            .populate("productId", "name sku price sellerName category productType returnDays")
             .populate("warehouseId", "name code")
             .populate("rackId", "name code")
             .sort({
@@ -184,26 +184,41 @@ export async function POST(request: Request) {
             );
         }
 
-        let status:
-            | "AVAILABLE"
-            | "LOW_STOCK"
-            | "OUT_OF_STOCK";
-
-        if (quantity === 0) {
-            status = "OUT_OF_STOCK";
-        } else if (quantity <= 10) {
-            status = "LOW_STOCK";
-        } else {
-            status = "AVAILABLE";
-        }
-
-        const inventory = await Inventory.create({
+        let inventory = await Inventory.findOne({
             productId,
             warehouseId,
             rackId,
-            quantity,
-            status,
         });
+
+        if (inventory) {
+            inventory.quantity = (inventory.quantity || 0) + Number(quantity);
+            if (inventory.quantity === 0) {
+                inventory.status = "OUT_OF_STOCK";
+            } else if (inventory.quantity <= 10) {
+                inventory.status = "LOW_STOCK";
+            } else {
+                inventory.status = "AVAILABLE";
+            }
+            await inventory.save();
+        } else {
+            let status: "AVAILABLE" | "LOW_STOCK" | "OUT_OF_STOCK";
+            const numQty = Number(quantity);
+            if (numQty === 0) {
+                status = "OUT_OF_STOCK";
+            } else if (numQty <= 10) {
+                status = "LOW_STOCK";
+            } else {
+                status = "AVAILABLE";
+            }
+
+            inventory = await Inventory.create({
+                productId,
+                warehouseId,
+                rackId,
+                quantity: numQty,
+                status,
+            });
+        }
 
         const populatedInventory = await Inventory.findById(
             inventory._id

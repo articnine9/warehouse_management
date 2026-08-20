@@ -6,6 +6,7 @@ import {
   CalendarClock,
   CheckCircle2,
   History,
+  RotateCcw,
   Wrench,
   X,
 } from "lucide-react";
@@ -87,6 +88,48 @@ export default function ServiceCycleModal({
     [selectedIntervalMonths, markServiceCompleted, item?.lastServiceDate, issue.createdAt]
   );
 
+  const isReusable = item?.productType === "REUSABLE" || Boolean(item?.returnDueDate);
+  const [renewDays, setRenewDays] = useState("30");
+  const [renewing, setRenewing] = useState(false);
+
+  let returnDaysLeft: number | null = null;
+  if (isReusable && item?.returnDueDate) {
+    const dueTime = new Date(item.returnDueDate).setHours(0, 0, 0, 0);
+    const nowTime = new Date().setHours(0, 0, 0, 0);
+    returnDaysLeft = Math.round((dueTime - nowTime) / 86400000);
+  }
+
+  async function handleRenewItem() {
+    setRenewing(true);
+    setErrorMessage("");
+    try {
+      const response = await fetch(`/api/employee-issues/${issue._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          itemIndex,
+          action: "RENEW_ITEM",
+          extendedDays: Math.max(1, Number(renewDays) || 30),
+          serviceNotes: serviceNotes.trim() || undefined,
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        setErrorMessage(result.message || "Failed to renew item");
+        return;
+      }
+
+      onUpdated(result.data as EmployeeIssue);
+      onClose();
+    } catch (error) {
+      console.error(error);
+      setErrorMessage("Failed to renew item period");
+    } finally {
+      setRenewing(false);
+    }
+  }
+
   if (!item) return null;
 
   async function handleSave() {
@@ -156,6 +199,94 @@ export default function ServiceCycleModal({
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {/* Reusable Asset Return Validity & Renewal */}
+        {isReusable && item.returnDueDate && (
+          <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase text-indigo-900 flex items-center gap-1.5">
+                <RotateCcw className="h-3.5 w-3.5 text-indigo-600" /> Reusable Return / Renewal Status
+              </span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                  isReturned
+                    ? "bg-slate-200 text-slate-700"
+                    : returnDaysLeft !== null && returnDaysLeft < 0
+                    ? "bg-red-600 text-white"
+                    : returnDaysLeft !== null && returnDaysLeft <= 7
+                    ? "bg-amber-500 text-white"
+                    : "bg-indigo-600 text-white"
+                }`}
+              >
+                {isReturned
+                  ? "RETURNED TO STOCK"
+                  : returnDaysLeft !== null && returnDaysLeft < 0
+                  ? `OVERDUE BY ${Math.abs(returnDaysLeft)} DAYS`
+                  : returnDaysLeft === 0
+                  ? "DUE TODAY"
+                  : `${returnDaysLeft} DAYS REMAINING`}
+              </span>
+            </div>
+
+            <dl className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-xs">
+              <dt className="text-slate-500">Return due date</dt>
+              <dd className="font-bold text-slate-800 text-right">
+                {new Date(item.returnDueDate).toLocaleDateString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </dd>
+
+              <dt className="text-slate-500">Renewals performed</dt>
+              <dd className="font-semibold text-slate-800 text-right">
+                {item.renewalCount || 0} times
+              </dd>
+            </dl>
+
+            {!isReturned && (
+              <div className="pt-2 border-t border-indigo-200/60 flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-bold text-indigo-950">Extend Validity:</span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    min="1"
+                    value={renewDays}
+                    onChange={(e) => setRenewDays(e.target.value)}
+                    className="w-16 rounded border border-indigo-300 bg-white px-2 py-1 text-xs font-bold text-slate-800 outline-none"
+                  />
+                  <span className="text-[11px] text-indigo-900">Days</span>
+                </div>
+
+                <div className="flex gap-1">
+                  {[7, 15, 30, 60, 90].map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setRenewDays(d.toString())}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-bold border transition ${
+                        renewDays === d.toString()
+                          ? "bg-indigo-600 text-white border-indigo-600"
+                          : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
+                      }`}
+                    >
+                      +{d}d
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  disabled={renewing}
+                  onClick={handleRenewItem}
+                  className="ml-auto rounded-lg bg-indigo-600 px-3 py-1 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {renewing ? "Renewing..." : "✓ Renew Period"}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Current service cycle summary */}
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-2">

@@ -21,6 +21,8 @@ export type InventoryItem = {
     category?: string;
     price?: number;
     sellerName?: string;
+    productType?: "REUSABLE" | "NON_REUSABLE";
+    returnDays?: number;
   };
   warehouseId: {
     _id: string;
@@ -43,10 +45,25 @@ export type ServiceHistoryRecord = {
   performedBy?: string;
 };
 
+export type RenewalHistoryRecord = {
+  renewalNumber: number;
+  renewedAt: string;
+  extendedDays: number;
+  newDueDate: string;
+  notes?: string;
+  performedBy?: string;
+};
+
 export type SelectedLineItem = {
   inventoryId: string;
   productName: string;
   sku: string;
+  productType?: "REUSABLE" | "NON_REUSABLE";
+  returnDueDays?: number;
+  returnDueDate?: string;
+  lastRenewedDate?: string;
+  renewalCount?: number;
+  renewalHistory?: RenewalHistoryRecord[];
   warehouseName: string;
   rackName: string;
   unitPrice: number;
@@ -69,6 +86,7 @@ export type SelectedLineItem = {
 export type EmployeeIssue = {
   _id: string;
   issueNumber: string;
+  employeeId?: string;
   employeeName: string;
   employeeEmail: string;
   employeePhone?: string;
