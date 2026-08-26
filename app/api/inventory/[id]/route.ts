@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
 import Inventory from "@/models/Inventory";
+import StockMovement from "@/models/StockMovement";
 
 export async function PUT(
   request: Request,
@@ -32,6 +33,14 @@ export async function PUT(
       status = "AVAILABLE";
     }
 
+    const oldInventory = await Inventory.findById(id).lean();
+    if (!oldInventory) {
+      return Response.json(
+        { success: false, message: "Inventory not found" },
+        { status: 404 }
+      );
+    }
+
     const inventory = await Inventory.findByIdAndUpdate(
       id,
       {
@@ -43,7 +52,7 @@ export async function PUT(
       },
       { new: true }
     )
-      .populate("productId", "name sku")
+      .populate("productId", "name sku price category")
       .populate("warehouseId", "name code")
       .populate("rackId", "name code");
 
@@ -52,6 +61,43 @@ export async function PUT(
         { success: false, message: "Inventory not found" },
         { status: 404 }
       );
+    }
+
+    const diff = Number(quantity) - Number(oldInventory.quantity || 0);
+    if (diff !== 0) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const p = inventory.productId as any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const w = inventory.warehouseId as any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const r = inventory.rackId as any;
+
+        if (p) {
+          await StockMovement.create({
+            productId: p._id,
+            productName: p.name,
+            sku: p.sku,
+            category: p.category,
+            warehouseId: w?._id,
+            warehouseName: w?.name,
+            rackId: r?._id,
+            rackName: r?.name,
+            movementType: diff > 0 ? "INWARD" : "OUTWARD",
+            reason: diff > 0 ? "RESTOCK" : "ADJUSTMENT",
+            quantity: Math.abs(diff),
+            unitPrice: p.price || 0,
+            totalValue: (p.price || 0) * Math.abs(diff),
+            referenceNumber: "STOCK-ADJUSTMENT",
+            entityName: `${w?.name || "Warehouse"} / ${r?.name || "Rack"}`,
+            notes: `Quantity changed from ${oldInventory.quantity} to ${quantity}`,
+            performedBy: user.id,
+            performedByName: user.name,
+          });
+        }
+      } catch (logErr) {
+        console.error("Failed to log movement in PUT inventory:", logErr);
+      }
     }
 
     return Response.json({ success: true, data: inventory });

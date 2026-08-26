@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState, useMemo } from "react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
+import WarningPopup from "@/app/components/WarningPopup";
 
 type Category = {
   _id: string;
@@ -20,6 +21,9 @@ export default function CategoriesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -74,7 +78,8 @@ export default function CategoriesPage() {
       const result = await response.json();
 
       if (!result.success) {
-        alert(result.message);
+        setWarningMessage(result.message || "Failed to add category");
+        setWarningOpen(true);
         return;
       }
 
@@ -84,7 +89,8 @@ export default function CategoriesPage() {
       await fetchCategories();
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setLoading(false);
     }
@@ -120,7 +126,8 @@ export default function CategoriesPage() {
       const result = await response.json();
 
       if (!result.success) {
-        alert(result.message);
+        setWarningMessage(result.message || "Failed to update category");
+        setWarningOpen(true);
         return;
       }
 
@@ -128,7 +135,8 @@ export default function CategoriesPage() {
       await fetchCategories();
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setEditLoading(false);
     }
@@ -146,7 +154,8 @@ export default function CategoriesPage() {
       const result = await response.json();
 
       if (!result.success) {
-        alert(result.message);
+        setWarningMessage(result.message || "Failed to delete category");
+        setWarningOpen(true);
         return;
       }
 
@@ -154,7 +163,8 @@ export default function CategoriesPage() {
       await fetchCategories();
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setDeleteLoading(false);
     }
@@ -466,6 +476,12 @@ export default function CategoriesPage() {
           </div>
         )}
       </div>
+
+      <WarningPopup
+        open={warningOpen}
+        message={warningMessage}
+        onClose={() => setWarningOpen(false)}
+      />
     </ProtectedPage>
   );
 }

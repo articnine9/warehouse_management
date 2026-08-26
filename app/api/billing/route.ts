@@ -5,6 +5,7 @@ import Product from "@/models/Product";
 import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
 import Invoice from "@/models/Invoice";
+import StockMovement from "@/models/StockMovement";
 
 export async function GET(request: NextRequest) {
   try {
@@ -248,6 +249,32 @@ export async function POST(request: NextRequest) {
       paymentMethod,
       notes: notes?.trim(),
     });
+
+    // Log Outward Stock Movement for sold items
+    try {
+      for (const item of invoiceItems) {
+        await StockMovement.create({
+          productId: item.productId,
+          productName: item.productName,
+          sku: item.sku,
+          warehouseId: item.warehouseId,
+          warehouseName: item.warehouseName,
+          rackId: item.rackId,
+          rackName: item.rackName,
+          movementType: "OUTWARD",
+          reason: "INVOICE_SALE",
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalValue: item.total,
+          referenceId: invoice._id.toString(),
+          referenceNumber: `INVOICE #${invoiceNumber}`,
+          entityName: `${customerName.trim()}${customerPhone ? ` (${customerPhone.trim()})` : ""}`,
+          notes: notes?.trim() || `Sold via ${paymentMethod}`,
+        });
+      }
+    } catch (logErr) {
+      console.error("Failed to log stock movements in POST billing:", logErr);
+    }
 
     return Response.json(
       {

@@ -6,6 +6,7 @@ import Inventory from "@/models/Inventory";
 import Product from "@/models/Product";
 import Rack from "@/models/Rack";
 import Warehouse from "@/models/Warehouse";
+import StockMovement from "@/models/StockMovement";
 
 const allowedReasons = new Set([
   "STAFF_USE",
@@ -307,6 +308,36 @@ export async function POST(request: Request) {
       issuedBy: currentUser._id,
       issuedByName: currentUser.name,
     });
+
+    // Log Outward Stock Movement for each item
+    try {
+      for (const item of issueItems) {
+        await StockMovement.create({
+          productId: item.productId,
+          productName: item.productName,
+          sku: item.sku,
+          warehouseId: item.warehouseId,
+          warehouseName: item.warehouseName,
+          rackId: item.rackId,
+          rackName: item.rackName,
+          movementType: "OUTWARD",
+          reason: "EMPLOYEE_ISSUE",
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          totalValue: item.totalValue,
+          serialNumber: item.serialNumber,
+          referenceId: newIssue._id.toString(),
+          referenceNumber: `ISSUE #${issueNumber}`,
+          entityName: `${employee.name} (${employee.department || "Staff"})`,
+          entityId: employee._id.toString(),
+          notes: notes || `Issued for ${reason}`,
+          performedBy: currentUser._id,
+          performedByName: currentUser.name,
+        });
+      }
+    } catch (logErr) {
+      console.error("Failed to log stock movements in POST employee-issues:", logErr);
+    }
 
     return Response.json(
       {

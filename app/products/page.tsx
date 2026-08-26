@@ -1,12 +1,18 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { FolderTree, History, RotateCcw, Box, Tag } from "lucide-react";
+import { FolderTree, History, RotateCcw, Box, Tag, Wrench, Shield, Hash } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
 import Link from "next/link";
 import WarningPopup from "@/app/components/WarningPopup";
+import {
+  SERVICE_INTERVAL_OPTIONS,
+  CUSTOM_INTERVAL_VALUE,
+  normalizeIntervalMonths,
+  formatServiceInterval,
+} from "@/lib/serviceCycle";
 
 type Product = {
   _id: string;
@@ -15,6 +21,9 @@ type Product = {
   category?: string;
   productType?: "REUSABLE" | "NON_REUSABLE";
   returnDays?: number;
+  serviceIntervalMonths?: number;
+  warrantyMonths?: number;
+  serialNumber?: string;
   sellerName?: string;
   price?: number;
   description?: string;
@@ -47,6 +56,10 @@ export default function ProductsPage() {
   const [category, setCategory] = useState("");
   const [productType, setProductType] = useState<"NON_REUSABLE" | "REUSABLE">("NON_REUSABLE");
   const [returnDays, setReturnDays] = useState("30");
+  const [serviceInterval, setServiceInterval] = useState("3");
+  const [customServiceInterval, setCustomServiceInterval] = useState("");
+  const [warrantyMonths, setWarrantyMonths] = useState("12");
+  const [serialNumber, setSerialNumber] = useState("");
   const [description, setDescription] = useState("");
   const [sellerName, setSellerName] = useState("");
   const [price, setPrice] = useState("");
@@ -57,6 +70,10 @@ export default function ProductsPage() {
   const [editCategory, setEditCategory] = useState("");
   const [editProductType, setEditProductType] = useState<"NON_REUSABLE" | "REUSABLE">("NON_REUSABLE");
   const [editReturnDays, setEditReturnDays] = useState("30");
+  const [editServiceInterval, setEditServiceInterval] = useState("3");
+  const [editCustomServiceInterval, setEditCustomServiceInterval] = useState("");
+  const [editWarrantyMonths, setEditWarrantyMonths] = useState("12");
+  const [editSerialNumber, setEditSerialNumber] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editSellerName, setEditSellerName] = useState("");
   const [editPrice, setEditPrice] = useState("");
@@ -124,6 +141,11 @@ export default function ProductsPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setAddLoading(true);
+
+    const intervalVal = normalizeIntervalMonths(
+      serviceInterval === CUSTOM_INTERVAL_VALUE ? customServiceInterval : serviceInterval
+    );
+
     try {
       const response = await fetch("/api/products", {
         method: "POST",
@@ -134,6 +156,9 @@ export default function ProductsPage() {
           category,
           productType,
           returnDays: productType === "REUSABLE" ? Math.max(1, Number(returnDays) || 30) : 0,
+          serviceIntervalMonths: intervalVal,
+          warrantyMonths: Math.max(0, Number(warrantyMonths) || 0),
+          serialNumber: serialNumber.trim() || undefined,
           sellerName,
           price: Number(price),
           description,
@@ -150,6 +175,10 @@ export default function ProductsPage() {
       setCategory("");
       setProductType("NON_REUSABLE");
       setReturnDays("30");
+      setServiceInterval("3");
+      setCustomServiceInterval("");
+      setWarrantyMonths("12");
+      setSerialNumber("");
       setSellerName("");
       setPrice("");
       setDescription("");
@@ -170,6 +199,12 @@ export default function ProductsPage() {
     setEditCategory(product.category || "");
     setEditProductType(product.productType || "NON_REUSABLE");
     setEditReturnDays(product.returnDays?.toString() || "30");
+    const interval = product.serviceIntervalMonths ?? 3;
+    const isPreset = [1, 3, 6, 12, 0].includes(interval);
+    setEditServiceInterval(isPreset ? String(interval) : CUSTOM_INTERVAL_VALUE);
+    setEditCustomServiceInterval(isPreset ? "" : String(interval));
+    setEditWarrantyMonths(product.warrantyMonths?.toString() ?? "12");
+    setEditSerialNumber(product.serialNumber || "");
     setEditDescription(product.description || "");
     setEditSellerName(product.sellerName || "");
     setEditPrice(product.price?.toString() || "");
@@ -180,6 +215,11 @@ export default function ProductsPage() {
     event.preventDefault();
     if (!editId) return;
     setEditLoading(true);
+
+    const intervalVal = normalizeIntervalMonths(
+      editServiceInterval === CUSTOM_INTERVAL_VALUE ? editCustomServiceInterval : editServiceInterval
+    );
+
     try {
       const response = await fetch(`/api/products/${editId}`, {
         method: "PUT",
@@ -190,6 +230,9 @@ export default function ProductsPage() {
           category: editCategory,
           productType: editProductType,
           returnDays: editProductType === "REUSABLE" ? Math.max(1, Number(editReturnDays) || 30) : 0,
+          serviceIntervalMonths: intervalVal,
+          warrantyMonths: Math.max(0, Number(editWarrantyMonths) || 0),
+          serialNumber: editSerialNumber.trim() || undefined,
           sellerName: editSellerName,
           price: Number(editPrice),
           description: editDescription,
@@ -517,6 +560,77 @@ export default function ProductsPage() {
               )}
             </div>
 
+            {/* Service Interval, Warranty & Serial Number Specification */}
+            <div className="md:col-span-2 lg:col-span-3 rounded-xl bg-slate-50/70 p-3.5 border border-slate-200/80 space-y-3">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 uppercase">
+                <Wrench className="h-3.5 w-3.5 text-blue-600" />
+                <span>Service Maintenance, Warranty & Tracking Specs</span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                    Service Interval (Recurring Cycle)
+                  </label>
+                  <select
+                    value={serviceInterval}
+                    onChange={(e) => setServiceInterval(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500 font-medium text-slate-800"
+                  >
+                    {SERVICE_INTERVAL_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                    <option value={CUSTOM_INTERVAL_VALUE}>Custom Months...</option>
+                  </select>
+                </div>
+
+                {serviceInterval === CUSTOM_INTERVAL_VALUE && (
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                      Enter Custom Months
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 2, 4, 9..."
+                      value={customServiceInterval}
+                      onChange={(e) => setCustomServiceInterval(e.target.value)}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                    Warranty (Months)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 12 (0 for no warranty)"
+                    value={warrantyMonths}
+                    onChange={(e) => setWarrantyMonths(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500 font-medium text-slate-800"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                    Serial No / Asset Tag (Optional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. SN-PREFIX / TAG-001"
+                    value={serialNumber}
+                    onChange={(e) => setSerialNumber(e.target.value)}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none focus:border-blue-500 font-medium text-slate-800"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Seller Name</label>
               <input
@@ -653,11 +767,12 @@ export default function ProductsPage() {
                   <tr>
                     <th className="px-5 py-3">Product</th>
                     <th className="px-5 py-3">Type / Validity</th>
+                    <th className="px-5 py-3">Service Interval</th>
+                    <th className="px-5 py-3">Warranty & Serial</th>
                     <th className="px-5 py-3">SKU</th>
                     <th className="px-5 py-3">Category</th>
                     <th className="px-5 py-3">Seller</th>
                     <th className="px-5 py-3">Price</th>
-                    <th className="px-5 py-3">Created</th>
                     <th className="px-5 py-3">Status</th>
                     <th className="px-5 py-3">Actions</th>
                   </tr>
@@ -682,7 +797,26 @@ export default function ProductsPage() {
                           </span>
                         )}
                       </td>
-                      <td className="px-5 py-3 text-slate-600">{product.sku}</td>
+                      <td className="px-5 py-3">
+                        <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                          <Wrench className="h-3 w-3 text-blue-600" />
+                          {formatServiceInterval(product.serviceIntervalMonths)}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-xs text-slate-600">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-semibold text-slate-700 flex items-center gap-1">
+                            <Shield className="h-3 w-3 text-emerald-600" />
+                            {product.warrantyMonths ? `${product.warrantyMonths}m Warranty` : "No Warranty"}
+                          </span>
+                          {product.serialNumber && (
+                            <span className="text-[11px] font-mono text-slate-500 flex items-center gap-0.5">
+                              <Hash className="h-2.5 w-2.5" /> {product.serialNumber}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-5 py-3 font-mono text-xs text-slate-600">{product.sku}</td>
                       <td className="px-5 py-3">
                         {product.category ? (
                           <span className="inline-block rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700">
@@ -698,15 +832,6 @@ export default function ProductsPage() {
                       <td className="px-5 py-3 font-medium text-slate-800">
                         {product.price != null
                           ? `₹${product.price.toLocaleString("en-IN")}`
-                          : "-"}
-                      </td>
-                      <td className="px-5 py-3 text-slate-500">
-                        {product.createdAt
-                          ? new Date(product.createdAt).toLocaleDateString("en-IN", {
-                              day: "2-digit",
-                              month: "short",
-                              year: "numeric",
-                            })
                           : "-"}
                       </td>
                       <td className="px-5 py-3">
@@ -749,14 +874,14 @@ export default function ProductsPage() {
               {paginatedProducts.map((product) => (
                 <div
                   key={product._id}
-                  className="rounded-lg border border-slate-100 bg-slate-50/50 p-4"
+                  className="rounded-lg border border-slate-100 bg-slate-50/50 p-4 space-y-2"
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-slate-800">
                         {product.name}
                       </p>
-                      <p className="mt-0.5 text-xs text-slate-500">{product.sku}</p>
+                      <p className="mt-0.5 text-xs font-mono text-slate-500">SKU: {product.sku}</p>
                     </div>
                     <span
                       className={`ml-2 shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -768,7 +893,8 @@ export default function ProductsPage() {
                       {product.status}
                     </span>
                   </div>
-                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 items-center">
+
+                  <div className="flex flex-wrap gap-1.5 text-xs">
                     {product.productType === "REUSABLE" ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 font-bold text-indigo-700">
                         <RotateCcw className="h-3 w-3" /> Reusable ({product.returnDays || 30}d)
@@ -778,18 +904,35 @@ export default function ProductsPage() {
                         Normal
                       </span>
                     )}
-                    {product.category && (
-                      <span className="rounded-full bg-blue-50 px-2 py-0.5 font-medium text-blue-700">
-                        Category: {product.category}
-                      </span>
-                    )}
-                    {product.price != null && (
-                      <span className="font-semibold text-slate-700">
-                        ₹{product.price.toLocaleString("en-IN")}
+
+                    <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
+                      <Wrench className="h-3 w-3" />
+                      {formatServiceInterval(product.serviceIntervalMonths)}
+                    </span>
+
+                    <span className="inline-flex items-center gap-1 rounded-md bg-emerald-50 border border-emerald-200 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                      <Shield className="h-3 w-3" />
+                      {product.warrantyMonths ? `${product.warrantyMonths}m Warranty` : "No Warranty"}
+                    </span>
+
+                    {product.serialNumber && (
+                      <span className="inline-flex items-center gap-1 rounded-md bg-purple-50 border border-purple-200 px-2 py-0.5 text-[11px] font-mono text-purple-700">
+                        <Hash className="h-3 w-3" />
+                        {product.serialNumber}
                       </span>
                     )}
                   </div>
-                  <div className="mt-3 flex gap-2">
+
+                  <div className="flex items-center justify-between text-xs text-slate-500 pt-1 border-t border-slate-200/50">
+                    <span>
+                      Seller: <b>{product.sellerName || "-"}</b>
+                    </span>
+                    <span className="font-bold text-slate-800">
+                      {product.price != null ? `₹${product.price.toLocaleString("en-IN")}` : "-"}
+                    </span>
+                  </div>
+
+                  <div className="mt-2 flex gap-2">
                     <button
                       onClick={() => openEdit(product)}
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
@@ -909,6 +1052,72 @@ export default function ProductsPage() {
                       />
                     </div>
                   )}
+                </div>
+
+                {/* Edit Service Interval, Warranty, Serial */}
+                <div className="rounded-lg bg-slate-50 p-3 border border-slate-200 space-y-2.5">
+                  <label className="block text-xs font-bold text-slate-700 uppercase">Service & Warranty Specs</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                        Service Interval
+                      </label>
+                      <select
+                        value={editServiceInterval}
+                        onChange={(e) => setEditServiceInterval(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 font-medium"
+                      >
+                        {SERVICE_INTERVAL_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                        <option value={CUSTOM_INTERVAL_VALUE}>Custom Months...</option>
+                      </select>
+                    </div>
+
+                    {editServiceInterval === CUSTOM_INTERVAL_VALUE && (
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                          Custom Months
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          placeholder="Months"
+                          value={editCustomServiceInterval}
+                          onChange={(e) => setEditCustomServiceInterval(e.target.value)}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none"
+                        />
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                        Warranty (Months)
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={editWarrantyMonths}
+                        onChange={(e) => setEditWarrantyMonths(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none font-medium"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                        Serial Number / Tag
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. SN-XXXX"
+                        value={editSerialNumber}
+                        onChange={(e) => setEditSerialNumber(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none font-medium"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div>

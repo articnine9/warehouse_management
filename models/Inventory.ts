@@ -6,6 +6,8 @@ export interface IInventory {
   rackId: mongoose.Types.ObjectId;
   quantity: number;
   status: "AVAILABLE" | "LOW_STOCK" | "OUT_OF_STOCK";
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 const inventorySchema = new Schema<IInventory>(

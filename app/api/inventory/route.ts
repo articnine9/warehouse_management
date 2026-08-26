@@ -4,6 +4,7 @@ import Inventory from "@/models/Inventory";
 import Product from "@/models/Product";
 import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
+import StockMovement from "@/models/StockMovement";
 
 export async function GET(request: Request) {
     try {
@@ -72,7 +73,7 @@ export async function GET(request: Request) {
             const [total, inventory] = await Promise.all([
                 Inventory.countDocuments(filter),
                 Inventory.find(filter)
-                    .populate("productId", "name sku price sellerName category productType returnDays")
+                    .populate("productId", "name sku price sellerName category productType returnDays serviceIntervalMonths warrantyMonths serialNumber")
                     .populate("warehouseId", "name code")
                     .populate("rackId", "name code")
                     .sort({ createdAt: -1 })
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
 
         // Return all records (used for selection dropdowns / backward compatibility)
         const inventory = await Inventory.find(filter)
-            .populate("productId", "name sku price sellerName category productType returnDays")
+            .populate("productId", "name sku price sellerName category productType returnDays serviceIntervalMonths warrantyMonths serialNumber")
             .populate("warehouseId", "name code")
             .populate("rackId", "name code")
             .sort({
@@ -223,9 +224,43 @@ export async function POST(request: Request) {
         const populatedInventory = await Inventory.findById(
             inventory._id
         )
-            .populate("productId", "name sku")
+            .populate("productId", "name sku price category")
             .populate("warehouseId", "name code")
             .populate("rackId", "name code");
+
+        // Log Inward Stock Movement
+        try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const p = populatedInventory?.productId as any;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const w = populatedInventory?.warehouseId as any;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const r = populatedInventory?.rackId as any;
+
+            if (p) {
+                await StockMovement.create({
+                    productId: p._id,
+                    productName: p.name,
+                    sku: p.sku,
+                    category: p.category,
+                    warehouseId: w?._id,
+                    warehouseName: w?.name,
+                    rackId: r?._id,
+                    rackName: r?.name,
+                    movementType: "INWARD",
+                    reason: "RESTOCK",
+                    quantity: Number(quantity),
+                    unitPrice: p.price || 0,
+                    totalValue: (p.price || 0) * Number(quantity),
+                    referenceNumber: "RESTOCK",
+                    entityName: `Added to ${w?.name || "Warehouse"} / ${r?.name || "Rack"}`,
+                    performedBy: user.id,
+                    performedByName: user.name,
+                });
+            }
+        } catch (logErr) {
+            console.error("Failed to log stock movement in POST /api/inventory:", logErr);
+        }
 
         return Response.json(
             {

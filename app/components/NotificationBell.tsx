@@ -16,6 +16,7 @@ import {
   Layers,
 } from "lucide-react";
 import Link from "next/link";
+import WarningPopup from "./WarningPopup";
 
 type ServiceAlert = {
   issueId: string;
@@ -74,6 +75,9 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("ALL");
+
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
 
   // Service Modal state
   const [selectedServiceAlert, setSelectedServiceAlert] = useState<ServiceAlert | null>(null);
@@ -148,11 +152,13 @@ export default function NotificationBell() {
         setServiceNotes("");
         await fetchAlerts();
       } else {
-        alert(data.message || "Failed to update service status");
+        setWarningMessage(data.message || "Failed to update service status");
+        setWarningOpen(true);
       }
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setMarkingService(false);
     }
@@ -180,11 +186,13 @@ export default function NotificationBell() {
         setRenewDays("30");
         await fetchAlerts();
       } else {
-        alert(data.message || "Failed to renew item");
+        setWarningMessage(data.message || "Failed to renew item");
+        setWarningOpen(true);
       }
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setRenewing(false);
     }
@@ -210,11 +218,13 @@ export default function NotificationBell() {
       if (data.success) {
         await fetchAlerts();
       } else {
-        alert(data.message || "Failed to return item");
+        setWarningMessage(data.message || "Failed to return item");
+        setWarningOpen(true);
       }
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setReturningItem(false);
     }
@@ -743,6 +753,12 @@ export default function NotificationBell() {
           </div>
         </div>
       )}
+
+      <WarningPopup
+        open={warningOpen}
+        message={warningMessage}
+        onClose={() => setWarningOpen(false)}
+      />
     </div>
   );
 }

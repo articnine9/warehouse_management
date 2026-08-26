@@ -6,6 +6,7 @@ import Inventory from "@/models/Inventory";
 import Product from "@/models/Product";
 import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
+import StockMovement from "@/models/StockMovement";
 import {
   HOLDING_STATUSES,
   MAX_INTERVAL_MONTHS,
@@ -182,6 +183,33 @@ export async function PUT(
       if (requestedStatus === "RETURNED") {
         await restoreStock(item);
         item.returnedAt = new Date();
+
+        try {
+          await StockMovement.create({
+            productId: item.productId,
+            productName: item.productName,
+            sku: item.sku,
+            warehouseId: item.warehouseId,
+            warehouseName: item.warehouseName,
+            rackId: item.rackId,
+            rackName: item.rackName,
+            movementType: "INWARD",
+            reason: "EMPLOYEE_RETURN",
+            quantity: item.quantity || 1,
+            unitPrice: item.unitPrice || 0,
+            totalValue: (item.unitPrice || 0) * (item.quantity || 1),
+            serialNumber: item.serialNumber,
+            referenceId: issue._id.toString(),
+            referenceNumber: `RETURN #${issue.issueNumber}`,
+            entityName: `${issue.employeeName} (Returned)`,
+            entityId: issue.employeeId?.toString(),
+            notes: trimmedNotes || "Product returned to warehouse stock",
+            performedBy: currentUser._id,
+            performedByName: currentUser.name,
+          });
+        } catch (logErr) {
+          console.error("Failed to log return stock movement:", logErr);
+        }
       }
     }
 

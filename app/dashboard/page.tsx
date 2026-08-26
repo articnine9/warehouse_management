@@ -29,6 +29,7 @@ import {
 import ProductSearch from "@/app/components/ProductSearch";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import { useAuth } from "@/app/components/AuthProvider";
+import WarningPopup from "@/app/components/WarningPopup";
 
 type Metric = {
   label: string;
@@ -58,6 +59,7 @@ type ReusableAlert = {
   issueNumber: string;
   itemIndex: number;
   employeeName: string;
+  employeeEmail?: string;
   employeePhone?: string;
   employeeDepartment?: string;
   productName: string;
@@ -73,9 +75,9 @@ type ReusableAlert = {
 
 type StockAlert = {
   id: string;
-  productId?: string;
-  warehouseId?: string;
-  rackId?: string;
+  productId: string;
+  warehouseId: string;
+  rackId: string;
   productName: string;
   sku: string;
   warehouseName: string;
@@ -91,92 +93,68 @@ type LowStockItem = {
   rackName: string;
   rackCode: string;
   quantity: number;
-  status: string;
+  status: "LOW_STOCK" | "OUT_OF_STOCK";
 };
 
 type DashboardSummary = {
-  success: boolean;
   role: "ADMIN" | "STAFF";
   data: {
-    user: {
-      id: string;
-      name: string;
-      email: string;
-      role: "ADMIN" | "STAFF";
-      warehouse?: {
-        id: string;
-        name: string;
-        code: string;
-      } | null;
-    };
     metrics: Metric[];
     lowStockItems?: LowStockItem[];
     serviceAlerts?: ServiceAlert[];
     reusableAlerts?: ReusableAlert[];
     stockAlerts?: StockAlert[];
-    totalAlertCount?: number;
   };
 };
 
-function getMetricLink(label: string, role: "ADMIN" | "STAFF") {
-  if (role === "ADMIN") {
-    switch (label) {
-      case "Warehouses":
-        return "/warehouses";
-      case "Categories":
-        return "/categories";
-      case "Racks":
-        return "/racks";
-      case "Products":
-        return "/products";
-      case "Total Stock":
-        return "/inventory";
-      case "Low Stock":
-        return "/inventory?status=LOW_STOCK";
-      case "Out of Stock":
-        return "/inventory?status=OUT_OF_STOCK";
-      case "Low / Out":
-        return "/inventory?status=LOW_OUT";
-      case "Staff":
-        return "/staff";
-      default:
-        return "/dashboard";
-    }
-  }
-
+function getMetricLink(label: string, role?: string): string {
   switch (label) {
-    case "Assigned Warehouse":
-    case "Products in Warehouse":
-    case "Total Units":
-    case "Low Stock":
-    case "Out of Stock":
+    case "Total Warehouses":
+      return "/warehouses";
+    case "Total Categories":
+      return "/categories";
+    case "Total Products":
+      return "/products";
+    case "Inventory Stock":
+      return "/inventory";
+    case "Total Staff":
+      return "/staff";
+    case "Total Billing Orders":
+      return "/billing";
     case "Attention Needed":
+      return "/inventory";
+    case "Assigned Racks":
+      return "/racks";
+    case "Assigned Products":
+      return "/staff";
+    case "Stock Items":
+      return "/staff";
+    case "Low / Out":
       return "/staff";
     default:
-      return "/dashboard";
+      return role === "STAFF" ? "/staff" : "/warehouses";
   }
 }
 
 function getMetricIcon(label: string) {
   switch (label) {
-    case "Warehouses":
-    case "Assigned Warehouse":
+    case "Total Warehouses":
       return <Warehouse className="h-5 w-5 text-blue-600" />;
-    case "Categories":
+    case "Total Categories":
       return <FolderTree className="h-5 w-5 text-indigo-600" />;
-    case "Racks":
-      return <Box className="h-5 w-5 text-amber-600" />;
-    case "Products":
-    case "Products in Warehouse":
-      return <Tag className="h-5 w-5 text-emerald-600" />;
-    case "Total Stock":
-    case "Total Units":
-      return <ClipboardList className="h-5 w-5 text-violet-600" />;
-    case "Staff":
-      return <Users className="h-5 w-5 text-sky-600" />;
-    case "Low Stock":
-      return <AlertTriangle className="h-5 w-5 text-amber-600" />;
-    case "Out of Stock":
+    case "Total Products":
+      return <Box className="h-5 w-5 text-emerald-600" />;
+    case "Inventory Stock":
+      return <Tag className="h-5 w-5 text-amber-600" />;
+    case "Total Staff":
+      return <Users className="h-5 w-5 text-purple-600" />;
+    case "Total Billing Orders":
+      return <ClipboardList className="h-5 w-5 text-teal-600" />;
+    case "Assigned Racks":
+      return <Warehouse className="h-5 w-5 text-blue-600" />;
+    case "Assigned Products":
+      return <Box className="h-5 w-5 text-emerald-600" />;
+    case "Stock Items":
       return <AlertOctagon className="h-5 w-5 text-rose-600" />;
     case "Low / Out":
     case "Attention Needed":
@@ -190,6 +168,9 @@ export default function DashboardPage() {
   const { user } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
 
   // Tab filter for alerts
   const [alertTab, setAlertTab] = useState<"ALL" | "REUSABLE" | "STOCK" | "SERVICE">("ALL");
@@ -246,11 +227,13 @@ export default function DashboardPage() {
         setServiceNotes("");
         await fetchSummary();
       } else {
-        alert(data.message || "Failed to update service status");
+        setWarningMessage(data.message || "Failed to update service status");
+        setWarningOpen(true);
       }
     } catch (error) {
       console.error("Failed to mark service done:", error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setMarkingService(false);
     }
@@ -260,7 +243,8 @@ export default function DashboardPage() {
     if (!selectedReusableAlert) return;
     const days = parseInt(renewDays, 10);
     if (isNaN(days) || days <= 0) {
-      alert("Please enter a valid number of days to extend");
+      setWarningMessage("Please enter a valid number of days to extend");
+      setWarningOpen(true);
       return;
     }
 
@@ -283,11 +267,13 @@ export default function DashboardPage() {
         setRenewNotes("");
         await fetchSummary();
       } else {
-        alert(data.message || "Failed to renew item");
+        setWarningMessage(data.message || "Failed to renew item");
+        setWarningOpen(true);
       }
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setRenewing(false);
     }
@@ -310,11 +296,13 @@ export default function DashboardPage() {
       if (data.success) {
         await fetchSummary();
       } else {
-        alert(data.message || "Failed to return item");
+        setWarningMessage(data.message || "Failed to return item");
+        setWarningOpen(true);
       }
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     }
   }
 
@@ -933,6 +921,12 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        <WarningPopup
+          open={warningOpen}
+          message={warningMessage}
+          onClose={() => setWarningOpen(false)}
+        />
       </div>
     </ProtectedPage>
   );

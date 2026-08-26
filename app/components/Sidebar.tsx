@@ -26,6 +26,7 @@ import {
   Building2,
   Mail,
   Menu,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import NotificationBell from "./NotificationBell";
@@ -41,6 +42,7 @@ const iconMap: Record<string, React.ReactNode> = {
   Products: <Tag className="h-4 w-4" />,
   Inventory: <ClipboardList className="h-4 w-4" />,
   "Employee Issue": <PackageCheck className="h-4 w-4" />,
+  "Stock Movements": <ArrowLeftRight className="h-4 w-4" />,
   Staff: <Users className="h-4 w-4" />,
   "Staff Management": <Users className="h-4 w-4" />,
   "My Warehouse": <Warehouse className="h-4 w-4" />,
@@ -75,6 +77,7 @@ export default function Sidebar() {
           { name: "Dashboard", path: "/dashboard" },
           { name: "Inventory", path: "/inventory" },
           { name: "Employee Issue", path: "/employee-issues" },
+          { name: "Stock Movements", path: "/movements" },
           // { name: "Billing", path: "/billing" },
           // { name: "Search", path: "/search" },
           { name: "Staff Management", path: "/staff" },
@@ -92,6 +95,7 @@ export default function Sidebar() {
           { name: "Dashboard", path: "/dashboard" },
           { name: "Inventory", path: "/inventory" },
           { name: "Employee Issue", path: "/employee-issues" },
+          { name: "Stock Movements", path: "/movements" },
           // { name: "Billing", path: "/billing" },
           // { name: "Search", path: "/search" },
           { name: "My Warehouse", path: "/staff" },

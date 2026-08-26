@@ -23,6 +23,9 @@ export type InventoryItem = {
     sellerName?: string;
     productType?: "REUSABLE" | "NON_REUSABLE";
     returnDays?: number;
+    serviceIntervalMonths?: number;
+    warrantyMonths?: number;
+    serialNumber?: string;
   };
   warehouseId: {
     _id: string;

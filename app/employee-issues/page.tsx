@@ -5,6 +5,7 @@ import { PackageCheck, Search, Trash2, X, Wrench, RotateCcw, Box } from "lucide-
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import ServiceCycleBadge from "@/app/components/ServiceCycleBadge";
+import WarningPopup from "@/app/components/WarningPopup";
 import {
   CUSTOM_INTERVAL_VALUE,
   SERVICE_INTERVAL_OPTIONS,
@@ -27,6 +28,9 @@ export default function EmployeeIssuesPage() {
   const [issues, setIssues] = useState<EmployeeIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+
+  const [warningOpen, setWarningOpen] = useState(false);
+  const [warningMessage, setWarningMessage] = useState("");
 
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
@@ -280,6 +284,16 @@ export default function EmployeeIssuesPage() {
     const isReusable = inventory.productId.productType === "REUSABLE";
     setItemProductType(isReusable ? "REUSABLE" : "NON_REUSABLE");
     setItemReturnDueDays(inventory.productId.returnDays?.toString() || "30");
+
+    // Auto-populate service interval, warranty, and serial from Product definition
+    const productInterval = inventory.productId.serviceIntervalMonths ?? 3;
+    const isPreset = [1, 3, 6, 12, 0].includes(productInterval);
+    setItemServiceInterval(isPreset ? String(productInterval) : CUSTOM_INTERVAL_VALUE);
+    setCustomInterval(isPreset ? "" : String(productInterval));
+
+    setItemWarrantyMonths(inventory.productId.warrantyMonths !== undefined ? String(inventory.productId.warrantyMonths) : "12");
+    setItemSerial(inventory.productId.serialNumber || "");
+
     setTimeout(() => {
       quantityInputRef.current?.focus();
       quantityInputRef.current?.select();
@@ -302,18 +316,21 @@ export default function EmployeeIssuesPage() {
 
   function handleAddLineItem() {
     if (!currentSelectedInventory) {
-      alert("Please select a product from inventory");
+      setWarningMessage("Please select a product from inventory");
+      setWarningOpen(true);
       return;
     }
 
     const quantity = Number(itemQuantity);
     if (!quantity || quantity <= 0) {
-      alert("Please enter a valid quantity");
+      setWarningMessage("Please enter a valid quantity");
+      setWarningOpen(true);
       return;
     }
 
     if (quantity > currentSelectedInventory.quantity) {
-      alert(`Requested quantity exceeds available stock (${currentSelectedInventory.quantity})`);
+      setWarningMessage(`Requested quantity exceeds available stock (${currentSelectedInventory.quantity})`);
+      setWarningOpen(true);
       return;
     }
 
@@ -376,11 +393,13 @@ export default function EmployeeIssuesPage() {
   async function handleSubmitIssue(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selectedEmployeeId) {
-      alert("Please select an employee");
+      setWarningMessage("Please select an employee");
+      setWarningOpen(true);
       return;
     }
     if (lineItems.length === 0) {
-      alert("Please add at least one product to issue");
+      setWarningMessage("Please add at least one product to issue");
+      setWarningOpen(true);
       return;
     }
 
@@ -399,7 +418,8 @@ export default function EmployeeIssuesPage() {
 
       const result = await response.json();
       if (!result.success) {
-        alert(result.message || "Failed to issue products");
+        setWarningMessage(result.message || "Failed to issue products");
+        setWarningOpen(true);
         return;
       }
 
@@ -413,7 +433,8 @@ export default function EmployeeIssuesPage() {
       await fetchInventory();
     } catch (error) {
       console.error("Failed to create issue:", error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setSubmitting(false);
     }
@@ -445,11 +466,13 @@ export default function EmployeeIssuesPage() {
         await fetchIssues();
         await fetchInventory();
       } else {
-        alert(data.message || "Failed to delete issue record");
+        setWarningMessage(data.message || "Failed to delete issue record");
+        setWarningOpen(true);
       }
     } catch (error) {
       console.error(error);
-      alert("Something went wrong");
+      setWarningMessage("Something went wrong");
+      setWarningOpen(true);
     } finally {
       setDeleteLoading(false);
     }
@@ -1331,6 +1354,12 @@ export default function EmployeeIssuesPage() {
             onUpdated={handleIssueUpdated}
           />
         )}
+
+        <WarningPopup
+          open={warningOpen}
+          message={warningMessage}
+          onClose={() => setWarningOpen(false)}
+        />
       </div>
     </ProtectedPage>
   );
