@@ -68,10 +68,19 @@ type StockAlert = {
 
 type TabType = "ALL" | "REUSABLE" | "STOCK" | "SERVICE";
 
+type SharedAlertsData = {
+  serviceAlerts: ServiceAlert[];
+  reusableAlerts: ReusableAlert[];
+  stockAlerts: StockAlert[];
+};
+
+let sharedAlertsCache: SharedAlertsData | null = null;
+let sharedFetchPromise: Promise<SharedAlertsData | null> | null = null;
+
 export default function NotificationBell() {
-  const [serviceAlerts, setServiceAlerts] = useState<ServiceAlert[]>([]);
-  const [reusableAlerts, setReusableAlerts] = useState<ReusableAlert[]>([]);
-  const [stockAlerts, setStockAlerts] = useState<StockAlert[]>([]);
+  const [serviceAlerts, setServiceAlerts] = useState<ServiceAlert[]>(() => sharedAlertsCache?.serviceAlerts || []);
+  const [reusableAlerts, setReusableAlerts] = useState<ReusableAlert[]>(() => sharedAlertsCache?.reusableAlerts || []);
+  const [stockAlerts, setStockAlerts] = useState<StockAlert[]>(() => sharedAlertsCache?.stockAlerts || []);
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>("ALL");
@@ -95,15 +104,42 @@ export default function NotificationBell() {
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  async function fetchAlerts() {
+  async function fetchAlerts(force = false) {
+    if (!force && sharedAlertsCache) {
+      setServiceAlerts(sharedAlertsCache.serviceAlerts);
+      setReusableAlerts(sharedAlertsCache.reusableAlerts);
+      setStockAlerts(sharedAlertsCache.stockAlerts);
+      return;
+    }
+
     try {
-      setLoading(true);
-      const res = await fetch("/api/dashboard", { cache: "no-store" });
-      const json = await res.json();
-      if (json.success && json.data) {
-        setServiceAlerts(json.data.serviceAlerts || []);
-        setReusableAlerts(json.data.reusableAlerts || []);
-        setStockAlerts(json.data.stockAlerts || []);
+      if (!sharedAlertsCache) setLoading(true);
+
+      if (!sharedFetchPromise) {
+        sharedFetchPromise = fetch("/api/dashboard", { cache: "no-store" })
+          .then((res) => res.json())
+          .then((json) => {
+            if (json.success && json.data) {
+              const data = {
+                serviceAlerts: json.data.serviceAlerts || [],
+                reusableAlerts: json.data.reusableAlerts || [],
+                stockAlerts: json.data.stockAlerts || [],
+              };
+              sharedAlertsCache = data;
+              return data;
+            }
+            return null;
+          })
+          .finally(() => {
+            sharedFetchPromise = null;
+          });
+      }
+
+      const res = await sharedFetchPromise;
+      if (res) {
+        setServiceAlerts(res.serviceAlerts);
+        setReusableAlerts(res.reusableAlerts);
+        setStockAlerts(res.stockAlerts);
       }
     } catch (err) {
       console.error("Failed to fetch notification alerts:", err);
@@ -353,7 +389,7 @@ export default function NotificationBell() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className="rounded-md bg-indigo-600 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
-                            Reusable Due
+                            Returnable Due
                           </span>
                           <span className="font-bold text-slate-800 truncate text-xs">
                             {alert.productName}
@@ -515,7 +551,7 @@ export default function NotificationBell() {
                   <CheckCircle2 className="h-8 w-8 text-emerald-500 mx-auto" />
                   <p className="font-semibold text-slate-700 text-xs">All clear & up to date!</p>
                   <p className="text-[11px] text-slate-400">
-                    No reusable items expiring, no low stocks, and no overdue services.
+                    No returnable items expiring, no low stocks, and no overdue services.
                   </p>
                 </div>
               )}
@@ -550,7 +586,7 @@ export default function NotificationBell() {
               <div className="flex items-center gap-2">
                 <RotateCcw className="h-5 w-5 text-indigo-600" />
                 <div>
-                  <h3 className="text-base font-bold text-slate-800">Renew Reusable Period</h3>
+                  <h3 className="text-base font-bold text-slate-800">Renew Returnable Period</h3>
                   <p className="text-xs text-slate-400">Issue #{selectedReusableAlert.issueNumber}</p>
                 </div>
               </div>

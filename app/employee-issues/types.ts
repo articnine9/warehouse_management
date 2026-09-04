@@ -59,6 +59,7 @@ export type RenewalHistoryRecord = {
 
 export type SelectedLineItem = {
   inventoryId: string;
+  productId?: string;
   productName: string;
   sku: string;
   productType?: "REUSABLE" | "NON_REUSABLE";

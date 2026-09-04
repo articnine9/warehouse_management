@@ -284,17 +284,17 @@ export async function GET() {
         data: {
           user: toSafeUser(user),
           metrics: [
+            { label: "Staff", value: staffCount },
             { label: "Warehouses", value: warehouseCount },
-            { label: "Categories", value: categoryCount },
             { label: "Racks", value: rackCount },
+            { label: "Categories", value: categoryCount },
             { label: "Products", value: productCount },
             {
               label: "Total Stock",
               value: inventoryItems[0]?.totalQuantity ?? 0,
             },
-            { label: "Low Stock", value: lowStockCount },
-            { label: "Out of Stock", value: outOfStockCount },
-            { label: "Staff", value: staffCount },
+            { label: "Low", value: lowStockCount },
+            { label: "Out", value: outOfStockCount },
           ],
           serviceAlerts,
           reusableAlerts,

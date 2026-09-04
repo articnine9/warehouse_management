@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Search, X, Package, Layers, MapPin } from "lucide-react";
 import SearchableSelect, { SelectOption } from "./SearchableSelect";
-import Pagination from "./Pagination";
+import ProductHistoryModal from "./ProductHistoryModal";
 
 type SearchResult = {
   _id: string;
@@ -35,6 +35,8 @@ type Category = {
   code?: string;
 };
 
+const CHUNK_SIZE = 5;
+
 export default function ProductSearch() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
@@ -44,10 +46,12 @@ export default function ProductSearch() {
   const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [page, setPage] = useState(1);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
-  // Pagination state
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const desktopScrollRef = useRef<HTMLDivElement>(null);
+  const mobileScrollRef = useRef<HTMLDivElement>(null);
 
   // Fetch categories once
   useEffect(() => {
@@ -67,18 +71,18 @@ export default function ProductSearch() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedQuery(query);
-      setCurrentPage(1);
     }, 250);
     return () => clearTimeout(timer);
   }, [query]);
 
-  // Fetch paginated inventory chunk from server
-  const fetchChunk = useCallback(async () => {
+  // Initial fetch on filter change (resets to page 1)
+  const fetchInitial = useCallback(async () => {
     setLoading(true);
+    setPage(1);
     try {
       const params = new URLSearchParams();
-      params.set("page", String(currentPage));
-      params.set("limit", String(pageSize));
+      params.set("page", "1");
+      params.set("limit", String(CHUNK_SIZE));
 
       if (debouncedQuery.trim()) {
         params.set("q", debouncedQuery.trim());
@@ -105,16 +109,66 @@ export default function ProductSearch() {
         setTotalCount(0);
       }
     } catch (error) {
-      console.error("Failed to fetch inventory chunk:", error);
+      console.error("Failed to fetch initial inventory:", error);
       setInventory([]);
     } finally {
       setLoading(false);
     }
-  }, [currentPage, pageSize, debouncedQuery, selectedStatus, selectedCategory]);
+  }, [debouncedQuery, selectedStatus, selectedCategory]);
 
   useEffect(() => {
-    void fetchChunk();
-  }, [fetchChunk]);
+    void fetchInitial();
+  }, [fetchInitial]);
+
+  // Fetch next chunk for lazy load on scroll
+  const fetchNextChunk = useCallback(async () => {
+    if (loading || loadingMore) return;
+    if (inventory.length >= totalCount) return;
+
+    const nextPage = page + 1;
+    setLoadingMore(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(nextPage));
+      params.set("limit", String(CHUNK_SIZE));
+
+      if (debouncedQuery.trim()) {
+        params.set("q", debouncedQuery.trim());
+      }
+      if (selectedStatus !== "ALL") {
+        params.set("status", selectedStatus);
+      }
+      if (selectedCategory !== "ALL") {
+        params.set("category", selectedCategory);
+      }
+
+      const res = await fetch(`/api/inventory?${params.toString()}`);
+      const result = await res.json();
+
+      if (result.success && Array.isArray(result.data)) {
+        setInventory((prev) => {
+          const existingIds = new Set(prev.map((it) => it._id));
+          const filteredNew = (result.data as SearchResult[]).filter(
+            (it) => !existingIds.has(it._id)
+          );
+          return [...prev, ...filteredNew];
+        });
+        setPage(nextPage);
+      }
+    } catch (error) {
+      console.error("Failed to load more inventory items:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loading, loadingMore, inventory.length, totalCount, page, debouncedQuery, selectedStatus, selectedCategory]);
+
+  // Handle scroll on container to lazy-load when nearing bottom
+  function handleContainerScroll(e: React.UIEvent<HTMLDivElement>) {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 60) {
+      void fetchNextChunk();
+    }
+  }
 
   function statusBadgeClass(status: string) {
     switch (status) {
@@ -153,7 +207,7 @@ export default function ProductSearch() {
               </h2>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Browse, search, and monitor stock locations, racks, and product pricing ({totalCount} total matching items)
+              Live stock locations, rack allocations & pricing ({totalCount} total records • scroll to load more)
             </p>
           </div>
 
@@ -165,7 +219,6 @@ export default function ProductSearch() {
                 value={selectedCategory}
                 onChange={(val) => {
                   setSelectedCategory(val || "ALL");
-                  setCurrentPage(1);
                 }}
                 placeholder="All Categories"
                 allowClear={false}
@@ -209,10 +262,7 @@ export default function ProductSearch() {
               <button
                 key={status.value}
                 type="button"
-                onClick={() => {
-                  setSelectedStatus(status.value);
-                  setCurrentPage(1);
-                }}
+                onClick={() => setSelectedStatus(status.value)}
                 className={`rounded-lg px-3 py-2 text-xs font-semibold transition shrink-0 ${
                   selectedStatus === status.value
                     ? "bg-blue-600 text-white shadow-sm"
@@ -226,7 +276,7 @@ export default function ProductSearch() {
         </div>
       </div>
 
-      {/* Loading */}
+      {/* Loading Skeleton */}
       {loading && (
         <div className="flex items-center justify-center gap-2 p-12 text-sm text-slate-500">
           <svg className="h-5 w-5 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
@@ -237,28 +287,39 @@ export default function ProductSearch() {
         </div>
       )}
 
-      {/* Desktop Table */}
+      {/* Desktop Table: Scrollable with 5 visible items and transparent scrollbar */}
       {!loading && inventory.length > 0 && (
-        <div className="hidden overflow-x-auto md:block">
+        <div
+          ref={desktopScrollRef}
+          onScroll={handleContainerScroll}
+          className="hidden overflow-x-auto md:block max-h-[385px] overflow-y-auto scrollbar-transparent"
+        >
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500 border-b border-slate-200">
+            <thead className="bg-slate-50 text-xs font-semibold uppercase text-slate-500 border-b border-slate-200 sticky top-0 z-10">
               <tr>
-                <th className="px-5 py-3.5">Product & SKU</th>
-                <th className="px-5 py-3.5">Category</th>
-                <th className="px-5 py-3.5 text-right">Price</th>
-                <th className="px-5 py-3.5">Warehouse</th>
-                <th className="px-5 py-3.5">Rack Location</th>
-                <th className="px-5 py-3.5 text-center">Stock Qty</th>
-                <th className="px-5 py-3.5">Status</th>
+                <th className="px-5 py-3">Product & SKU</th>
+                <th className="px-5 py-3">Category</th>
+                <th className="px-5 py-3 text-right">Price</th>
+                <th className="px-5 py-3">Warehouse</th>
+                <th className="px-5 py-3">Rack Location</th>
+                <th className="px-5 py-3 text-center">Stock Qty</th>
+                <th className="px-5 py-3">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {inventory.map((item) => (
                 <tr key={item._id} className="hover:bg-slate-50/70 transition">
-                  <td className="px-5 py-3.5">
-                    <p className="font-semibold text-slate-800">
+                  <td className="px-5 py-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (item.productId?._id) setSelectedProductId(item.productId._id);
+                      }}
+                      className="font-semibold text-slate-800 hover:text-blue-600 hover:underline text-left block"
+                      title="Click to view full product history"
+                    >
                       {item.productId?.name || "Unknown Product"}
-                    </p>
+                    </button>
                     <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
                       <span>SKU: {item.productId?.sku || "-"}</span>
                       {item.productId?.sellerName && (
@@ -269,7 +330,7 @@ export default function ProductSearch() {
                       )}
                     </div>
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3">
                     {item.productId?.category ? (
                       <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-100">
                         <Layers className="h-3 w-3" /> {item.productId.category}
@@ -278,18 +339,18 @@ export default function ProductSearch() {
                       <span className="text-slate-400">-</span>
                     )}
                   </td>
-                  <td className="px-5 py-3.5 text-right font-bold text-slate-800">
+                  <td className="px-5 py-3 text-right font-bold text-slate-800">
                     {item.productId?.price != null
                       ? `₹${Number(item.productId.price).toLocaleString("en-IN")}`
                       : "-"}
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3">
                     <p className="font-medium text-slate-700">{item.warehouseId?.name || "-"}</p>
                     {item.warehouseId?.code && (
                       <span className="text-xs text-slate-400">({item.warehouseId.code})</span>
                     )}
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3">
                     <div className="flex items-center gap-1 text-slate-700 font-medium">
                       <MapPin className="h-3.5 w-3.5 text-slate-400" />
                       <span>{item.rackId?.name || "-"}</span>
@@ -298,12 +359,12 @@ export default function ProductSearch() {
                       )}
                     </div>
                   </td>
-                  <td className="px-5 py-3.5 text-center">
+                  <td className="px-5 py-3 text-center">
                     <span className="inline-block font-extrabold text-slate-800 text-sm">
                       {item.quantity}
                     </span>
                   </td>
-                  <td className="px-5 py-3.5">
+                  <td className="px-5 py-3">
                     <span
                       className={`inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold ${statusBadgeClass(
                         item.status
@@ -319,17 +380,29 @@ export default function ProductSearch() {
         </div>
       )}
 
-      {/* Mobile Result Cards */}
+      {/* Mobile Result Cards: Scrollable with 5 visible items and transparent scrollbar */}
       {!loading && inventory.length > 0 && (
-        <div className="space-y-3 p-4 md:hidden">
+        <div
+          ref={mobileScrollRef}
+          onScroll={handleContainerScroll}
+          className="space-y-3 p-4 md:hidden max-h-[385px] overflow-y-auto scrollbar-transparent"
+        >
           {inventory.map((item) => (
             <div
               key={item._id}
-              className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-2.5"
+              className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs space-y-2.5"
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0 flex-1">
-                  <p className="font-bold text-slate-800">{item.productId?.name || "Unknown"}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (item.productId?._id) setSelectedProductId(item.productId._id);
+                    }}
+                    className="font-bold text-slate-800 text-left hover:text-blue-600 hover:underline block"
+                  >
+                    {item.productId?.name || "Unknown"}
+                  </button>
                   <p className="text-xs text-slate-400">SKU: {item.productId?.sku || "-"}</p>
                 </div>
                 <span
@@ -380,18 +453,32 @@ export default function ProductSearch() {
         </div>
       )}
 
-      {/* Pagination Footer */}
-      {!loading && totalCount > 0 && (
-        <Pagination
-          currentPage={currentPage}
-          totalItems={totalCount}
-          pageSize={pageSize}
-          onPageChange={(page) => setCurrentPage(page)}
-          onPageSizeChange={(size) => {
-            setPageSize(size);
-            setCurrentPage(1);
-          }}
-          pageSizeOptions={[10, 25, 50, 100]}
+      {/* Lazy Load Status Footer (Replaced Pagination) */}
+      {!loading && inventory.length > 0 && (
+        <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-2.5 text-center">
+          {loadingMore ? (
+            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-blue-600">
+              <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+              Loading more items...
+            </div>
+          ) : inventory.length < totalCount ? (
+            <p className="text-xs font-medium text-slate-500">
+              Showing <span className="font-bold text-slate-700">{inventory.length}</span> of{" "}
+              <span className="font-bold text-slate-700">{totalCount}</span> items • Scroll down to load more
+            </p>
+          ) : (
+            <p className="text-xs font-semibold text-slate-400">
+              All {totalCount} items loaded
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Product History Modal on Product Click */}
+      {selectedProductId && (
+        <ProductHistoryModal
+          productId={selectedProductId}
+          onClose={() => setSelectedProductId(null)}
         />
       )}
     </div>

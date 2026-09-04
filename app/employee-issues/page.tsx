@@ -1,11 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { PackageCheck, Search, Trash2, X, Wrench, RotateCcw, Box } from "lucide-react";
+import Link from "next/link";
+import { PackageCheck, Search, Trash2, X, Wrench, RotateCcw, Box, Eye, Receipt, ExternalLink, History } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import ServiceCycleBadge from "@/app/components/ServiceCycleBadge";
 import WarningPopup from "@/app/components/WarningPopup";
+import IssueBillModal, { IssueBillData } from "@/app/components/IssueBillModal";
+import ProductHistoryModal from "@/app/components/ProductHistoryModal";
+import EmployeeHistoryModal from "@/app/components/EmployeeHistoryModal";
 import {
   CUSTOM_INTERVAL_VALUE,
   SERVICE_INTERVAL_OPTIONS,
@@ -56,6 +60,8 @@ export default function EmployeeIssuesPage() {
   const [issueSearchQuery, setIssueSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [issueTypeFilter, setIssueTypeFilter] = useState("ALL");
+  const [issueDateFrom, setIssueDateFrom] = useState("");
+  const [issueDateTo, setIssueDateTo] = useState("");
   const [issuePage, setIssuePage] = useState(1);
   const [issuePageSize, setIssuePageSize] = useState(10);
 
@@ -65,8 +71,55 @@ export default function EmployeeIssuesPage() {
     itemIndex: number;
   } | null>(null);
 
+  // Issue Bill Modal State
+  const [billIssue, setBillIssue] = useState<IssueBillData | null>(null);
+
+  // Top-to-Bottom Product & Employee History Modals
+  const [historyProductId, setHistoryProductId] = useState<string | null>(null);
+  const [historyEmployee, setHistoryEmployee] = useState<string | null>(null);
+
   const [deleteIssueId, setDeleteIssueId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  function openBill(issue: EmployeeIssue) {
+    const emp = employees.find(
+      (e) =>
+        e.id === issue.employeeId ||
+        e.name.toLowerCase() === issue.employeeName.toLowerCase()
+    );
+    setBillIssue({
+      _id: issue._id,
+      issueNumber: issue.issueNumber,
+      createdAt: issue.createdAt,
+      employeeName: issue.employeeName,
+      employeeCode: emp?.employeeCode,
+      employeeDepartment: issue.employeeDepartment || emp?.department,
+      employeePhone: issue.employeePhone || emp?.phone,
+      employeeEmail: issue.employeeEmail || emp?.email,
+      employeeDesignation: emp?.designation,
+      reason: issue.reason,
+      notes: issue.notes,
+      issuedByName: issue.issuedByName,
+      items: issue.items.map((it) => ({
+        productId: it.productId?.toString(),
+        productName: it.productName,
+        sku: it.sku,
+        serialNumber: it.serialNumber,
+        warehouseName: it.warehouseName,
+        rackName: it.rackName,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+        totalValue: it.totalValue,
+        productType: it.productType,
+        returnDueDays: it.returnDueDays,
+        returnDueDate: it.returnDueDate,
+        serviceIntervalMonths: it.serviceIntervalMonths,
+        holdingStatus: it.holdingStatus,
+      })),
+      totalQuantity: issue.totalQuantity,
+      totalValue: issue.totalValue,
+    });
+  }
 
   const employeeDropdownRef = useRef<HTMLDivElement>(null);
   const productDropdownRef = useRef<HTMLDivElement>(null);
@@ -206,8 +259,24 @@ export default function EmployeeIssuesPage() {
     };
   }, [issues, selectedLookupEmployeeId, lookupEmployee]);
 
-  const filteredIssues = useMemo(() => {
-    return issues.filter((issue) => {
+  // Flatten issues into individual item custody records so filters strictly isolate matching records
+  const allCustodyRecords = useMemo(() => {
+    const records: Array<{
+      issue: EmployeeIssue;
+      item: SelectedLineItem;
+      itemIndex: number;
+    }> = [];
+    for (const issue of issues) {
+      issue.items.forEach((item, itemIndex) => {
+        records.push({ issue, item, itemIndex });
+      });
+    }
+    return records;
+  }, [issues]);
+
+  const filteredCustodyRecords = useMemo(() => {
+    return allCustodyRecords.filter(({ issue, item }) => {
+      // 1. Employee Lookup Filter
       if (selectedLookupEmployeeId) {
         const matchId = issue.employeeId === selectedLookupEmployeeId;
         const matchName =
@@ -216,45 +285,81 @@ export default function EmployeeIssuesPage() {
         if (!matchId && !matchName) return false;
       }
 
+      // 2. Status Filter
       if (statusFilter !== "ALL") {
-        const hasStatus = issue.items.some((it) => it.holdingStatus === statusFilter);
-        if (!hasStatus) return false;
+        const currentStatus = item.holdingStatus || "ACTIVE";
+        if (currentStatus !== statusFilter) return false;
       }
 
-      if (issueTypeFilter === "REUSABLE") {
-        const hasReusable = issue.items.some((it) => it.productType === "REUSABLE");
-        if (!hasReusable) return false;
-      } else if (issueTypeFilter === "NON_REUSABLE") {
-        const hasNormal = issue.items.some((it) => it.productType !== "REUSABLE");
-        if (!hasNormal) return false;
+      // 3. Product Type Filter
+      const isReusable = item.productType === "REUSABLE" || Boolean(item.returnDueDate);
+      if (issueTypeFilter === "REUSABLE" && !isReusable) return false;
+      if (issueTypeFilter === "NON_REUSABLE" && isReusable) return false;
+
+      // 4. Date Range Filter
+      if (issueDateFrom) {
+        const d = new Date(issue.createdAt);
+        if (d < new Date(issueDateFrom)) return false;
+      }
+      if (issueDateTo) {
+        const end = new Date(issueDateTo);
+        end.setHours(23, 59, 59, 999);
+        const d = new Date(issue.createdAt);
+        if (d > end) return false;
       }
 
-      if (!issueSearchQuery.trim()) return true;
-      const query = issueSearchQuery.toLowerCase().trim();
-      const matchIssue =
-        issue.issueNumber.toLowerCase().includes(query) ||
-        issue.employeeName.toLowerCase().includes(query) ||
-        issue.employeeEmail.toLowerCase().includes(query) ||
-        issue.employeePhone?.toLowerCase().includes(query) ||
-        issue.employeeDepartment?.toLowerCase().includes(query) ||
-        reasonLabels[issue.reason].toLowerCase().includes(query) ||
-        issue.issuedByName?.toLowerCase().includes(query);
+      // 5. Search Query
+      if (issueSearchQuery.trim()) {
+        const query = issueSearchQuery.toLowerCase().trim();
+        const matchIssue =
+          issue.issueNumber.toLowerCase().includes(query) ||
+          issue.employeeName.toLowerCase().includes(query) ||
+          issue.employeeEmail.toLowerCase().includes(query) ||
+          issue.employeePhone?.toLowerCase().includes(query) ||
+          issue.employeeDepartment?.toLowerCase().includes(query) ||
+          reasonLabels[issue.reason]?.toLowerCase().includes(query) ||
+          issue.issuedByName?.toLowerCase().includes(query);
 
-      const matchItem = issue.items.some(
-        (it) =>
-          it.productName.toLowerCase().includes(query) ||
-          it.sku.toLowerCase().includes(query) ||
-          it.serialNumber?.toLowerCase().includes(query)
-      );
+        const matchItem =
+          item.productName.toLowerCase().includes(query) ||
+          item.sku.toLowerCase().includes(query) ||
+          item.serialNumber?.toLowerCase().includes(query) ||
+          item.warehouseName?.toLowerCase().includes(query) ||
+          item.rackName?.toLowerCase().includes(query);
 
-      return matchIssue || matchItem;
+        return matchIssue || matchItem;
+      }
+
+      return true;
     });
-  }, [issues, issueSearchQuery, statusFilter, issueTypeFilter, selectedLookupEmployeeId]);
+  }, [
+    allCustodyRecords,
+    selectedLookupEmployeeId,
+    lookupEmployee,
+    statusFilter,
+    issueTypeFilter,
+    issueDateFrom,
+    issueDateTo,
+    issueSearchQuery,
+  ]);
 
-  const paginatedIssues = useMemo(() => {
+  // Reset pagination to Page 1 when any filter changes
+  useEffect(() => {
+    setIssuePage(1);
+  }, [
+    selectedLookupEmployeeId,
+    statusFilter,
+    issueTypeFilter,
+    issueSearchQuery,
+    issueDateFrom,
+    issueDateTo,
+    issuePageSize,
+  ]);
+
+  const paginatedRecords = useMemo(() => {
     const start = (issuePage - 1) * issuePageSize;
-    return filteredIssues.slice(start, start + issuePageSize);
-  }, [filteredIssues, issuePage, issuePageSize]);
+    return filteredCustodyRecords.slice(start, start + issuePageSize);
+  }, [filteredCustodyRecords, issuePage, issuePageSize]);
 
   // Resolved from the live list so the modal always shows the latest saved values.
   const activeModalData = useMemo(() => {
@@ -481,13 +586,24 @@ export default function EmployeeIssuesPage() {
   return (
     <ProtectedPage>
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">
-            Employee Product Issues & Service Tracking
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Issue products to employees, configure service interval cycles (e.g. every 3m / 12m), and track maintenance custody.
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">
+              Employee Asset Management
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Issue products to employees, configure service interval cycles, and manage custody handovers.
+            </p>
+          </div>
+          <div>
+            <Link
+              href="/asset-history"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 hover:text-blue-600 transition"
+            >
+              <History className="h-4 w-4 text-blue-600" />
+              View Asset Movement & History Directory →
+            </Link>
+          </div>
         </div>
 
         {/* Issue Form */}
@@ -674,7 +790,7 @@ export default function EmployeeIssuesPage() {
                       {itemProductType === "REUSABLE" ? (
                         <>
                           <RotateCcw className="h-4 w-4 text-indigo-600" />
-                          <span className="text-indigo-950 font-bold">Reusable Asset</span>
+                          <span className="text-indigo-950 font-bold">Returnable Asset</span>
                           <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-800">
                             Return / Renewal Tracking Enabled
                           </span>
@@ -825,11 +941,11 @@ export default function EmployeeIssuesPage() {
                         <td className="px-4 py-2.5">
                           {item.productType === "REUSABLE" ? (
                             <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
-                              <RotateCcw className="h-2.5 w-2.5" /> Reusable ({item.returnDueDays || 30}d)
+                              <RotateCcw className="h-2.5 w-2.5" /> Returnable ({item.returnDueDays || 30}d)
                             </span>
                           ) : (
                             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-                              Normal
+                              Non-Returnable
                             </span>
                           )}
                         </td>
@@ -892,10 +1008,10 @@ export default function EmployeeIssuesPage() {
           <div className="border-b border-slate-100 p-4 md:p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
-                Issued Product History & Custody ({filteredIssues.length})
+                Asset Movement & Custody History ({filteredCustodyRecords.length})
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Monitor products held by employees, reusable return/renewal periods, recurring service cycles, and custody status.
+                Monitor products held by employees, returnable return/renewal periods, recurring service cycles, and custody status.
               </p>
             </div>
 
@@ -937,7 +1053,7 @@ export default function EmployeeIssuesPage() {
                       : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
-                  <RotateCcw className="h-3 w-3" /> Reusable
+                  <RotateCcw className="h-3 w-3" /> Returnable
                 </button>
                 <button
                   type="button"
@@ -948,21 +1064,41 @@ export default function EmployeeIssuesPage() {
                       : "text-slate-500 hover:text-slate-700"
                   }`}
                 >
-                  Normal
+                  Non-Returnable
                 </button>
               </div>
 
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 font-medium text-slate-700"
               >
                 <option value="ALL">All Statuses</option>
                 <option value="ACTIVE">ACTIVE (In Use)</option>
-                <option value="INACTIVE">INACTIVE (Not Working / Idle)</option>
+                <option value="INACTIVE">INACTIVE (Idle / Faulty)</option>
                 <option value="UNDER_SERVICE">UNDER SERVICE</option>
                 <option value="RETURNED">RETURNED</option>
+                <option value="DAMAGED">DAMAGED</option>
               </select>
+
+              {/* Date Range Filter */}
+              <div className="flex items-center gap-1 text-xs text-slate-600">
+                <input
+                  type="date"
+                  value={issueDateFrom}
+                  onChange={(e) => setIssueDateFrom(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-500"
+                  title="Filter from issue date"
+                />
+                <span className="text-slate-400">to</span>
+                <input
+                  type="date"
+                  value={issueDateTo}
+                  onChange={(e) => setIssueDateTo(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-500"
+                  title="Filter to issue date"
+                />
+              </div>
 
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
@@ -971,7 +1107,7 @@ export default function EmployeeIssuesPage() {
                   placeholder="Search employee, product, SKU, serial..."
                   value={issueSearchQuery}
                   onChange={(e) => setIssueSearchQuery(e.target.value)}
-                  className="rounded-lg border border-slate-200 pl-8 pr-7 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-60"
+                  className="rounded-lg border border-slate-200 pl-8 pr-7 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-52"
                 />
                 {issueSearchQuery && (
                   <button
@@ -982,6 +1118,24 @@ export default function EmployeeIssuesPage() {
                   </button>
                 )}
               </div>
+
+              {(selectedLookupEmployeeId || statusFilter !== "ALL" || issueTypeFilter !== "ALL" || issueSearchQuery || issueDateFrom || issueDateTo) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedLookupEmployeeId("");
+                    setStatusFilter("ALL");
+                    setIssueTypeFilter("ALL");
+                    setIssueSearchQuery("");
+                    setIssueDateFrom("");
+                    setIssueDateTo("");
+                  }}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                  title="Clear all active filters"
+                >
+                  Clear
+                </button>
+              )}
             </div>
           </div>
 
@@ -1042,7 +1196,7 @@ export default function EmployeeIssuesPage() {
           )}
 
           {/* Desktop Table */}
-          {paginatedIssues.length > 0 && (
+          {paginatedRecords.length > 0 && (
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-[11px] font-semibold uppercase text-slate-500 border-b border-slate-200">
@@ -1057,257 +1211,263 @@ export default function EmployeeIssuesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paginatedIssues.map((issue) =>
-                    issue.items.map((item, itemIdx) => {
-                      const issuedDate = new Date(issue.createdAt).toLocaleDateString("en-IN", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      });
+                  {paginatedRecords.map(({ issue, item, itemIndex }) => {
+                    const issuedDate = new Date(issue.createdAt).toLocaleDateString("en-IN", {
+                      day: "2-digit",
+                      month: "short",
+                      year: "numeric",
+                    });
 
-                      const isReusable = item.productType === "REUSABLE" || Boolean(item.returnDueDate);
-                      let returnDaysLeft: number | null = null;
-                      if (isReusable && item.returnDueDate) {
-                        const dueTime = new Date(item.returnDueDate).setHours(0, 0, 0, 0);
-                        const nowTime = new Date().setHours(0, 0, 0, 0);
-                        returnDaysLeft = Math.round((dueTime - nowTime) / 86400000);
-                      }
+                    const isReusable = item.productType === "REUSABLE" || Boolean(item.returnDueDate);
+                    let returnDaysLeft: number | null = null;
+                    if (isReusable && item.returnDueDate) {
+                      const dueTime = new Date(item.returnDueDate).setHours(0, 0, 0, 0);
+                      const nowTime = new Date().setHours(0, 0, 0, 0);
+                      returnDaysLeft = Math.round((dueTime - nowTime) / 86400000);
+                    }
 
-                      return (
-                        <tr key={`${issue._id}-${itemIdx}`} className="hover:bg-slate-50/70 transition">
-                          <td className="px-5 py-3.5">
-                            <p className="font-bold text-slate-800">{issue.issueNumber}</p>
-                            <span className="text-[11px] text-slate-400">{issuedDate}</span>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (issue.employeeId) {
-                                  setSelectedLookupEmployeeId(issue.employeeId);
-                                } else {
-                                  const found = employees.find(
-                                    (e) => e.name.toLowerCase() === issue.employeeName.toLowerCase()
-                                  );
-                                  if (found) setSelectedLookupEmployeeId(found.id);
-                                }
-                              }}
-                              className="font-semibold text-slate-800 text-left hover:text-blue-600 hover:underline transition flex items-center gap-1 group"
-                              title="Click to view all assets held by this employee"
-                            >
-                              <span>{issue.employeeName}</span>
-                              <span className="text-[10px] text-blue-600 opacity-0 group-hover:opacity-100 transition flex items-center gap-0.5">
-                                <Search className="h-2.5 w-2.5" /> View Products
+                    return (
+                      <tr key={`${issue._id}-${itemIndex}`} className="hover:bg-slate-50/70 transition">
+                        <td className="px-5 py-3.5">
+                          <p className="font-bold text-slate-800">{issue.issueNumber}</p>
+                          <span className="text-[11px] text-slate-400">{issuedDate}</span>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <Link
+                            href={`/employee-issues/employee/${encodeURIComponent(issue.employeeId || issue.employeeName)}`}
+                            prefetch={true}
+                            className="font-semibold text-slate-800 text-left hover:text-blue-600 hover:underline transition flex items-center gap-1 group"
+                            title="Click to view complete top-to-bottom employee asset history"
+                          >
+                            <span>{issue.employeeName}</span>
+                            <ExternalLink className="h-2.5 w-2.5 text-blue-600 opacity-0 group-hover:opacity-100 transition" />
+                          </Link>
+                          <p className="text-[11px] text-slate-400">
+                            {issue.employeeDepartment || "-"} • {issue.employeePhone || "-"}
+                          </p>
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <Link
+                            href={`/product-history/${encodeURIComponent(item.productId?.toString() || item.sku)}`}
+                            prefetch={true}
+                            className="font-semibold text-slate-800 text-left hover:text-blue-600 hover:underline transition flex items-center gap-1 group"
+                            title="Click to view complete top-to-bottom product history"
+                          >
+                            <span>{item.productName}</span>
+                            <span className="font-bold text-blue-600">({item.quantity} units)</span>
+                            <ExternalLink className="h-2.5 w-2.5 text-blue-600 opacity-0 group-hover:opacity-100 transition" />
+                          </Link>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-[11px] text-slate-400">
+                              SKU: {item.sku} {item.serialNumber && `• SN: ${item.serialNumber}`}
+                            </span>
+                            {isReusable && (
+                              <span className="rounded bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 text-[9px] font-bold text-indigo-700">
+                                Returnable
                               </span>
-                            </button>
-                            <p className="text-[11px] text-slate-400">
-                              {issue.employeeDepartment || "-"} • {issue.employeePhone || "-"}
-                            </p>
-                          </td>
-                          <td className="px-5 py-3.5">
-                            <p className="font-semibold text-slate-800">
-                              {item.productName}{" "}
-                              <span className="font-bold text-blue-600">({item.quantity} units)</span>
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <span className="text-[11px] text-slate-400">
-                                SKU: {item.sku} {item.serialNumber && `• SN: ${item.serialNumber}`}
-                              </span>
-                              {isReusable && (
-                                <span className="rounded bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 text-[9px] font-bold text-indigo-700">
-                                  Reusable
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-5 py-3.5 text-center">
+                          <span
+                            className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                              item.holdingStatus === "ACTIVE"
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : item.holdingStatus === "INACTIVE"
+                                ? "bg-slate-100 text-slate-600 border border-slate-200"
+                                : item.holdingStatus === "UNDER_SERVICE"
+                                ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                : item.holdingStatus === "RETURNED"
+                                ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                : "bg-red-50 text-red-700 border border-red-200"
+                            }`}
+                          >
+                            {item.holdingStatus || "ACTIVE"}
+                          </span>
+                        </td>
+
+                        {/* Return / Renew Due Column */}
+                        <td className="px-5 py-3.5">
+                          {item.holdingStatus === "RETURNED" ? (
+                            <span className="text-slate-400 text-xs">Item Returned</span>
+                          ) : isReusable && item.returnDueDate ? (
+                            <div>
+                              <p className="font-bold text-xs text-slate-800">
+                                {new Date(item.returnDueDate).toLocaleDateString("en-IN", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })}
+                              </p>
+                              {returnDaysLeft !== null && (
+                                <span
+                                  className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold mt-0.5 ${
+                                    returnDaysLeft < 0
+                                      ? "bg-red-100 text-red-700"
+                                      : returnDaysLeft <= 7
+                                      ? "bg-amber-100 text-amber-800"
+                                      : "bg-emerald-50 text-emerald-700"
+                                  }`}
+                                >
+                                  {returnDaysLeft < 0
+                                    ? `Overdue by ${Math.abs(returnDaysLeft)}d`
+                                    : returnDaysLeft === 0
+                                    ? "Due Today"
+                                    : `${returnDaysLeft}d remaining`}
                                 </span>
                               )}
                             </div>
-                          </td>
-                          <td className="px-5 py-3.5 text-center">
-                            <span
-                              className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                                item.holdingStatus === "ACTIVE"
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                  : item.holdingStatus === "INACTIVE"
-                                  ? "bg-slate-100 text-slate-600 border border-slate-200"
-                                  : item.holdingStatus === "UNDER_SERVICE"
-                                  ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                  : item.holdingStatus === "RETURNED"
-                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                  : "bg-red-50 text-red-700 border border-red-200"
-                              }`}
+                          ) : (
+                            <span className="text-slate-400 text-xs">Standard Item</span>
+                          )}
+                        </td>
+
+                        <td className="px-5 py-3.5">
+                          <ServiceCycleBadge
+                            intervalMonths={item.serviceIntervalMonths}
+                            lastServiceDate={item.lastServiceDate}
+                            issuedAt={issue.createdAt}
+                            hideDueDate={item.holdingStatus === "RETURNED"}
+                          />
+                        </td>
+
+                        <td className="px-5 py-3.5 text-center">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => openServiceModal(issue, itemIndex)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-blue-600 hover:bg-blue-50 transition shadow-2xs active:scale-95"
+                              title="Update Asset & Manage Service"
                             >
-                              {item.holdingStatus || "ACTIVE"}
-                            </span>
-                          </td>
-
-                          {/* Return / Renew Due Column */}
-                          <td className="px-5 py-3.5">
-                            {item.holdingStatus === "RETURNED" ? (
-                              <span className="text-slate-400 text-xs">Item Returned</span>
-                            ) : isReusable && item.returnDueDate ? (
-                              <div>
-                                <p className="font-bold text-xs text-slate-800">
-                                  {new Date(item.returnDueDate).toLocaleDateString("en-IN", {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  })}
-                                </p>
-                                {returnDaysLeft !== null && (
-                                  <span
-                                    className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold mt-0.5 ${
-                                      returnDaysLeft < 0
-                                        ? "bg-red-100 text-red-700"
-                                        : returnDaysLeft <= 7
-                                        ? "bg-amber-100 text-amber-800"
-                                        : "bg-emerald-50 text-emerald-700"
-                                    }`}
-                                  >
-                                    {returnDaysLeft < 0
-                                      ? `Overdue by ${Math.abs(returnDaysLeft)}d`
-                                      : returnDaysLeft === 0
-                                      ? "Due Today"
-                                      : `${returnDaysLeft}d remaining`}
-                                  </span>
-                                )}
-                              </div>
-                            ) : (
-                              <span className="text-slate-400 text-xs">Standard Item</span>
-                            )}
-                          </td>
-
-                          <td className="px-5 py-3.5">
-                            <ServiceCycleBadge
-                              intervalMonths={item.serviceIntervalMonths}
-                              lastServiceDate={item.lastServiceDate}
-                              issuedAt={issue.createdAt}
-                              hideDueDate={item.holdingStatus === "RETURNED"}
-                            />
-                          </td>
-
-                          <td className="px-5 py-3.5 text-center">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => openServiceModal(issue, itemIdx)}
-                                className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition flex items-center gap-1"
-                              >
-                                <Wrench className="h-3.5 w-3.5 text-blue-600" /> Manage / Service
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeleteIssueId(issue._id)}
-                                className="p-1 rounded-lg text-red-500 hover:bg-red-50 hover:text-red-700 transition"
-                                title="Delete this issue record"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
+                              <Wrench className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openBill(issue)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-emerald-600 hover:bg-emerald-50 transition shadow-2xs active:scale-95"
+                              title="View Bill / Issue Voucher"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDeleteIssueId(issue._id)}
+                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-2xs active:scale-95"
+                              title="Delete this issue record"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
 
           {/* Mobile Cards */}
-          {paginatedIssues.length > 0 && (
+          {paginatedRecords.length > 0 && (
             <div className="space-y-3 p-4 md:hidden">
-              {paginatedIssues.map((issue) =>
-                issue.items.map((item, itemIdx) => {
-                  return (
-                    <div
-                      key={`${issue._id}-${itemIdx}`}
-                      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-2.5"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="font-bold text-slate-800">{item.productName}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            Holder:{" "}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (issue.employeeId) {
-                                  setSelectedLookupEmployeeId(issue.employeeId);
-                                } else {
-                                  const found = employees.find(
-                                    (e) => e.name.toLowerCase() === issue.employeeName.toLowerCase()
-                                  );
-                                  if (found) setSelectedLookupEmployeeId(found.id);
-                                }
-                              }}
-                              className="font-bold text-blue-600 underline hover:text-blue-800"
-                              title="Click to view all assets held by this employee"
-                            >
-                              {issue.employeeName}
-                            </button>{" "}
-                            ({issue.employeeDepartment || "-"})
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                              item.holdingStatus === "ACTIVE"
-                                ? "bg-emerald-50 text-emerald-700"
-                                : item.holdingStatus === "INACTIVE"
-                                ? "bg-slate-100 text-slate-600"
-                                : "bg-amber-50 text-amber-700"
-                            }`}
+              {paginatedRecords.map(({ issue, item, itemIndex }) => {
+                return (
+                  <div
+                    key={`${issue._id}-${itemIndex}`}
+                    className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-2.5"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <Link
+                          href={`/product-history/${encodeURIComponent(item.productId?.toString() || item.sku)}`}
+                          className="font-bold text-slate-800 text-left hover:text-blue-600 hover:underline transition flex items-center gap-1"
+                          title="Click to view complete product history"
+                        >
+                          <span>{item.productName}</span>
+                          <ExternalLink className="h-3 w-3 text-blue-600" />
+                        </Link>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          Holder:{" "}
+                          <Link
+                            href={`/employee-issues/employee/${encodeURIComponent(issue.employeeId || issue.employeeName)}`}
+                            className="font-bold text-blue-600 underline hover:text-blue-800"
+                            title="Click to view complete employee asset history"
                           >
-                            {item.holdingStatus}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setDeleteIssueId(issue._id)}
-                            className="p-1 text-red-500 hover:text-red-700"
-                            title="Delete issue"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg space-y-1.5">
-                        <p>
-                          Issue #{issue.issueNumber} • Qty: <b>{item.quantity}</b> {item.serialNumber && `• SN: ${item.serialNumber}`}
-                        </p>
-                        <ServiceCycleBadge
-                          intervalMonths={item.serviceIntervalMonths}
-                          lastServiceDate={item.lastServiceDate}
-                          issuedAt={issue.createdAt}
-                          hideDueDate={item.holdingStatus === "RETURNED"}
-                        />
-                        <p>
-                          Services completed: <b>{item.serviceCount || 0} times</b>
+                            {issue.employeeName}
+                          </Link>{" "}
+                          ({issue.employeeDepartment || "-"})
                         </p>
                       </div>
-
-                      <div className="pt-1">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                            item.holdingStatus === "ACTIVE"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : item.holdingStatus === "INACTIVE"
+                              ? "bg-slate-100 text-slate-600"
+                              : "bg-amber-50 text-amber-700"
+                          }`}
+                        >
+                          {item.holdingStatus}
+                        </span>
                         <button
                           type="button"
-                          onClick={() => openServiceModal(issue, itemIdx)}
-                          className="w-full rounded-lg border border-slate-200 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center justify-center gap-1.5"
+                          onClick={() => setDeleteIssueId(issue._id)}
+                          className="p-1 text-red-500 hover:text-red-700"
+                          title="Delete issue"
                         >
-                          <Wrench className="h-3.5 w-3.5 text-blue-600" /> Manage / Service
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
-                  );
-                })
-              )}
+
+                    <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg space-y-1.5">
+                      <p>
+                        Issue #{issue.issueNumber} • Qty: <b>{item.quantity}</b> {item.serialNumber && `• SN: ${item.serialNumber}`}
+                      </p>
+                      <ServiceCycleBadge
+                        intervalMonths={item.serviceIntervalMonths}
+                        lastServiceDate={item.lastServiceDate}
+                        issuedAt={issue.createdAt}
+                        hideDueDate={item.holdingStatus === "RETURNED"}
+                      />
+                      <p>
+                        Services completed: <b>{item.serviceCount || 0} times</b>
+                      </p>
+                    </div>
+
+                    <div className="pt-1 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openServiceModal(issue, itemIndex)}
+                        className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
+                        title="Update Asset & Manage Service"
+                      >
+                        <Wrench className="h-4 w-4" /> Update
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openBill(issue)}
+                        className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
+                        title="View Bill / Issue Voucher"
+                      >
+                        <Eye className="h-4 w-4" /> View Bill
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {filteredIssues.length === 0 && (
-            <p className="p-8 text-center text-sm text-slate-400">No issued product records found.</p>
+          {filteredCustodyRecords.length === 0 && (
+            <p className="p-8 text-center text-sm text-slate-400">No matching issued product records found.</p>
           )}
 
-          {filteredIssues.length > 0 && (
+          {filteredCustodyRecords.length > 0 && (
             <Pagination
               currentPage={issuePage}
-              totalItems={filteredIssues.length}
+              totalItems={filteredCustodyRecords.length}
               pageSize={issuePageSize}
               onPageChange={(p) => setIssuePage(p)}
               onPageSizeChange={(s) => setIssuePageSize(s)}
@@ -1360,6 +1520,42 @@ export default function EmployeeIssuesPage() {
           message={warningMessage}
           onClose={() => setWarningOpen(false)}
         />
+
+        {/* 🧾 Official Bill / Issue Slip Modal */}
+        {billIssue && (
+          <IssueBillModal issue={billIssue} onClose={() => setBillIssue(null)} />
+        )}
+
+        {/* 📦 Top-to-Bottom Product History Modal */}
+        {historyProductId && (
+          <ProductHistoryModal
+            productId={historyProductId}
+            onClose={() => setHistoryProductId(null)}
+            onSelectEmployee={(emp) => {
+              setHistoryProductId(null);
+              setHistoryEmployee(emp);
+            }}
+          />
+        )}
+
+        {/* 👤 Top-to-Bottom Employee Asset History Modal */}
+        {historyEmployee && (
+          <EmployeeHistoryModal
+            employeeIdOrName={historyEmployee}
+            onClose={() => setHistoryEmployee(null)}
+            onSelectProduct={(pId) => {
+              setHistoryEmployee(null);
+              setHistoryProductId(pId);
+            }}
+            onViewBill={(issId) => {
+              const found = issues.find((i) => i._id === issId);
+              if (found) {
+                setHistoryEmployee(null);
+                openBill(found);
+              }
+            }}
+          />
+        )}
       </div>
     </ProtectedPage>
   );

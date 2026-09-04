@@ -2,11 +2,12 @@
 
 import { FormEvent, useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, RotateCcw } from "lucide-react";
+import { AlertTriangle, RotateCcw, Pencil, Eye, Trash2, Printer, X, Box } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
+import ProductHistoryModal from "@/app/components/ProductHistoryModal";
 
 type Product = {
   _id: string;
@@ -62,12 +63,15 @@ function InventoryContent() {
   const [editRackId, setEditRackId] = useState("");
   const [editQuantity, setEditQuantity] = useState("");
   const [editLoading, setEditLoading] = useState(false);
-
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   const [warningOpen, setWarningOpen] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
+
+  // Product History and Stock Voucher Modals
+  const [historyProductId, setHistoryProductId] = useState<string | null>(null);
+  const [viewingStockItem, setViewingStockItem] = useState<Inventory | null>(null);
 
   async function fetchProducts() {
     const r = await fetch("/api/products");
@@ -617,7 +621,7 @@ function InventoryContent() {
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                <RotateCcw className="h-3 w-3" /> Reusable ({inventory.filter((i) => i.productId?.productType === "REUSABLE").length})
+                <RotateCcw className="h-3 w-3" /> Returnable ({inventory.filter((i) => i.productId?.productType === "REUSABLE").length})
               </button>
               <button
                 type="button"
@@ -628,7 +632,7 @@ function InventoryContent() {
                     : "text-slate-500 hover:text-slate-700"
                 }`}
               >
-                Normal ({inventory.filter((i) => i.productId?.productType !== "REUSABLE").length})
+                Non-Returnable ({inventory.filter((i) => i.productId?.productType !== "REUSABLE").length})
               </button>
             </div>
 
@@ -678,17 +682,24 @@ function InventoryContent() {
                 {paginatedInventory.map((item) => (
                   <tr key={item._id} className="border-t border-slate-100 hover:bg-slate-50/50">
                     <td className="px-5 py-3 font-medium text-slate-800">
-                      {item.productId?.name || "Unknown"}{" "}
+                      <button
+                        type="button"
+                        onClick={() => setHistoryProductId(item.productId?._id || null)}
+                        className="font-semibold text-slate-800 hover:text-blue-600 hover:underline transition text-left block"
+                        title="Click to view complete product history"
+                      >
+                        {item.productId?.name || "Unknown"}
+                      </button>
                       <span className="text-xs text-slate-400">({item.productId?.sku || "-"})</span>
                     </td>
                     <td className="px-5 py-3">
                       {item.productId?.productType === "REUSABLE" ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xs font-bold text-indigo-700">
-                          <RotateCcw className="h-2.5 w-2.5" /> Reusable ({item.productId?.returnDays || 30}d)
+                          <RotateCcw className="h-2.5 w-2.5" /> Returnable ({item.productId?.returnDays || 30}d)
                         </span>
                       ) : (
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                          Normal
+                          Non-Returnable
                         </span>
                       )}
                     </td>
@@ -704,18 +715,30 @@ function InventoryContent() {
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-1.5">
                         <button
+                          type="button"
                           onClick={() => openEdit(item)}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-blue-600 hover:bg-blue-50 transition shadow-2xs active:scale-95"
+                          title="Update Stock Entry"
                         >
-                          Edit
+                          <Pencil className="h-4 w-4" />
                         </button>
                         <button
-                          onClick={() => setDeleteId(item._id)}
-                          className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                          type="button"
+                          onClick={() => setViewingStockItem(item)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-emerald-600 hover:bg-emerald-50 transition shadow-2xs active:scale-95"
+                          title="View Stock Voucher / Slip"
                         >
-                          Delete
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDeleteId(item._id)}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-2xs active:scale-95"
+                          title="Delete Stock Entry"
+                        >
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </td>
@@ -734,10 +757,17 @@ function InventoryContent() {
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-semibold text-slate-800">{item.productId?.name || "Unknown"}</p>
+                      <button
+                        type="button"
+                        onClick={() => setHistoryProductId(item.productId?._id || null)}
+                        className="font-bold text-slate-800 text-left hover:text-blue-600 hover:underline"
+                        title="Click to view complete product history"
+                      >
+                        {item.productId?.name || "Unknown"}
+                      </button>
                       {item.productId?.productType === "REUSABLE" && (
                         <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.2 text-[10px] font-bold text-indigo-700">
-                          <RotateCcw className="h-2.5 w-2.5" /> Reusable ({item.productId?.returnDays || 30}d)
+                          <RotateCcw className="h-2.5 w-2.5" /> Returnable ({item.productId?.returnDays || 30}d)
                         </span>
                       )}
                     </div>
@@ -754,18 +784,28 @@ function InventoryContent() {
                   </span>
                   <span className="font-semibold text-slate-700">Qty: {item.quantity}</span>
                 </div>
-                <div className="mt-3 flex gap-2">
+                <div className="mt-3 flex items-center gap-2">
                   <button
+                    type="button"
                     onClick={() => openEdit(item)}
-                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                    className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
                   >
-                    Edit
+                    <Pencil className="h-3.5 w-3.5" /> Update
                   </button>
                   <button
-                    onClick={() => setDeleteId(item._id)}
-                    className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                    type="button"
+                    onClick={() => setViewingStockItem(item)}
+                    className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
                   >
-                    Delete
+                    <Eye className="h-3.5 w-3.5" /> View Slip
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteId(item._id)}
+                    className="rounded-lg border border-slate-200 bg-white p-2 text-xs font-medium text-red-600 hover:bg-red-50 shadow-2xs active:scale-95"
+                    title="Delete"
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
               </div>
@@ -896,6 +936,168 @@ function InventoryContent() {
           </div>
         </div>
       )}
+      {/* 🧾 Stock Voucher / Receipt Slip Modal */}
+      {viewingStockItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-xs overflow-y-auto">
+          <div className="w-full max-w-2xl my-auto rounded-2xl bg-white shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95">
+            {/* Top Bar (Hidden on print) */}
+            <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/90 px-5 py-3.5 print:hidden shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-600 text-white font-bold text-xs shadow-xs">
+                  <Box className="h-4 w-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-800 text-sm">
+                    Stock Receipt & Storage Voucher
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-mono">
+                    STK-{viewingStockItem._id.slice(-8).toUpperCase()}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const pId = viewingStockItem.productId?._id;
+                    setViewingStockItem(null);
+                    if (pId) setHistoryProductId(pId);
+                  }}
+                  className="rounded-lg bg-blue-50 border border-blue-200 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition shadow-2xs"
+                >
+                  Full History →
+                </button>
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700 transition shadow-2xs active:scale-95"
+                >
+                  <Printer className="h-3.5 w-3.5" /> Print
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingStockItem(null)}
+                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Printable Slip Paper */}
+            <div className="p-6 md:p-8 space-y-6 overflow-y-auto bg-white text-slate-900 print:p-0 print:m-0">
+              <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
+                <div>
+                  <h1 className="text-xl font-black text-slate-900 uppercase">
+                    Warehouse Inventory Voucher
+                  </h1>
+                  <p className="text-xs text-slate-600 font-medium mt-0.5">
+                    Goods Storage Slip & Rack Allocation Note
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="font-mono font-bold bg-slate-900 text-white text-xs px-2.5 py-1 rounded">
+                    STK-{viewingStockItem._id.slice(-8).toUpperCase()}
+                  </span>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Date: {new Date().toLocaleDateString("en-IN")}
+                  </p>
+                </div>
+              </div>
+
+              {/* Grid Information */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5">
+                  <p className="font-bold uppercase text-[10px] text-slate-500 border-b border-slate-200 pb-1">
+                    Storage Location
+                  </p>
+                  <p className="text-sm font-bold text-slate-900 pt-0.5">
+                    {viewingStockItem.warehouseId?.name || "Main Warehouse"}
+                  </p>
+                  <p className="text-slate-600">
+                    Warehouse Code: <b className="text-slate-800">{viewingStockItem.warehouseId?.code || "-"}</b>
+                  </p>
+                  <p className="text-slate-600">
+                    Rack Shelf: <b className="text-slate-800">{viewingStockItem.rackId?.name || "-"}</b> ({viewingStockItem.rackId?.code || "-"})
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-1.5">
+                  <p className="font-bold uppercase text-[10px] text-slate-500 border-b border-slate-200 pb-1">
+                    Product Specification
+                  </p>
+                  <p className="text-sm font-bold text-slate-900 pt-0.5">
+                    {viewingStockItem.productId?.name}
+                  </p>
+                  <p className="text-slate-600">
+                    SKU Code: <b className="text-slate-800">{viewingStockItem.productId?.sku}</b>
+                  </p>
+                  <p className="text-slate-600">
+                    Category: <b className="text-slate-800">{viewingStockItem.productId?.category || "General"}</b>
+                  </p>
+                  <p className="text-slate-600">
+                    Type: <b className="text-slate-800">{viewingStockItem.productId?.productType === "REUSABLE" ? "Returnable Asset" : "Standard Inventory"}</b>
+                  </p>
+                </div>
+              </div>
+
+              {/* Quantities Table */}
+              <div className="rounded-xl border border-slate-200 overflow-hidden">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-100 font-bold uppercase text-[10px] text-slate-700">
+                    <tr>
+                      <th className="p-3">Quantity Stored</th>
+                      <th className="p-3">Stock Status</th>
+                      <th className="p-3 text-right">Unit Price</th>
+                      <th className="p-3 text-right">Total Valuation</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-100">
+                    <tr>
+                      <td className="p-3 font-extrabold text-base text-slate-900">
+                        {viewingStockItem.quantity} units
+                      </td>
+                      <td className="p-3">
+                        <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${statusBadge(viewingStockItem.status)}`}>
+                          {viewingStockItem.status.replace("_", " ")}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right text-slate-600">
+                        {viewingStockItem.productId?.price ? `₹${viewingStockItem.productId.price.toLocaleString("en-IN")}` : "N/A"}
+                      </td>
+                      <td className="p-3 text-right font-bold text-slate-900">
+                        {viewingStockItem.productId?.price ? `₹${(viewingStockItem.productId.price * viewingStockItem.quantity).toLocaleString("en-IN")}` : "N/A"}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Signatures */}
+              <div className="pt-6 grid grid-cols-2 gap-8 border-t border-slate-200">
+                <div className="space-y-10">
+                  <div className="h-8 border-b border-dashed border-slate-300" />
+                  <p className="font-bold text-xs text-slate-700">Storage In-Charge</p>
+                </div>
+                <div className="space-y-10 text-right">
+                  <div className="h-8 border-b border-dashed border-slate-300" />
+                  <p className="font-bold text-xs text-slate-700">Warehouse Supervisor</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 📦 Top-to-Bottom Product History Modal */}
+      {historyProductId && (
+        <ProductHistoryModal
+          productId={historyProductId}
+          onClose={() => setHistoryProductId(null)}
+        />
+      )}
+
       <WarningPopup
         open={warningOpen}
         message={warningMessage}

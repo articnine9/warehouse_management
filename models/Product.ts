@@ -14,6 +14,8 @@ export interface IProduct {
     price: number;
     description?: string;
     status: "ACTIVE" | "INACTIVE";
+    createdAt?: Date;
+    updatedAt?: Date;
 }
 
 const productSchema = new Schema<IProduct>(

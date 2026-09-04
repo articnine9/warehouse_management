@@ -104,10 +104,11 @@ export async function GET(request: Request) {
     }
 
     const [issues, employees] = await Promise.all([
-      EmployeeIssue.find(filter).sort({ createdAt: -1 }).limit(200),
-      Employee.find({ status: "ACTIVE" })
+      EmployeeIssue.find(filter).sort({ createdAt: -1 }).lean(),
+      Employee.find({})
         .populate("warehouseId", "name code")
-        .sort({ employeeCode: 1 }),
+        .sort({ status: 1, employeeCode: 1 })
+        .lean(),
     ]);
 
     return Response.json({

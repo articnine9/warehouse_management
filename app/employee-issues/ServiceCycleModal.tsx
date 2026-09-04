@@ -205,7 +205,7 @@ export default function ServiceCycleModal({
           <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase text-indigo-900 flex items-center gap-1.5">
-                <RotateCcw className="h-3.5 w-3.5 text-indigo-600" /> Reusable Return / Renewal Status
+                <RotateCcw className="h-3.5 w-3.5 text-indigo-600" /> Returnable Return / Renewal Status
               </span>
               <span
                 className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${

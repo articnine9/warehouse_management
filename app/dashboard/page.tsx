@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
 import {
   Warehouse,
@@ -109,28 +109,41 @@ type DashboardSummary = {
 
 function getMetricLink(label: string, role?: string): string {
   switch (label) {
-    case "Total Warehouses":
-      return "/warehouses";
-    case "Total Categories":
-      return "/categories";
-    case "Total Products":
-      return "/products";
-    case "Inventory Stock":
-      return "/inventory";
+    case "Staff":
     case "Total Staff":
       return "/staff";
+    case "Warehouses":
+    case "Warehouse":
+    case "Total Warehouses":
+      return "/warehouses";
+    case "Racks":
+    case "Assigned Racks":
+      return "/racks";
+    case "Categories":
+    case "Total Categories":
+      return "/categories";
+    case "Products":
+    case "Total Products":
+    case "Assigned Products":
+    case "Products in Warehouse":
+      return "/products";
+    case "Total Stock":
+    case "Inventory Stock":
+    case "Total Units":
+      return "/inventory";
+    case "Low":
+    case "Low Stock":
+      return "/inventory?status=LOW_STOCK";
+    case "Out":
+    case "Out of Stock":
+      return "/inventory?status=OUT_OF_STOCK";
     case "Total Billing Orders":
       return "/billing";
     case "Attention Needed":
-      return "/inventory";
-    case "Assigned Racks":
-      return "/racks";
-    case "Assigned Products":
-      return "/staff";
-    case "Stock Items":
-      return "/staff";
     case "Low / Out":
-      return "/staff";
+      return "/inventory?status=LOW_OUT";
+    case "Stock Items":
+      return "/inventory";
     default:
       return role === "STAFF" ? "/staff" : "/warehouses";
   }
@@ -138,24 +151,37 @@ function getMetricLink(label: string, role?: string): string {
 
 function getMetricIcon(label: string) {
   switch (label) {
-    case "Total Warehouses":
-      return <Warehouse className="h-5 w-5 text-blue-600" />;
-    case "Total Categories":
-      return <FolderTree className="h-5 w-5 text-indigo-600" />;
-    case "Total Products":
-      return <Box className="h-5 w-5 text-emerald-600" />;
-    case "Inventory Stock":
-      return <Tag className="h-5 w-5 text-amber-600" />;
+    case "Staff":
     case "Total Staff":
       return <Users className="h-5 w-5 text-purple-600" />;
+    case "Warehouses":
+    case "Warehouse":
+    case "Total Warehouses":
+    case "Assigned Warehouse":
+      return <Warehouse className="h-5 w-5 text-blue-600" />;
+    case "Racks":
+    case "Assigned Racks":
+      return <Box className="h-5 w-5 text-indigo-600" />;
+    case "Categories":
+    case "Total Categories":
+      return <FolderTree className="h-5 w-5 text-cyan-600" />;
+    case "Products":
+    case "Total Products":
+    case "Assigned Products":
+    case "Products in Warehouse":
+      return <Tag className="h-5 w-5 text-emerald-600" />;
+    case "Total Stock":
+    case "Inventory Stock":
+    case "Total Units":
+      return <PackageCheck className="h-5 w-5 text-teal-600" />;
+    case "Low":
+    case "Low Stock":
+      return <AlertTriangle className="h-5 w-5 text-amber-500" />;
+    case "Out":
+    case "Out of Stock":
+      return <AlertOctagon className="h-5 w-5 text-rose-600" />;
     case "Total Billing Orders":
       return <ClipboardList className="h-5 w-5 text-teal-600" />;
-    case "Assigned Racks":
-      return <Warehouse className="h-5 w-5 text-blue-600" />;
-    case "Assigned Products":
-      return <Box className="h-5 w-5 text-emerald-600" />;
-    case "Stock Items":
-      return <AlertOctagon className="h-5 w-5 text-rose-600" />;
     case "Low / Out":
     case "Attention Needed":
       return <AlertTriangle className="h-5 w-5 text-rose-600" />;
@@ -315,6 +341,74 @@ export default function DashboardPage() {
     serviceAlerts.filter((a) => a.isOverdue).length +
     reusableAlerts.filter((a) => a.isOverdue).length;
 
+  type CombinedAlert =
+    | { kind: "REUSABLE"; alert: ReusableAlert }
+    | { kind: "STOCK"; alert: StockAlert }
+    | { kind: "SERVICE"; alert: ServiceAlert };
+
+  const [visibleAlertsCount, setVisibleAlertsCount] = useState(6);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const combinedAlerts: CombinedAlert[] = useMemo(() => {
+    const list: CombinedAlert[] = [];
+    if (alertTab === "ALL" || alertTab === "REUSABLE") {
+      reusableAlerts.forEach((r) => list.push({ kind: "REUSABLE", alert: r }));
+    }
+    if (alertTab === "ALL" || alertTab === "STOCK") {
+      stockAlerts.forEach((s) => list.push({ kind: "STOCK", alert: s }));
+    }
+    if (alertTab === "ALL" || alertTab === "SERVICE") {
+      serviceAlerts.forEach((svc) => list.push({ kind: "SERVICE", alert: svc }));
+    }
+    return list;
+  }, [alertTab, reusableAlerts, stockAlerts, serviceAlerts]);
+
+  // Reset to 6 items when tab changes
+  useEffect(() => {
+    setVisibleAlertsCount(6);
+  }, [alertTab]);
+
+  const loadMoreAlerts = useCallback(() => {
+    setVisibleAlertsCount((prev) => {
+      if (prev < combinedAlerts.length) {
+        return Math.min(prev + 6, combinedAlerts.length);
+      }
+      return prev;
+    });
+  }, [combinedAlerts.length]);
+
+  // Infinite scroll observer: automatically loads more as user scrolls down
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    const container = scrollContainerRef.current;
+    if (!sentinel || !container) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreAlerts();
+        }
+      },
+      {
+        root: container,
+        rootMargin: "80px",
+        threshold: 0.1,
+      }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [loadMoreAlerts, visibleAlertsCount]);
+
+  // onScroll fallback for mousewheel / trackpad / touch
+  const handleAlertsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop - clientHeight < 100) {
+      loadMoreAlerts();
+    }
+  };
+
   return (
     <ProtectedPage>
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
@@ -324,8 +418,8 @@ export default function DashboardPage() {
           </h1>
           <p className="mt-1 text-sm text-slate-500">
             {user?.role === "ADMIN"
-              ? "Monitor warehouses, inventory stock, recurring maintenance alerts, reusable return validities, and staff operations."
-              : "Track your assigned warehouse inventory, reusable returns, and equipment maintenance."}
+              ? "Monitor warehouses, inventory stock, recurring maintenance alerts, returnable validities, and staff operations."
+              : "Track your assigned warehouse inventory, returnable returns, and equipment maintenance."}
           </p>
         </div>
 
@@ -402,7 +496,7 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Reusable product returns, low stock warnings, and maintenance intervals requiring action.
+                  Returnable product returns, low stock warnings, and maintenance intervals requiring action.
                 </p>
               </div>
             </div>
@@ -465,14 +559,18 @@ export default function DashboardPage() {
                 </div>
                 <h3 className="font-bold text-slate-800 text-sm">Everything is running smoothly!</h3>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  No reusable items overdue, no stock shortages, and no upcoming service maintenance in the next 30 days.
+                  No returnable items overdue, no stock shortages, and no upcoming service maintenance in the next 30 days.
                 </p>
               </div>
             ) : (
-              <div className="divide-y divide-slate-100">
-                {/* 1. REUSABLE ASSET RETURN / RENEWAL ALERTS */}
-                {(alertTab === "ALL" || alertTab === "REUSABLE") &&
-                  reusableAlerts.map((alert) => {
+              <div
+                ref={scrollContainerRef}
+                onScroll={handleAlertsScroll}
+                className="max-h-[390px] overflow-y-auto divide-y divide-slate-100 overscroll-contain"
+              >
+                {combinedAlerts.slice(0, visibleAlertsCount).map((item) => {
+                  if (item.kind === "REUSABLE") {
+                    const alert = item.alert;
                     const dateObj = new Date(alert.returnDueDate);
                     const formattedDate = dateObj.toLocaleDateString("en-IN", {
                       day: "2-digit",
@@ -505,7 +603,7 @@ export default function DashboardPage() {
                                 {alert.productName}
                               </p>
                               <span className="rounded-md bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 text-[10px] font-bold text-indigo-700">
-                                Reusable
+                                Returnable
                               </span>
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
@@ -521,11 +619,16 @@ export default function DashboardPage() {
                             </div>
 
                             <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-x-2 flex-wrap">
-                              <span>Holder: <b className="text-slate-700">{alert.employeeName}</b> {alert.employeeDepartment ? `(${alert.employeeDepartment})` : ""}</span>
+                              <span>
+                                Holder: <b className="text-slate-700">{alert.employeeName}</b>{" "}
+                                {alert.employeeDepartment ? `(${alert.employeeDepartment})` : ""}
+                              </span>
                               <span>• SKU: <b className="text-slate-700">{alert.sku}</b></span>
                               <span>• Due: <b className="text-slate-700">{formattedDate}</b></span>
                               {alert.renewalCount > 0 && (
-                                <span className="text-indigo-600 font-semibold">({alert.renewalCount}x renewed)</span>
+                                <span className="text-indigo-600 font-semibold">
+                                  ({alert.renewalCount}x renewed)
+                                </span>
                               )}
                             </p>
                           </div>
@@ -555,139 +658,172 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     );
-                  })}
+                  }
 
-                {/* 2. STOCK ALERTS */}
-                {(alertTab === "ALL" || alertTab === "STOCK") &&
-                  stockAlerts.map((stock) => (
-                    <div
-                      key={`stock-${stock.id}`}
-                      className={`flex flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:justify-between transition hover:bg-slate-50/80 ${
-                        stock.status === "OUT_OF_STOCK" ? "bg-rose-50/20" : ""
-                      }`}
-                    >
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <div
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold shadow-2xs ${
-                            stock.status === "OUT_OF_STOCK"
-                              ? "bg-rose-100 text-rose-700"
-                              : "bg-amber-100 text-amber-700"
-                          }`}
-                        >
-                          <AlertTriangle className="h-4 w-4" />
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-bold text-slate-800 text-sm truncate">
-                              {stock.productName}
-                            </p>
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
-                                stock.status === "OUT_OF_STOCK"
-                                  ? "bg-rose-600 text-white"
-                                  : "bg-amber-500 text-white"
-                              }`}
-                            >
-                              {stock.status === "OUT_OF_STOCK" ? "OUT OF STOCK" : "LOW STOCK"}
-                            </span>
-                          </div>
-
-                          <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-x-2 flex-wrap">
-                            <span>Warehouse: <b className="text-slate-700">{stock.warehouseName}</b></span>
-                            <span>• Rack: <b className="text-slate-700">{stock.rackName}</b></span>
-                            <span>• SKU: <b className="text-slate-700">{stock.sku}</b></span>
-                            <span className="font-bold text-slate-700">
-                              Qty: <span className={stock.quantity === 0 ? "text-rose-600" : "text-amber-600"}>{stock.quantity} units</span>
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 self-end sm:self-center">
-                        <Link
-                          href={`/inventory?productId=${stock.productId}&warehouseId=${stock.warehouseId}&rackId=${stock.rackId}&restock=true`}
-                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition flex items-center gap-1"
-                        >
-                          Restock <ArrowRight className="h-3 w-3" />
-                        </Link>
-                      </div>
-                    </div>
-                  ))}
-
-                {/* 3. SERVICE & MAINTENANCE ALERTS */}
-                {(alertTab === "ALL" || alertTab === "SERVICE") &&
-                  serviceAlerts.map((alert) => {
-                    const dateObj = new Date(alert.serviceDate);
-                    const formattedDate = dateObj.toLocaleDateString("en-IN", {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                    });
-
+                  if (item.kind === "STOCK") {
+                    const stock = item.alert;
                     return (
                       <div
-                        key={`service-${alert.issueId}-${alert.itemIndex}-${alert.serviceStage}`}
+                        key={`stock-${stock.id}`}
                         className={`flex flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:justify-between transition hover:bg-slate-50/80 ${
-                          alert.isOverdue ? "bg-red-50/20" : ""
+                          stock.status === "OUT_OF_STOCK" ? "bg-rose-50/20" : ""
                         }`}
                       >
                         <div className="flex items-start gap-3 min-w-0 flex-1">
                           <div
                             className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold shadow-2xs ${
-                              alert.isOverdue
-                                ? "bg-red-100 text-red-700"
-                                : "bg-blue-100 text-blue-700"
+                              stock.status === "OUT_OF_STOCK"
+                                ? "bg-rose-100 text-rose-700"
+                                : "bg-amber-100 text-amber-700"
                             }`}
                           >
-                            <Wrench className="h-4 w-4" />
+                            <AlertTriangle className="h-4 w-4" />
                           </div>
 
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-bold text-slate-800 text-sm truncate">
-                                {alert.productName}
+                                {stock.productName}
                               </p>
-                              <span className="rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.2 text-[10px] font-bold text-blue-700">
-                                {alert.serviceStage}
-                              </span>
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
-                                  alert.isOverdue
-                                    ? "bg-red-600 text-white"
-                                    : "bg-blue-600 text-white"
+                                  stock.status === "OUT_OF_STOCK"
+                                    ? "bg-rose-600 text-white"
+                                    : "bg-amber-500 text-white"
                                 }`}
                               >
-                                {alert.isOverdue
-                                  ? `OVERDUE (${Math.abs(alert.daysRemaining)}d)`
-                                  : `${alert.daysRemaining} DAYS LEFT`}
+                                {stock.status === "OUT_OF_STOCK" ? "OUT OF STOCK" : "LOW STOCK"}
                               </span>
                             </div>
 
                             <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-x-2 flex-wrap">
-                              <span>Holder: <b className="text-slate-700">{alert.employeeName}</b> {alert.employeeDepartment ? `(${alert.employeeDepartment})` : ""}</span>
-                              <span>• SKU: <b className="text-slate-700">{alert.sku}</b></span>
-                              <span>• Due: <b className="text-slate-700">{formattedDate}</b></span>
+                              <span>
+                                Warehouse: <b className="text-slate-700">{stock.warehouseName}</b>
+                              </span>
+                              <span>• Rack: <b className="text-slate-700">{stock.rackName}</b></span>
+                              <span>• SKU: <b className="text-slate-700">{stock.sku}</b></span>
+                              <span className="font-bold text-slate-700">
+                                Qty:{" "}
+                                <span
+                                  className={
+                                    stock.quantity === 0 ? "text-rose-600" : "text-amber-600"
+                                  }
+                                >
+                                  {stock.quantity} units
+                                </span>
+                              </span>
                             </p>
                           </div>
                         </div>
 
                         <div className="shrink-0 self-end sm:self-center">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedAlert(alert);
-                              setServiceNotes("");
-                            }}
-                            className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-blue-700 active:scale-95 flex items-center gap-1"
+                          <Link
+                            href={`/inventory?productId=${stock.productId}&warehouseId=${stock.warehouseId}&rackId=${stock.rackId}&restock=true`}
+                            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition flex items-center gap-1"
                           >
-                            <Wrench className="h-3.5 w-3.5" />
-                            Complete Service
-                          </button>
+                            Restock <ArrowRight className="h-3 w-3" />
+                          </Link>
                         </div>
                       </div>
                     );
-                  })}
+                  }
+
+                  // SERVICE alert
+                  const alert = item.alert;
+                  const dateObj = new Date(alert.serviceDate);
+                  const formattedDate = dateObj.toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  });
+
+                  return (
+                    <div
+                      key={`service-${alert.issueId}-${alert.itemIndex}-${alert.serviceStage}`}
+                      className={`flex flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:justify-between transition hover:bg-slate-50/80 ${
+                        alert.isOverdue ? "bg-red-50/20" : ""
+                      }`}
+                    >
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold shadow-2xs ${
+                            alert.isOverdue
+                              ? "bg-red-100 text-red-700"
+                              : "bg-blue-100 text-blue-700"
+                          }`}
+                        >
+                          <Wrench className="h-4 w-4" />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-slate-800 text-sm truncate">
+                              {alert.productName}
+                            </p>
+                            <span className="rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.2 text-[10px] font-bold text-blue-700">
+                              {alert.serviceStage}
+                            </span>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+                                alert.isOverdue ? "bg-red-600 text-white" : "bg-blue-600 text-white"
+                              }`}
+                            >
+                              {alert.isOverdue
+                                ? `OVERDUE (${Math.abs(alert.daysRemaining)}d)`
+                                : `${alert.daysRemaining} DAYS LEFT`}
+                            </span>
+                          </div>
+
+                          <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-x-2 flex-wrap">
+                            <span>
+                              Holder: <b className="text-slate-700">{alert.employeeName}</b>{" "}
+                              {alert.employeeDepartment ? `(${alert.employeeDepartment})` : ""}
+                            </span>
+                            <span>• SKU: <b className="text-slate-700">{alert.sku}</b></span>
+                            <span>• Due: <b className="text-slate-700">{formattedDate}</b></span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 self-end sm:self-center">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedAlert(alert);
+                            setServiceNotes("");
+                          }}
+                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-blue-700 active:scale-95 flex items-center gap-1"
+                        >
+                          <Wrench className="h-3.5 w-3.5" />
+                          Complete Service
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Sentinel for infinite scroll */}
+                {visibleAlertsCount < combinedAlerts.length && (
+                  <div
+                    ref={sentinelRef}
+                    className="p-3 text-center bg-slate-50/70 border-t border-slate-100 flex items-center justify-center gap-2"
+                  >
+                    <button
+                      type="button"
+                      onClick={loadMoreAlerts}
+                      className="inline-flex items-center gap-2 rounded-lg bg-white border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition shadow-2xs"
+                    >
+                      <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                      <span>Scroll to load more • {visibleAlertsCount} of {combinedAlerts.length} loaded</span>
+                    </button>
+                  </div>
+                )}
+
+                {combinedAlerts.length > 6 && visibleAlertsCount >= combinedAlerts.length && (
+                  <div className="py-2.5 text-center text-xs font-semibold text-slate-500 bg-slate-50/60 border-t border-slate-100">
+                    ✓ All {combinedAlerts.length} live alerts loaded
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -825,7 +961,7 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* ─── MODAL: RENEW REUSABLE ASSET PERIOD ─── */}
+        {/* ─── MODAL: RENEW RETURNABLE ASSET PERIOD ─── */}
         {selectedReusableAlert && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95">

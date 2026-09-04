@@ -27,6 +27,7 @@ import {
   Mail,
   Menu,
   ArrowLeftRight,
+  History,
 } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import NotificationBell from "./NotificationBell";
@@ -36,11 +37,15 @@ const iconMap: Record<string, React.ReactNode> = {
   Billing: <Receipt className="h-4 w-4" />,
   Search: <Search className="h-4 w-4" />,
   Settings: <Settings className="h-4 w-4" />,
+  "Add & Modify": <Settings className="h-4 w-4" />,
   Warehouses: <Warehouse className="h-4 w-4" />,
   Racks: <Box className="h-4 w-4" />,
   Categories: <FolderTree className="h-4 w-4" />,
   Products: <Tag className="h-4 w-4" />,
   Inventory: <ClipboardList className="h-4 w-4" />,
+  "Employee Asset Management": <PackageCheck className="h-4 w-4" />,
+  "Asset Movement & History": <History className="h-4 w-4" />,
+  "Assest Moment & History": <History className="h-4 w-4" />,
   "Employee Issue": <PackageCheck className="h-4 w-4" />,
   "Stock Movements": <ArrowLeftRight className="h-4 w-4" />,
   Staff: <Users className="h-4 w-4" />,
@@ -71,18 +76,31 @@ export default function Sidebar() {
     "/products",
   ].some((p) => pathname === p);
 
+  const isItemActive = (itemPath?: string) => {
+    if (!itemPath) return isSettingsActive;
+    if (pathname === itemPath) return true;
+    if (itemPath === "/employee-issues") {
+      return pathname === "/employee-issues";
+    }
+    if (itemPath === "/asset-history") {
+      return (
+        pathname === "/asset-history" ||
+        pathname.startsWith("/employee-issues/employee") ||
+        pathname.startsWith("/product-history")
+      );
+    }
+    if (itemPath !== "/dashboard") {
+      return pathname.startsWith(itemPath);
+    }
+    return false;
+  };
+
   const menuItems =
     user.role === "ADMIN"
       ? [
           { name: "Dashboard", path: "/dashboard" },
-          { name: "Inventory", path: "/inventory" },
-          { name: "Employee Issue", path: "/employee-issues" },
-          { name: "Stock Movements", path: "/movements" },
-          // { name: "Billing", path: "/billing" },
-          // { name: "Search", path: "/search" },
-          { name: "Staff Management", path: "/staff" },
           {
-            name: "Settings",
+            name: "Add & Modify",
             children: [
               { name: "Warehouses", path: "/warehouses" },
               { name: "Racks", path: "/racks" },
@@ -90,11 +108,19 @@ export default function Sidebar() {
               { name: "Products", path: "/products" },
             ],
           },
+          { name: "Inventory", path: "/inventory" },
+          { name: "Employee Asset Management", path: "/employee-issues" },
+          { name: "Asset Movement & History", path: "/asset-history" },
+          { name: "Stock Movements", path: "/movements" },
+          // { name: "Billing", path: "/billing" },
+          // { name: "Search", path: "/search" },
+          { name: "Staff Management", path: "/staff" },
         ]
       : [
           { name: "Dashboard", path: "/dashboard" },
           { name: "Inventory", path: "/inventory" },
-          { name: "Employee Issue", path: "/employee-issues" },
+          { name: "Employee Asset Management", path: "/employee-issues" },
+          { name: "Asset Movement & History", path: "/asset-history" },
           { name: "Stock Movements", path: "/movements" },
           // { name: "Billing", path: "/billing" },
           // { name: "Search", path: "/search" },
@@ -189,13 +215,14 @@ export default function Sidebar() {
             {/* Nav Menu */}
             <nav className="flex-1 space-y-1.5 overflow-y-auto p-3 text-xs">
               {menuItems.map((item) => {
-                const isActive = item.path ? pathname === item.path : isSettingsActive;
+                const isActive = isItemActive(item.path);
                 const hasChildren = "children" in item && item.children;
 
                 return (
                   <div key={item.path || item.name}>
                     <Link
                       href={hasChildren ? "#" : item.path}
+                      prefetch={!hasChildren}
                       onClick={
                         hasChildren
                           ? () => setSettingsOpen(!settingsOpen)
@@ -230,6 +257,7 @@ export default function Sidebar() {
                             <Link
                               key={child.path}
                               href={child.path}
+                              prefetch={true}
                               onClick={() => setMobileDrawerOpen(false)}
                               className={`flex items-center gap-2.5 rounded-lg px-2.5 py-2 transition ${
                                 childActive
@@ -362,7 +390,7 @@ export default function Sidebar() {
 
       {/* ─── DESKTOP SIDEBAR ─── */}
       <aside
-        className={`hidden md:flex min-h-screen flex-col border-r border-slate-200 bg-white transition-all duration-300 print:hidden ${
+        className={`hidden md:flex sticky top-0 h-screen shrink-0 flex-col border-r border-slate-200 bg-white transition-all duration-300 print:hidden z-20 ${
           isOpen ? "w-64" : "w-[72px]"
         }`}
       >
@@ -407,17 +435,16 @@ export default function Sidebar() {
         </div>
 
         {/* Navigation */}
-        <nav className="mt-3 flex-1 space-y-1 px-3">
+        <nav className="mt-3 flex-1 space-y-1 px-3 overflow-y-auto overscroll-contain">
           {menuItems.map((item) => {
-            const isActive = item.path
-              ? pathname === item.path
-              : isSettingsActive;
+            const isActive = isItemActive(item.path);
             const hasChildren = "children" in item && item.children;
 
             return (
               <div key={item.path || item.name}>
                 <Link
                   href={hasChildren ? "#" : item.path}
+                  prefetch={!hasChildren}
                   onClick={
                     hasChildren
                       ? () => setSettingsOpen(!settingsOpen)
@@ -425,7 +452,7 @@ export default function Sidebar() {
                   }
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                     isActive
-                      ? "bg-blue-50 text-blue-700"
+                      ? "bg-blue-50 text-blue-700 font-semibold"
                       : "text-slate-600 hover:bg-slate-50 hover:text-slate-800"
                   }`}
                 >
@@ -450,6 +477,7 @@ export default function Sidebar() {
                         <Link
                           key={child.path}
                           href={child.path}
+                          prefetch={true}
                           className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors ${
                             childActive
                               ? "bg-blue-50 text-blue-700 font-medium"
