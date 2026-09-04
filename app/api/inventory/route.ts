@@ -238,6 +238,11 @@ export async function POST(request: Request) {
             const r = populatedInventory?.rackId as any;
 
             if (p) {
+                const priorMovementsCount = await StockMovement.countDocuments({
+                    $or: [{ productId: p._id }, { sku: p.sku }],
+                });
+                const isFirstAddition = priorMovementsCount === 0;
+
                 await StockMovement.create({
                     productId: p._id,
                     productName: p.name,
@@ -248,12 +253,15 @@ export async function POST(request: Request) {
                     rackId: r?._id,
                     rackName: r?.name,
                     movementType: "INWARD",
-                    reason: "RESTOCK",
+                    reason: isFirstAddition ? "INITIAL_STOCK" : "RESTOCK",
                     quantity: Number(quantity),
                     unitPrice: p.price || 0,
                     totalValue: (p.price || 0) * Number(quantity),
-                    referenceNumber: "RESTOCK",
-                    entityName: `Added to ${w?.name || "Warehouse"} / ${r?.name || "Rack"}`,
+                    referenceNumber: isFirstAddition ? "INITIAL-STOCK" : "RESTOCK",
+                    entityName: isFirstAddition
+                        ? (p.sellerName ? `Received from ${p.sellerName}` : `Initial stock in ${w?.name || "Warehouse"}`)
+                        : `Added to ${w?.name || "Warehouse"} / ${r?.name || "Rack"}`,
+                    notes: isFirstAddition ? "First initial stock arrival into warehouse" : undefined,
                     performedBy: user.id,
                     performedByName: user.name,
                 });

@@ -162,47 +162,178 @@ export async function GET(
       });
     }
 
-    // 5. Build Unified Chronological Lifecycle Events (From Inward to Today)
+    // Ensure inward stock movements exist for each inventory item if no movement exists
+    const hasInward = movements.some((m) => m.movementType === "INWARD");
+    if (!hasInward && inventoryItems.length > 0) {
+      for (const inv of inventoryItems) {
+        const synth = {
+          _id: `synth-${inv._id}`,
+          productId: effectiveProductId,
+          productName: product.name,
+          sku: product.sku,
+          category: product.category,
+          warehouseId: inv.warehouseId?._id || inv.warehouseId,
+          warehouseName: inv.warehouseId?.name || "Main Warehouse",
+          rackId: inv.rackId?._id || inv.rackId,
+          rackName: inv.rackId?.name || "Unassigned Rack",
+          movementType: "INWARD",
+          reason: "INITIAL_STOCK",
+          quantity: inv.quantity || 0,
+          unitPrice: product.price || 0,
+          totalValue: (product.price || 0) * (inv.quantity || 0),
+          referenceNumber: "INITIAL-STOCK",
+          entityName: product.sellerName ? `Received from ${product.sellerName}` : "Initial Stock Setup",
+          notes: "Initial inventory setup into warehouse",
+          performedByName: "Administrator",
+          createdAt: inv.createdAt || product.createdAt || new Date(),
+        };
+        movements.push(synth);
+      }
+    }
+
+    // Find the earliest inward movement to mark as the absolute origin/first stock addition
+    const inwardMovements = movements.filter((m) => m.movementType === "INWARD");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let earliestInward: any = null;
+    if (inwardMovements.length > 0) {
+      earliestInward = [...inwardMovements].sort(
+        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+      )[0];
+    }
+
+    const initialStockArrival = earliestInward
+      ? {
+          date: new Date(earliestInward.createdAt).toISOString(),
+          quantity: earliestInward.quantity,
+          warehouseName: earliestInward.warehouseName || "Warehouse",
+          rackName: earliestInward.rackName || "Rack",
+          unitPrice: earliestInward.unitPrice || product.price || 0,
+          totalValue:
+            earliestInward.totalValue ||
+            (earliestInward.unitPrice || product.price || 0) * earliestInward.quantity,
+          supplier: earliestInward.entityName || product.sellerName || "Supplier",
+          referenceNumber: earliestInward.referenceNumber || "INITIAL-STOCK",
+          performedByName: earliestInward.performedByName || "Administrator",
+          notes: earliestInward.notes || "Initial stock added to warehouse",
+          isOrigin: true,
+        }
+      : {
+          date: new Date(product.createdAt || Date.now()).toISOString(),
+          quantity: totalInStock,
+          warehouseName: inventoryItems[0]?.warehouseId?.name || "Warehouse",
+          rackName: inventoryItems[0]?.rackId?.name || "Rack",
+          unitPrice: product.price || 0,
+          totalValue: (product.price || 0) * totalInStock,
+          supplier: product.sellerName || "Supplier",
+          referenceNumber: "INITIAL-STOCK",
+          performedByName: "Administrator",
+          notes: "Initial inventory stock",
+          isOrigin: true,
+        };
+
+    // 5. Build Unified Chronological Lifecycle Events (From Product Creation & 1st Inward to Today)
     type LifecycleEvent = {
       id: string;
       date: string;
-      eventType: "INWARD" | "OUTWARD" | "EMPLOYEE_ISSUE" | "EMPLOYEE_RETURN" | "SERVICE" | "INVOICE_SALE";
+      eventType:
+        | "INITIAL_STOCK"
+        | "INWARD"
+        | "OUTWARD"
+        | "EMPLOYEE_ISSUE"
+        | "EMPLOYEE_RETURN"
+        | "SERVICE"
+        | "INVOICE_SALE"
+        | "PRODUCT_CREATED";
+      isInitialStock?: boolean;
       title: string;
       subtitle?: string;
       quantity: number;
+      unitPrice?: number;
+      totalValue?: number;
       entityName?: string;
       location?: string;
       notes?: string;
+      referenceNumber?: string;
+      performedByName?: string;
       badgeColor?: string;
     };
 
     const lifecycleEvents: LifecycleEvent[] = [];
 
+    // Add Product Catalog Registration Event
+    lifecycleEvents.push({
+      id: `prod-created-${product._id}`,
+      date: new Date(product.createdAt || Date.now()).toISOString(),
+      eventType: "PRODUCT_CREATED",
+      title: "Product Catalog Registered",
+      subtitle: `SKU: ${product.sku} • Category: ${product.category || "General"}`,
+      quantity: 0,
+      entityName: product.sellerName || "Supplier",
+      location: "Inventory Catalog",
+      notes: product.description ? `Description: ${product.description}` : "Product record created in database",
+      badgeColor: "slate",
+    });
+
     // Add Inward movements (Arrivals / Restocks)
     movements.forEach((m) => {
       if (m.movementType === "INWARD") {
-        lifecycleEvents.push({
-          id: `mov-${m._id}`,
-          date: new Date(m.createdAt).toISOString(),
-          eventType: "INWARD",
-          title: m.reason === "INITIAL_STOCK" ? "Initial Stock Inward" : "Stock Restocked / Added",
-          subtitle: m.referenceNumber ? `Ref: ${m.referenceNumber}` : undefined,
-          quantity: m.quantity,
-          entityName: m.entityName || product.sellerName || "Supplier",
-          location: `${m.warehouseName || "Warehouse"} • ${m.rackName || "Rack"}`,
-          notes: m.notes,
-          badgeColor: "emerald",
-        });
+        const earliestId = earliestInward?._id
+          ? String(earliestInward._id)
+          : earliestInward?.id
+          ? String(earliestInward.id)
+          : null;
+        const currentId = m._id ? String(m._id) : m.id ? String(m.id) : null;
+        const isEarliest = Boolean(earliestId && currentId && earliestId === currentId);
+
+        if (isEarliest) {
+          lifecycleEvents.push({
+            id: `mov-${m._id || m.id}`,
+            date: new Date(m.createdAt).toISOString(),
+            eventType: "INITIAL_STOCK",
+            isInitialStock: true,
+            title: "1st Stock Inward Arrival (Initial Stock Added)",
+            subtitle: `Origin Stock Entry • Received from ${m.entityName || product.sellerName || "Supplier"}`,
+            quantity: m.quantity,
+            unitPrice: m.unitPrice || product.price || 0,
+            totalValue: m.totalValue || (m.unitPrice || product.price || 0) * m.quantity,
+            entityName: m.entityName || product.sellerName || "Supplier",
+            location: `${m.warehouseName || "Warehouse"} • ${m.rackName || "Rack"}`,
+            referenceNumber: m.referenceNumber || "INITIAL-STOCK",
+            performedByName: m.performedByName || "Administrator",
+            notes: m.notes || "Initial stock received into warehouse inventory",
+            badgeColor: "emerald",
+          });
+        } else {
+          lifecycleEvents.push({
+            id: `mov-${m._id || m.id}`,
+            date: new Date(m.createdAt).toISOString(),
+            eventType: "INWARD",
+            title: "Stock Restocked / Added",
+            subtitle: m.referenceNumber ? `Ref: ${m.referenceNumber}` : "Warehouse Restock",
+            quantity: m.quantity,
+            unitPrice: m.unitPrice,
+            totalValue: m.totalValue,
+            entityName: m.entityName || product.sellerName || "Supplier",
+            location: `${m.warehouseName || "Warehouse"} • ${m.rackName || "Rack"}`,
+            referenceNumber: m.referenceNumber,
+            performedByName: m.performedByName,
+            notes: m.notes,
+            badgeColor: "teal",
+          });
+        }
       } else if (m.reason === "INVOICE_SALE") {
         lifecycleEvents.push({
-          id: `mov-${m._id}`,
+          id: `mov-${m._id || m.id}`,
           date: new Date(m.createdAt).toISOString(),
           eventType: "INVOICE_SALE",
           title: "Sold via Customer Invoice",
           subtitle: m.referenceNumber ? `Inv #${m.referenceNumber}` : undefined,
           quantity: m.quantity,
+          unitPrice: m.unitPrice,
+          totalValue: m.totalValue,
           entityName: m.entityName || "Customer",
           location: m.warehouseName,
+          referenceNumber: m.referenceNumber,
           notes: m.notes,
           badgeColor: "blue",
         });
@@ -223,8 +354,11 @@ export async function GET(
             title: `Issued to Employee: ${iss.employeeName}`,
             subtitle: `Voucher #${iss.issueNumber} • Dept: ${iss.employeeDepartment || "General"}`,
             quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            totalValue: item.totalValue,
             entityName: iss.employeeName,
             location: `${item.warehouseName} • ${item.rackName}`,
+            referenceNumber: iss.issueNumber,
             notes: item.serialNumber ? `Serial: ${item.serialNumber}` : iss.notes,
             badgeColor: "indigo",
           });
@@ -239,8 +373,11 @@ export async function GET(
               title: `Returned to Warehouse by ${iss.employeeName}`,
               subtitle: `Returned from Voucher #${iss.issueNumber}`,
               quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalValue: item.totalValue,
               entityName: iss.employeeName,
               location: `${item.warehouseName} • ${item.rackName}`,
+              referenceNumber: iss.issueNumber,
               notes: item.serviceNotes || "Returned to stock",
               badgeColor: "cyan",
             });
@@ -295,6 +432,7 @@ export async function GET(
           totalHolders: employeeHolders.length,
           activeHoldersCount: employeeHolders.filter((h) => h.holdingStatus !== "RETURNED").length,
         },
+        initialStockArrival,
         inventoryLocations: inventoryItems.map((inv) => ({
           id: inv._id.toString(),
           warehouse: inv.warehouseId,

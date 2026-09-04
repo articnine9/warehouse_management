@@ -26,6 +26,8 @@ import {
   History,
   CheckCircle2,
   Users,
+  Sparkles,
+  ArrowUpDown,
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
@@ -83,16 +85,42 @@ interface ProductHistoryData {
     returnedAt?: string;
     serviceNotes?: string;
   }>;
+  initialStockArrival?: {
+    date: string;
+    quantity: number;
+    warehouseName: string;
+    rackName: string;
+    unitPrice: number;
+    totalValue: number;
+    supplier: string;
+    referenceNumber?: string;
+    performedByName?: string;
+    notes?: string;
+    isOrigin?: boolean;
+  };
   lifecycleEvents: Array<{
     id: string;
     date: string;
-    eventType: "INWARD" | "OUTWARD" | "EMPLOYEE_ISSUE" | "EMPLOYEE_RETURN" | "SERVICE" | "INVOICE_SALE";
+    eventType:
+      | "INITIAL_STOCK"
+      | "INWARD"
+      | "OUTWARD"
+      | "EMPLOYEE_ISSUE"
+      | "EMPLOYEE_RETURN"
+      | "SERVICE"
+      | "INVOICE_SALE"
+      | "PRODUCT_CREATED";
+    isInitialStock?: boolean;
     title: string;
     subtitle?: string;
     quantity: number;
+    unitPrice?: number;
+    totalValue?: number;
     entityName?: string;
     location?: string;
     notes?: string;
+    referenceNumber?: string;
+    performedByName?: string;
     badgeColor?: string;
   }>;
   movements: Array<{
@@ -133,7 +161,8 @@ export default function ProductDetailPage({
     "LIFECYCLE" | "HOLDERS" | "STOCK" | "MOVEMENTS" | "RETURNS"
   >("LIFECYCLE");
 
-  // Filters
+  // Filters & Ordering
+  const [timelineOrder, setTimelineOrder] = useState<"OLDEST_FIRST" | "NEWEST_FIRST">("OLDEST_FIRST");
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [startDate, setStartDate] = useState("");
@@ -172,11 +201,34 @@ export default function ProductDetailPage({
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, statusFilter, startDate, endDate, activeTab]);
+  }, [searchQuery, statusFilter, startDate, endDate, activeTab, timelineOrder]);
 
   // First Inward / Arrival Date
   const arrivalInfo = useMemo(() => {
     if (!data) return null;
+
+    if (data.initialStockArrival) {
+      const formatted = new Date(data.initialStockArrival.date).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      return {
+        formatted,
+        rawDate: data.initialStockArrival.date,
+        supplier: data.initialStockArrival.supplier,
+        quantity: data.initialStockArrival.quantity,
+        location: `${data.initialStockArrival.warehouseName} • ${data.initialStockArrival.rackName}`,
+        warehouseName: data.initialStockArrival.warehouseName,
+        rackName: data.initialStockArrival.rackName,
+        unitPrice: data.initialStockArrival.unitPrice,
+        totalValue: data.initialStockArrival.totalValue,
+        performedByName: data.initialStockArrival.performedByName,
+        referenceNumber: data.initialStockArrival.referenceNumber,
+        notes: data.initialStockArrival.notes,
+      };
+    }
+
     const inwardMovements = data.movements.filter((m) => m.movementType === "INWARD");
     const earliest = inwardMovements.length > 0
       ? inwardMovements[inwardMovements.length - 1]
@@ -193,18 +245,26 @@ export default function ProductDetailPage({
 
     return {
       formatted,
+      rawDate: arrivalDate,
       supplier: earliest?.entityName || data.product.sellerName || "Supplier Inward",
       quantity: earliest?.quantity,
       location: earliest?.warehouseName ? `${earliest.warehouseName} • ${earliest.rackName || ""}` : null,
+      warehouseName: earliest?.warehouseName,
+      rackName: earliest?.rackName,
+      unitPrice: earliest?.unitPrice,
+      totalValue: earliest?.totalValue,
+      performedByName: earliest?.performedByName,
+      referenceNumber: earliest?.referenceNumber,
+      notes: earliest?.notes,
     };
   }, [data]);
 
   // Filtered Lifecycle Events
   const filteredLifecycle = useMemo(() => {
     if (!data) return [];
-    return data.lifecycleEvents.filter((ev) => {
+    let list = data.lifecycleEvents.filter((ev) => {
       if (statusFilter !== "ALL") {
-        if (statusFilter === "INWARD" && ev.eventType !== "INWARD") return false;
+        if (statusFilter === "INWARD" && ev.eventType !== "INITIAL_STOCK" && ev.eventType !== "INWARD") return false;
         if (statusFilter === "EMPLOYEE_ISSUE" && ev.eventType !== "EMPLOYEE_ISSUE") return false;
         if (statusFilter === "EMPLOYEE_RETURN" && ev.eventType !== "EMPLOYEE_RETURN") return false;
       }
@@ -221,12 +281,22 @@ export default function ProductDetailPage({
           (ev.subtitle && ev.subtitle.toLowerCase().includes(q)) ||
           (ev.entityName && ev.entityName.toLowerCase().includes(q)) ||
           (ev.location && ev.location.toLowerCase().includes(q)) ||
-          (ev.notes && ev.notes.toLowerCase().includes(q));
+          (ev.notes && ev.notes.toLowerCase().includes(q)) ||
+          (ev.referenceNumber && ev.referenceNumber.toLowerCase().includes(q));
         if (!matches) return false;
       }
       return true;
     });
-  }, [data, statusFilter, startDate, endDate, searchQuery]);
+
+    // Chronological sorting (from 1st stock addition vs newest first)
+    if (timelineOrder === "OLDEST_FIRST") {
+      list = [...list].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    } else {
+      list = [...list].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+
+    return list;
+  }, [data, statusFilter, startDate, endDate, searchQuery, timelineOrder]);
 
   // Active Employee Holders (Currently Holding)
   const activeHolders = useMemo(() => {
@@ -454,6 +524,75 @@ export default function ProductDetailPage({
                   </div>
                 </div>
               </div>
+
+              {/* 🌟 CRYSTAL CLEAR 1ST STOCK ARRIVAL (ORIGIN RECORD) 🌟 */}
+              {arrivalInfo && (
+                <div className="mt-5 rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-r from-emerald-50/90 via-teal-50/40 to-blue-50/40 p-4 sm:p-5 shadow-xs">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-200/70 pb-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-xs">
+                        <Sparkles className="h-4.5 w-4.5" />
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-sm font-black uppercase tracking-wide text-emerald-950">
+                            1st Stock Inward Arrival (Initial Origin Point)
+                          </h3>
+                          <span className="rounded-full bg-emerald-600 text-white px-2 py-0.2 text-[9px] font-extrabold uppercase">
+                            Origin Step
+                          </span>
+                        </div>
+                        <p className="text-xs text-emerald-700 mt-0.5">
+                          The very first day stock was received and entered into warehouse inventory
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-xl bg-white/95 border border-emerald-200 px-3 py-1.5 text-xs font-extrabold text-emerald-900 shadow-2xs flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 text-emerald-600" />
+                        {arrivalInfo.formatted}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                    <div className="rounded-xl bg-white/90 p-3 border border-emerald-100/90 shadow-2xs">
+                      <span className="text-[10px] font-bold uppercase text-emerald-700 block">Initial Received Quantity</span>
+                      <p className="text-lg font-black text-emerald-900 mt-0.5">
+                        +{arrivalInfo.quantity != null ? arrivalInfo.quantity : data.summary.totalInStock} <span className="text-xs font-normal text-emerald-600">units</span>
+                      </p>
+                      <span className="text-[10px] text-slate-400">First stock inward</span>
+                    </div>
+
+                    <div className="rounded-xl bg-white/90 p-3 border border-emerald-100/90 shadow-2xs">
+                      <span className="text-[10px] font-bold uppercase text-emerald-700 block">Initial Warehouse Location</span>
+                      <p className="text-xs font-bold text-slate-800 mt-0.5 truncate" title={arrivalInfo.location || "Warehouse"}>
+                        {arrivalInfo.warehouseName || "Warehouse"}
+                      </p>
+                      <span className="text-[10px] text-slate-500 block truncate">{arrivalInfo.rackName || "Rack"}</span>
+                    </div>
+
+                    <div className="rounded-xl bg-white/90 p-3 border border-emerald-100/90 shadow-2xs">
+                      <span className="text-[10px] font-bold uppercase text-emerald-700 block">Supplier / Vendor</span>
+                      <p className="text-xs font-bold text-slate-800 mt-0.5 truncate" title={arrivalInfo.supplier}>
+                        {arrivalInfo.supplier}
+                      </p>
+                      <span className="text-[10px] text-slate-500 block truncate">Ref: {arrivalInfo.referenceNumber || "INITIAL-STOCK"}</span>
+                    </div>
+
+                    <div className="rounded-xl bg-white/90 p-3 border border-emerald-100/90 shadow-2xs">
+                      <span className="text-[10px] font-bold uppercase text-emerald-700 block">Initial Stock Valuation</span>
+                      <p className="text-xs font-bold text-emerald-800 mt-0.5">
+                        ₹{(arrivalInfo.totalValue || (arrivalInfo.unitPrice || data.product.price || 0) * (arrivalInfo.quantity || 1)).toLocaleString("en-IN")}
+                      </p>
+                      <span className="text-[10px] text-slate-500 block">
+                        @ ₹{(arrivalInfo.unitPrice || data.product.price || 0).toLocaleString("en-IN")}/unit
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ─── METRIC CARDS STRIP ─── */}
@@ -653,6 +792,21 @@ export default function ProductDetailPage({
                       Clear Filters
                     </button>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTimelineOrder(
+                        timelineOrder === "OLDEST_FIRST" ? "NEWEST_FIRST" : "OLDEST_FIRST"
+                      )
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+                  >
+                    <ArrowUpDown className="h-3.5 w-3.5 text-blue-600" />
+                    {timelineOrder === "OLDEST_FIRST"
+                      ? "From 1st Stock Addition (Day 1 → Today)"
+                      : "Latest Activity First (Today → Day 1)"}
+                  </button>
                 </div>
 
                 <div className="text-xs font-semibold text-slate-500">
@@ -670,75 +824,122 @@ export default function ProductDetailPage({
                   ) : (
                     <div className="relative pl-6 sm:pl-8 before:absolute before:left-3 sm:before:left-4 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 space-y-6">
                       {(paginatedItems.rows as typeof filteredLifecycle).map((ev) => {
+                        const isInitialStock = ev.isInitialStock || ev.eventType === "INITIAL_STOCK";
+                        const isProductCreated = ev.eventType === "PRODUCT_CREATED";
+
                         const eventDate = new Date(ev.date).toLocaleDateString("en-IN", {
                           day: "2-digit",
                           month: "short",
                           year: "numeric",
                         });
 
-                        const iconBg =
-                          ev.eventType === "INWARD"
-                            ? "bg-emerald-600 text-white"
-                            : ev.eventType === "EMPLOYEE_ISSUE"
-                            ? "bg-blue-600 text-white"
-                            : ev.eventType === "EMPLOYEE_RETURN"
-                            ? "bg-cyan-600 text-white"
-                            : ev.eventType === "SERVICE"
-                            ? "bg-amber-500 text-white"
-                            : "bg-purple-600 text-white";
+                        const iconBg = isInitialStock
+                          ? "bg-emerald-600 text-white ring-4 ring-emerald-200"
+                          : ev.eventType === "INWARD"
+                          ? "bg-teal-600 text-white ring-4 ring-teal-100"
+                          : ev.eventType === "EMPLOYEE_ISSUE"
+                          ? "bg-blue-600 text-white ring-4 ring-blue-100"
+                          : ev.eventType === "EMPLOYEE_RETURN"
+                          ? "bg-cyan-600 text-white ring-4 ring-cyan-100"
+                          : ev.eventType === "SERVICE"
+                          ? "bg-amber-500 text-white ring-4 ring-amber-100"
+                          : isProductCreated
+                          ? "bg-slate-600 text-white ring-4 ring-slate-200"
+                          : "bg-purple-600 text-white ring-4 ring-purple-100";
 
                         return (
                           <div key={ev.id} className="relative group">
                             {/* Dot on line */}
                             <div
-                              className={`absolute -left-6 sm:-left-8 top-1 flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full ${iconBg} shadow-xs ring-4 ring-white`}
+                              className={`absolute -left-6 sm:-left-8 top-1 flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-full ${iconBg} shadow-xs`}
                             >
-                              {ev.eventType === "INWARD" ? (
+                              {isInitialStock ? (
+                                <Sparkles className="h-3.5 w-3.5" />
+                              ) : ev.eventType === "INWARD" ? (
                                 <ArrowDownLeft className="h-3.5 w-3.5" />
                               ) : ev.eventType === "EMPLOYEE_ISSUE" ? (
                                 <Users className="h-3.5 w-3.5" />
                               ) : ev.eventType === "EMPLOYEE_RETURN" ? (
                                 <RotateCcw className="h-3.5 w-3.5" />
-                              ) : (
+                              ) : ev.eventType === "SERVICE" ? (
                                 <Wrench className="h-3.5 w-3.5" />
+                              ) : (
+                                <Package className="h-3.5 w-3.5" />
                               )}
                             </div>
 
-                            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs hover:shadow-xs transition">
-                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                            <div
+                              className={`rounded-xl border p-4 shadow-2xs transition ${
+                                isInitialStock
+                                  ? "border-2 border-emerald-400 bg-gradient-to-r from-emerald-50/80 via-white to-white ring-1 ring-emerald-200 shadow-sm"
+                                  : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs"
+                              }`}
+                            >
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
                                 <div>
-                                  <div className="flex items-center gap-2">
-                                    <h4 className="font-bold text-slate-800 text-sm">{ev.title}</h4>
-                                    <span
-                                      className={`rounded-md px-2 py-0.2 text-[10px] font-extrabold uppercase ${
-                                        ev.eventType === "INWARD"
-                                          ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
-                                          : ev.eventType === "EMPLOYEE_ISSUE"
-                                          ? "bg-blue-50 text-blue-800 border border-blue-200"
-                                          : ev.eventType === "EMPLOYEE_RETURN"
-                                          ? "bg-cyan-50 text-cyan-800 border border-cyan-200"
-                                          : "bg-amber-50 text-amber-800 border border-amber-200"
-                                      }`}
-                                    >
-                                      {ev.eventType.replace("_", " ")}
-                                    </span>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <h4 className="font-extrabold text-slate-800 text-sm">{ev.title}</h4>
+                                    {isInitialStock ? (
+                                      <span className="rounded-full bg-emerald-600 text-white px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide">
+                                        🌟 1ST STOCK INWARD (ORIGIN)
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className={`rounded-md px-2 py-0.2 text-[10px] font-extrabold uppercase ${
+                                          ev.eventType === "INWARD"
+                                            ? "bg-teal-50 text-teal-800 border border-teal-200"
+                                            : ev.eventType === "EMPLOYEE_ISSUE"
+                                            ? "bg-blue-50 text-blue-800 border border-blue-200"
+                                            : ev.eventType === "EMPLOYEE_RETURN"
+                                            ? "bg-cyan-50 text-cyan-800 border border-cyan-200"
+                                            : ev.eventType === "SERVICE"
+                                            ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                            : "bg-slate-100 text-slate-700 border border-slate-200"
+                                        }`}
+                                      >
+                                        {ev.eventType.replace("_", " ")}
+                                      </span>
+                                    )}
                                   </div>
                                   {ev.subtitle && (
                                     <p className="text-xs text-slate-500 mt-0.5">{ev.subtitle}</p>
                                   )}
                                 </div>
 
-                                <div className="text-right self-start sm:self-auto">
+                                <div className="text-right self-start sm:self-auto shrink-0">
                                   <span className="text-xs font-bold text-slate-700">{eventDate}</span>
-                                  <span className="block text-[11px] font-bold text-slate-900">
-                                    Qty: {ev.quantity} unit{ev.quantity > 1 ? "s" : ""}
-                                  </span>
+                                  {ev.quantity > 0 && (
+                                    <span
+                                      className={`block text-xs font-black ${
+                                        isInitialStock || ev.eventType === "INWARD" || ev.eventType === "EMPLOYEE_RETURN"
+                                          ? "text-emerald-700"
+                                          : "text-blue-700"
+                                      }`}
+                                    >
+                                      {isInitialStock || ev.eventType === "INWARD" || ev.eventType === "EMPLOYEE_RETURN" ? "+" : "-"}
+                                      {ev.quantity} unit{ev.quantity > 1 ? "s" : ""}
+                                    </span>
+                                  )}
                                 </div>
                               </div>
 
-                              {(ev.location || ev.notes) && (
-                                <div className="mt-2 text-xs text-slate-500 border-t border-slate-100 pt-2 flex flex-wrap gap-x-4">
-                                  {ev.location && <span>Location: <b>{ev.location}</b></span>}
+                              {(ev.location || ev.notes || ev.referenceNumber || ev.totalValue != null) && (
+                                <div className="mt-3 text-xs text-slate-500 border-t border-slate-100 pt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1">
+                                  {ev.location && (
+                                    <span>
+                                      Location: <b className="text-slate-800">{ev.location}</b>
+                                    </span>
+                                  )}
+                                  {ev.totalValue != null && ev.totalValue > 0 && (
+                                    <span>
+                                      Stock Valuation: <b className="text-slate-800">₹{ev.totalValue.toLocaleString("en-IN")}</b>
+                                    </span>
+                                  )}
+                                  {ev.referenceNumber && (
+                                    <span>
+                                      Ref: <b className="text-slate-800 font-mono">{ev.referenceNumber}</b>
+                                    </span>
+                                  )}
                                   {ev.notes && <span>Notes: {ev.notes}</span>}
                                 </div>
                               )}
