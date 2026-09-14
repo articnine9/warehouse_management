@@ -1,10 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { Tag } from "lucide-react";
+import { Tag, Box, Eye, Warehouse as WarehouseIcon } from "lucide-react";
+import { useRouter } from "next/navigation";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
+import WarehouseDetailsModal from "@/app/components/WarehouseDetailsModal";
+import RackDetailsModal from "@/app/components/RackDetailsModal";
 
 type Warehouse = {
   _id: string;
@@ -13,9 +16,12 @@ type Warehouse = {
   address?: string;
   status: "ACTIVE" | "INACTIVE";
   productCount?: number;
+  totalUnits?: number;
+  rackCount?: number;
 };
 
 export default function WarehousesPage() {
+  const router = useRouter();
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -23,6 +29,10 @@ export default function WarehousesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+
+  // Modal inspection state
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
+  const [selectedRackId, setSelectedRackId] = useState<string | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -289,45 +299,94 @@ export default function WarehousesPage() {
               <table className="w-full text-left text-sm">
                 <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500">
                   <tr>
-                    <th className="px-5 py-3">Name</th>
+                    <th className="px-5 py-3">Warehouse Name</th>
                     <th className="px-5 py-3">Code</th>
                     <th className="px-5 py-3">Address</th>
-                    <th className="px-5 py-3">Products</th>
+                    <th className="px-5 py-3">Racks</th>
+                    <th className="px-5 py-3">Inventory Products</th>
                     <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">Actions</th>
+                    <th className="px-5 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedWarehouses.map((warehouse) => (
-                    <tr key={warehouse._id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                      <td className="px-5 py-3 font-medium text-slate-800">{warehouse.name}</td>
-                      <td className="px-5 py-3 text-slate-600">{warehouse.code}</td>
-                      <td className="px-5 py-3 text-slate-500">{warehouse.address || "-"}</td>
+                    <tr
+                      key={warehouse._id}
+                      onClick={() => setSelectedWarehouseId(warehouse._id)}
+                      className="border-t border-slate-100 hover:bg-blue-50/40 transition cursor-pointer"
+                    >
                       <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                          <Tag className="h-3 w-3" /> {warehouse.productCount ?? 0}
+                        <div className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 group">
+                          <WarehouseIcon className="h-4 w-4 text-blue-500 shrink-0 group-hover:scale-110 transition" />
+                          <span>{warehouse.name}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                          {warehouse.code}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-slate-500 text-xs">{warehouse.address || "-"}</td>
+                      <td className="px-5 py-3">
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700"
+                          title="Total racks in this warehouse"
+                        >
+                          <Box className="h-3 w-3" /> {warehouse.rackCount ?? 0} Racks
                         </span>
                       </td>
                       <td className="px-5 py-3">
-                        <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700"
+                          title="Total product types in this warehouse"
+                        >
+                          <Tag className="h-3 w-3" /> {warehouse.productCount ?? 0} Products
+                          {warehouse.totalUnits !== undefined && warehouse.totalUnits > 0 && (
+                            <span className="text-[10px] text-blue-500 font-normal">
+                              ({warehouse.totalUnits}u)
+                            </span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${
                           warehouse.status === "ACTIVE"
-                            ? "bg-emerald-50 text-emerald-700"
+                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                             : "bg-slate-100 text-slate-600"
                         }`}>
                           {warehouse.status}
                         </span>
                       </td>
-                      <td className="px-5 py-3">
-                        <div className="flex gap-2">
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => openEdit(warehouse)}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedWarehouseId(warehouse._id);
+                            }}
+                            className="rounded-lg border border-blue-200 bg-blue-50/50 px-2.5 py-1 text-xs font-bold text-blue-700 hover:bg-blue-100 transition flex items-center gap-1 cursor-pointer"
+                            title="View warehouse details & racks"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEdit(warehouse);
+                            }}
+                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 cursor-pointer"
                           >
                             Edit
                           </button>
                           <button
-                            onClick={() => setDeleteId(warehouse._id)}
-                            className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteId(warehouse._id);
+                            }}
+                            className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 cursor-pointer"
                           >
                             Delete
                           </button>
@@ -344,35 +403,64 @@ export default function WarehousesPage() {
           {!fetching && paginatedWarehouses.length > 0 && (
             <div className="space-y-3 p-4 md:hidden">
               {paginatedWarehouses.map((warehouse) => (
-                <div key={warehouse._id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
+                <div
+                  key={warehouse._id}
+                  onClick={() => setSelectedWarehouseId(warehouse._id)}
+                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-2.5 cursor-pointer hover:border-blue-300 transition"
+                >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="font-semibold text-slate-800">{warehouse.name}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{warehouse.code}</p>
+                      <div className="font-bold text-blue-600 text-sm">
+                        {warehouse.name}
+                      </div>
+                      <p className="mt-0.5 text-xs text-slate-500 font-mono font-semibold">{warehouse.code}</p>
                     </div>
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${
                       warehouse.status === "ACTIVE"
-                        ? "bg-emerald-50 text-emerald-700"
+                        ? "bg-emerald-100 text-emerald-800"
                         : "bg-slate-100 text-slate-600"
                     }`}>
                       {warehouse.status}
                     </span>
                   </div>
                   {warehouse.address && (
-                    <p className="mt-2 text-xs text-slate-500">{warehouse.address}</p>
+                    <p className="text-xs text-slate-500">{warehouse.address}</p>
                   )}
-                  <div className="mt-2 flex items-center gap-1 text-xs text-slate-600">
-                    <Tag className="h-3 w-3" /> Products: {warehouse.productCount ?? 0}
+                  <div className="flex items-center gap-2 pt-1 flex-wrap">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-0.5 text-xs font-bold text-indigo-700">
+                      <Box className="h-3 w-3" /> {warehouse.rackCount ?? 0} Racks
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-blue-700">
+                      <Tag className="h-3 w-3" /> {warehouse.productCount ?? 0} Products
+                    </span>
                   </div>
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 flex gap-2 pt-1">
                     <button
-                      onClick={() => openEdit(warehouse)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedWarehouseId(warehouse._id);
+                      }}
+                      className="flex-1 rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition flex items-center justify-center gap-1"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Details & Racks
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEdit(warehouse);
+                      }}
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                     >
                       Edit
                     </button>
                     <button
-                      onClick={() => setDeleteId(warehouse._id)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteId(warehouse._id);
+                      }}
                       className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
                     >
                       Delete
@@ -488,6 +576,32 @@ export default function WarehousesPage() {
           </div>
         )}
       </div>
+
+      {/* Warehouse Details Inspection Modal */}
+      <WarehouseDetailsModal
+        warehouseId={selectedWarehouseId}
+        onClose={() => setSelectedWarehouseId(null)}
+        onEditWarehouse={(wh) => {
+          setSelectedWarehouseId(null);
+          openEdit(wh as Warehouse);
+        }}
+        onSelectRack={(rackId) => {
+          setSelectedRackId(rackId);
+        }}
+        onAddRack={() => {
+          router.push("/racks");
+        }}
+      />
+
+      {/* Rack Details Inspection Modal */}
+      <RackDetailsModal
+        rackId={selectedRackId}
+        onClose={() => setSelectedRackId(null)}
+        onSelectWarehouse={(whId) => {
+          setSelectedRackId(null);
+          setSelectedWarehouseId(whId);
+        }}
+      />
 
       <WarningPopup
         open={warningOpen}

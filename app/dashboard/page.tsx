@@ -30,6 +30,8 @@ import ProductSearch from "@/app/components/ProductSearch";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import { useAuth } from "@/app/components/AuthProvider";
 import WarningPopup from "@/app/components/WarningPopup";
+import WarehouseDetailsModal from "@/app/components/WarehouseDetailsModal";
+import RackDetailsModal from "@/app/components/RackDetailsModal";
 
 type Metric = {
   label: string;
@@ -88,6 +90,9 @@ type StockAlert = {
 
 type LowStockItem = {
   id: string;
+  productId?: string;
+  warehouseId?: string;
+  rackId?: string;
   productName: string;
   sku: string;
   rackName: string;
@@ -199,12 +204,11 @@ export default function DashboardPage() {
   const [warningMessage, setWarningMessage] = useState("");
 
   // Tab filter for alerts
-  const [alertTab, setAlertTab] = useState<"ALL" | "REUSABLE" | "STOCK" | "SERVICE">("ALL");
+  const [alertTab, setAlertTab] = useState<"ALL" | "REUSABLE" | "STOCK">("ALL");
 
-  // Modal state for service completion
-  const [selectedAlert, setSelectedAlert] = useState<ServiceAlert | null>(null);
-  const [serviceNotes, setServiceNotes] = useState("");
-  const [markingService, setMarkingService] = useState(false);
+  // Inspection Modals for Warehouse and Rack details
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
+  const [selectedRackId, setSelectedRackId] = useState<string | null>(null);
 
   // Modal state for Reusable Renewal
   const [selectedReusableAlert, setSelectedReusableAlert] = useState<ReusableAlert | null>(null);
@@ -230,40 +234,6 @@ export default function DashboardPage() {
   useEffect(() => {
     void fetchSummary();
   }, []);
-
-  async function handleMarkServiceDone(alertTarget?: ServiceAlert) {
-    const alertItem = alertTarget || selectedAlert;
-    if (!alertItem) return;
-
-    setMarkingService(true);
-    try {
-      const res = await fetch(`/api/employee-issues/${alertItem.issueId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          itemIndex: alertItem.itemIndex,
-          action: "COMPLETE_SERVICE",
-          serviceNotes: serviceNotes.trim() || undefined,
-        }),
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setSelectedAlert(null);
-        setServiceNotes("");
-        await fetchSummary();
-      } else {
-        setWarningMessage(data.message || "Failed to update service status");
-        setWarningOpen(true);
-      }
-    } catch (error) {
-      console.error("Failed to mark service done:", error);
-      setWarningMessage("Something went wrong");
-      setWarningOpen(true);
-    } finally {
-      setMarkingService(false);
-    }
-  }
 
   async function handleRenewItem() {
     if (!selectedReusableAlert) return;
@@ -332,19 +302,15 @@ export default function DashboardPage() {
     }
   }
 
-  const serviceAlerts = summary?.data?.serviceAlerts || [];
   const reusableAlerts = summary?.data?.reusableAlerts || [];
   const stockAlerts = summary?.data?.stockAlerts || [];
-  const totalAlerts = reusableAlerts.length + stockAlerts.length + serviceAlerts.length;
+  const totalAlerts = reusableAlerts.length + stockAlerts.length;
 
-  const overdueCount =
-    serviceAlerts.filter((a) => a.isOverdue).length +
-    reusableAlerts.filter((a) => a.isOverdue).length;
+  const overdueCount = reusableAlerts.filter((a) => a.isOverdue).length;
 
   type CombinedAlert =
     | { kind: "REUSABLE"; alert: ReusableAlert }
-    | { kind: "STOCK"; alert: StockAlert }
-    | { kind: "SERVICE"; alert: ServiceAlert };
+    | { kind: "STOCK"; alert: StockAlert };
 
   const [visibleAlertsCount, setVisibleAlertsCount] = useState(6);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -358,11 +324,8 @@ export default function DashboardPage() {
     if (alertTab === "ALL" || alertTab === "STOCK") {
       stockAlerts.forEach((s) => list.push({ kind: "STOCK", alert: s }));
     }
-    if (alertTab === "ALL" || alertTab === "SERVICE") {
-      serviceAlerts.forEach((svc) => list.push({ kind: "SERVICE", alert: svc }));
-    }
     return list;
-  }, [alertTab, reusableAlerts, stockAlerts, serviceAlerts]);
+  }, [alertTab, reusableAlerts, stockAlerts]);
 
   // Reset to 6 items when tab changes
   useEffect(() => {
@@ -496,7 +459,7 @@ export default function DashboardPage() {
                   )}
                 </div>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Returnable product returns, low stock warnings, and maintenance intervals requiring action.
+                  Returnable product returns and low stock warnings requiring action.
                 </p>
               </div>
             </div>
@@ -536,17 +499,6 @@ export default function DashboardPage() {
               >
                 <AlertTriangle className="h-3.5 w-3.5" /> Stock Alerts ({stockAlerts.length})
               </button>
-              <button
-                type="button"
-                onClick={() => setAlertTab("SERVICE")}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition whitespace-nowrap ${
-                  alertTab === "SERVICE"
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "bg-white text-slate-600 hover:bg-blue-50 border border-slate-200"
-                }`}
-              >
-                <Wrench className="h-3.5 w-3.5" /> Service ({serviceAlerts.length})
-              </button>
             </div>
           </div>
 
@@ -559,7 +511,7 @@ export default function DashboardPage() {
                 </div>
                 <h3 className="font-bold text-slate-800 text-sm">Everything is running smoothly!</h3>
                 <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                  No returnable items overdue, no stock shortages, and no upcoming service maintenance in the next 30 days.
+                  No returnable items overdue and no stock shortages.
                 </p>
               </div>
             ) : (
@@ -696,11 +648,31 @@ export default function DashboardPage() {
                               </span>
                             </div>
 
-                            <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-x-2 flex-wrap">
-                              <span>
-                                Warehouse: <b className="text-slate-700">{stock.warehouseName}</b>
+                            <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-x-2 flex-wrap">
+                              <span className="inline-flex items-center gap-1">
+                                Warehouse:{" "}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedWarehouseId(stock.warehouseId)}
+                                  className="font-bold text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                                  title="View warehouse details & racks"
+                                >
+                                  <Warehouse className="h-3 w-3 inline" />
+                                  {stock.warehouseName}
+                                </button>
                               </span>
-                              <span>• Rack: <b className="text-slate-700">{stock.rackName}</b></span>
+                              <span className="inline-flex items-center gap-1">
+                                • Rack:{" "}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedRackId(stock.rackId)}
+                                  className="font-bold text-indigo-600 hover:text-indigo-800 hover:underline inline-flex items-center gap-0.5 cursor-pointer"
+                                  title="View rack details & products"
+                                >
+                                  <Box className="h-3 w-3 inline" />
+                                  {stock.rackName}
+                                </button>
+                              </span>
                               <span>• SKU: <b className="text-slate-700">{stock.sku}</b></span>
                               <span className="font-bold text-slate-700">
                                 Qty:{" "}
@@ -712,7 +684,7 @@ export default function DashboardPage() {
                                   {stock.quantity} units
                                 </span>
                               </span>
-                            </p>
+                            </div>
                           </div>
                         </div>
 
@@ -728,78 +700,7 @@ export default function DashboardPage() {
                     );
                   }
 
-                  // SERVICE alert
-                  const alert = item.alert;
-                  const dateObj = new Date(alert.serviceDate);
-                  const formattedDate = dateObj.toLocaleDateString("en-IN", {
-                    day: "2-digit",
-                    month: "short",
-                    year: "numeric",
-                  });
-
-                  return (
-                    <div
-                      key={`service-${alert.issueId}-${alert.itemIndex}-${alert.serviceStage}`}
-                      className={`flex flex-col gap-3 p-3.5 sm:flex-row sm:items-center sm:justify-between transition hover:bg-slate-50/80 ${
-                        alert.isOverdue ? "bg-red-50/20" : ""
-                      }`}
-                    >
-                      <div className="flex items-start gap-3 min-w-0 flex-1">
-                        <div
-                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl font-bold shadow-2xs ${
-                            alert.isOverdue
-                              ? "bg-red-100 text-red-700"
-                              : "bg-blue-100 text-blue-700"
-                          }`}
-                        >
-                          <Wrench className="h-4 w-4" />
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-bold text-slate-800 text-sm truncate">
-                              {alert.productName}
-                            </p>
-                            <span className="rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.2 text-[10px] font-bold text-blue-700">
-                              {alert.serviceStage}
-                            </span>
-                            <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
-                                alert.isOverdue ? "bg-red-600 text-white" : "bg-blue-600 text-white"
-                              }`}
-                            >
-                              {alert.isOverdue
-                                ? `OVERDUE (${Math.abs(alert.daysRemaining)}d)`
-                                : `${alert.daysRemaining} DAYS LEFT`}
-                            </span>
-                          </div>
-
-                          <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-x-2 flex-wrap">
-                            <span>
-                              Holder: <b className="text-slate-700">{alert.employeeName}</b>{" "}
-                              {alert.employeeDepartment ? `(${alert.employeeDepartment})` : ""}
-                            </span>
-                            <span>• SKU: <b className="text-slate-700">{alert.sku}</b></span>
-                            <span>• Due: <b className="text-slate-700">{formattedDate}</b></span>
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 self-end sm:self-center">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedAlert(alert);
-                            setServiceNotes("");
-                          }}
-                          className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-2xs transition hover:bg-blue-700 active:scale-95 flex items-center gap-1"
-                        >
-                          <Wrench className="h-3.5 w-3.5" />
-                          Complete Service
-                        </button>
-                      </div>
-                    </div>
-                  );
+                  return null;
                 })}
 
                 {/* Sentinel for infinite scroll */}
@@ -873,7 +774,20 @@ export default function DashboardPage() {
                         <p className="text-xs text-slate-500">SKU: {item.sku}</p>
                       </td>
                       <td className="px-5 py-3.5 text-slate-600">
-                        {item.rackName} ({item.rackCode})
+                        {item.rackId ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedRackId(item.rackId!)}
+                            className="text-indigo-600 hover:text-indigo-800 hover:underline font-semibold text-xs flex items-center gap-1 cursor-pointer"
+                            title="View rack details & products"
+                          >
+                            <Box className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                            <span>{item.rackName}</span>
+                            <span className="font-mono text-slate-400 font-normal">({item.rackCode})</span>
+                          </button>
+                        ) : (
+                          <span>{item.rackName} ({item.rackCode})</span>
+                        )}
                       </td>
                       <td className="px-5 py-3.5 font-bold text-slate-800">{item.quantity}</td>
                       <td className="px-5 py-3.5">
@@ -891,72 +805,6 @@ export default function DashboardPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
-
-        {/* ─── MODAL: COMPLETE SERVICE ─── */}
-        {selectedAlert && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-                <div className="flex items-center gap-2">
-                  <Wrench className="h-5 w-5 text-blue-600" />
-                  <h3 className="font-bold text-slate-800 text-base">Complete Service Maintenance</h3>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedAlert(null)}
-                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              <div className="mt-4 space-y-3">
-                <div className="rounded-xl bg-blue-50/60 p-3.5 border border-blue-100 text-xs space-y-1">
-                  <p className="font-bold text-slate-800 text-sm">{selectedAlert.productName}</p>
-                  <p className="text-slate-600">
-                    Holder: <b>{selectedAlert.employeeName}</b> ({selectedAlert.employeeDepartment || "-"})
-                  </p>
-                  <p className="text-slate-600">
-                    Cycle: <b>{selectedAlert.serviceStage}</b> • Due Date:{" "}
-                    <b>{new Date(selectedAlert.serviceDate).toLocaleDateString("en-IN")}</b>
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Service Remarks / Maintenance Notes:
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="E.g., Oil change completed, parts replaced, inspected and working normally..."
-                    value={serviceNotes}
-                    onChange={(e) => setServiceNotes(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs outline-none focus:border-blue-500 focus:bg-white"
-                  />
-                </div>
-
-                <div className="flex items-center justify-end gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedAlert(null)}
-                    className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={markingService}
-                    onClick={() => void handleMarkServiceDone()}
-                    className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5"
-                  >
-                    <Check className="h-4 w-4" />
-                    {markingService ? "Saving..." : "Mark Maintenance Complete"}
-                  </button>
-                </div>
-              </div>
             </div>
           </div>
         )}
@@ -1057,6 +905,18 @@ export default function DashboardPage() {
             </div>
           </div>
         )}
+
+        {/* ─── INSPECTION MODALS FOR WAREHOUSE & RACK ─── */}
+        <WarehouseDetailsModal
+          warehouseId={selectedWarehouseId}
+          onClose={() => setSelectedWarehouseId(null)}
+          onSelectRack={(rackId) => setSelectedRackId(rackId)}
+        />
+        <RackDetailsModal
+          rackId={selectedRackId}
+          onClose={() => setSelectedRackId(null)}
+          onSelectWarehouse={(whId) => setSelectedWarehouseId(whId)}
+        />
 
         <WarningPopup
           open={warningOpen}

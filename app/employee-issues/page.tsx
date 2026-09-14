@@ -5,7 +5,6 @@ import Link from "next/link";
 import { PackageCheck, Search, Trash2, X, Wrench, RotateCcw, Box, Eye, Receipt, ExternalLink, History } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
-import ServiceCycleBadge from "@/app/components/ServiceCycleBadge";
 import WarningPopup from "@/app/components/WarningPopup";
 import IssueBillModal, { IssueBillData } from "@/app/components/IssueBillModal";
 import ProductHistoryModal from "@/app/components/ProductHistoryModal";
@@ -839,70 +838,20 @@ export default function EmployeeIssuesPage() {
                 </div>
               )}
 
-              {/* Service Interval & Warranty */}
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 pt-1">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                    Service Interval (Recurring Cycle) *
-                  </label>
-                  <select
-                    value={itemServiceInterval}
-                    onChange={(e) => updateItemServiceInterval(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 font-medium text-slate-800"
-                  >
-                    {SERVICE_INTERVAL_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                    <option value={CUSTOM_INTERVAL_VALUE}>Custom Months...</option>
-                  </select>
-                </div>
-
-                {itemServiceInterval === CUSTOM_INTERVAL_VALUE && (
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                      Enter Custom Months
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      placeholder="e.g. 2, 4, 9..."
-                      value={customInterval}
-                      onChange={(e) => updateCustomInterval(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500"
-                    />
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                    Initial Status
-                  </label>
-                  <select
-                    value={itemHoldingStatus}
-                    onChange={(e) => setItemHoldingStatus(e.target.value as HoldingStatus)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 font-medium text-slate-800"
-                  >
-                    <option value="ACTIVE">ACTIVE (In Active Use / Working)</option>
-                    <option value="INACTIVE">INACTIVE (Not Working / Idle)</option>
-                    <option value="UNDER_SERVICE">UNDER SERVICE (In Repair)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
-                    Warranty (Months)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="e.g. 12"
-                    value={itemWarrantyMonths}
-                    onChange={(e) => setItemWarrantyMonths(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500"
-                  />
-                </div>
+              {/* Initial Status */}
+              <div className="pt-1 max-w-xs">
+                <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+                  Initial Status
+                </label>
+                <select
+                  value={itemHoldingStatus}
+                  onChange={(e) => setItemHoldingStatus(e.target.value as HoldingStatus)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 font-medium text-slate-800"
+                >
+                  <option value="ACTIVE">ACTIVE (In Active Use / Working)</option>
+                  <option value="INACTIVE">INACTIVE (Not Working / Idle)</option>
+                  <option value="UNDER_SERVICE">UNDER SERVICE (In Repair)</option>
+                </select>
               </div>
 
               <div className="flex justify-end pt-1">
@@ -926,7 +875,6 @@ export default function EmployeeIssuesPage() {
                       <th className="px-4 py-2.5">Type & Return Due</th>
                       <th className="px-4 py-2.5">Serial No</th>
                       <th className="px-4 py-2.5">Qty</th>
-                      <th className="px-4 py-2.5">Service Interval</th>
                       <th className="px-4 py-2.5">Status</th>
                       <th className="px-4 py-2.5 text-center">Action</th>
                     </tr>
@@ -951,9 +899,6 @@ export default function EmployeeIssuesPage() {
                         </td>
                         <td className="px-4 py-2.5 text-slate-600">{item.serialNumber || "-"}</td>
                         <td className="px-4 py-2.5 font-bold text-slate-800">{item.quantity}</td>
-                        <td className="px-4 py-2.5 text-slate-700 font-semibold">
-                          {formatServiceInterval(item.serviceIntervalMonths)}
-                        </td>
                         <td className="px-4 py-2.5">
                           <span
                             className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
@@ -1206,7 +1151,6 @@ export default function EmployeeIssuesPage() {
                     <th className="px-5 py-3">Product & Type</th>
                     <th className="px-5 py-3 text-center">Status</th>
                     <th className="px-5 py-3">Return / Renew Due</th>
-                    <th className="px-5 py-3">Service Cycle</th>
                     <th className="px-5 py-3 text-center">Actions</th>
                   </tr>
                 </thead>
@@ -1322,25 +1266,8 @@ export default function EmployeeIssuesPage() {
                           )}
                         </td>
 
-                        <td className="px-5 py-3.5">
-                          <ServiceCycleBadge
-                            intervalMonths={item.serviceIntervalMonths}
-                            lastServiceDate={item.lastServiceDate}
-                            issuedAt={issue.createdAt}
-                            hideDueDate={item.holdingStatus === "RETURNED"}
-                          />
-                        </td>
-
                         <td className="px-5 py-3.5 text-center">
                           <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => openServiceModal(issue, itemIndex)}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-blue-600 hover:bg-blue-50 transition shadow-2xs active:scale-95"
-                              title="Update Asset & Manage Service"
-                            >
-                              <Wrench className="h-4 w-4" />
-                            </button>
                             <button
                               type="button"
                               onClick={() => openBill(issue)}
@@ -1425,30 +1352,13 @@ export default function EmployeeIssuesPage() {
                       <p>
                         Issue #{issue.issueNumber} • Qty: <b>{item.quantity}</b> {item.serialNumber && `• SN: ${item.serialNumber}`}
                       </p>
-                      <ServiceCycleBadge
-                        intervalMonths={item.serviceIntervalMonths}
-                        lastServiceDate={item.lastServiceDate}
-                        issuedAt={issue.createdAt}
-                        hideDueDate={item.holdingStatus === "RETURNED"}
-                      />
-                      <p>
-                        Services completed: <b>{item.serviceCount || 0} times</b>
-                      </p>
                     </div>
 
-                    <div className="pt-1 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => openServiceModal(issue, itemIndex)}
-                        className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
-                        title="Update Asset & Manage Service"
-                      >
-                        <Wrench className="h-4 w-4" /> Update
-                      </button>
+                    <div className="pt-1 flex items-center">
                       <button
                         type="button"
                         onClick={() => openBill(issue)}
-                        className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
+                        className="w-full rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
                         title="View Bill / Issue Voucher"
                       >
                         <Eye className="h-4 w-4" /> View Bill

@@ -242,7 +242,7 @@ export default function EmployeeHistoryModal({
         {!loading && data && (
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
             {/* Top Stat Badges Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="rounded-xl border border-slate-200 bg-blue-50/40 p-3 shadow-2xs">
                 <p className="text-[11px] font-semibold text-blue-700 uppercase">Active Units Held</p>
                 <p className="text-xl font-extrabold text-blue-800 mt-1">
@@ -263,25 +263,13 @@ export default function EmployeeHistoryModal({
                 </p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-indigo-50/40 p-3 shadow-2xs">
-                <p className="text-[11px] font-semibold text-indigo-700 uppercase">Active Valuation</p>
-                <p className="text-xl font-extrabold text-indigo-800 mt-1">
-                  {data.summary.totalActiveValue > 0
-                    ? `₹${data.summary.totalActiveValue.toLocaleString("en-IN")}`
-                    : "N/A"}
-                </p>
-                <p className="text-[10px] text-indigo-600 mt-0.5">
-                  Equipment value in custody
-                </p>
-              </div>
-
               <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-2xs">
                 <p className="text-[11px] font-semibold text-slate-600 uppercase">Total Issue Slips</p>
                 <p className="text-xl font-extrabold text-slate-800 mt-1">
                   {data.summary.totalIssuesCount} <span className="text-xs font-normal text-slate-500">vouchers</span>
                 </p>
                 <p className="text-[10px] text-slate-500 mt-0.5">
-                  {data.summary.servicesCompletedCount} maintenance events
+                  Recorded custody slips
                 </p>
               </div>
             </div>
@@ -326,19 +314,6 @@ export default function EmployeeHistoryModal({
                 <Receipt className="h-3.5 w-3.5" />
                 Issue Vouchers & Bills ({data.issueSlips.length})
               </button>
-
-              <button
-                type="button"
-                onClick={() => setActiveTab("SERVICES")}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition whitespace-nowrap ${
-                  activeTab === "SERVICES"
-                    ? "bg-blue-600 text-white shadow-xs"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                <Wrench className="h-3.5 w-3.5" />
-                Maintenance Log ({data.serviceHistory.length})
-              </button>
             </div>
 
             {/* TAB 1: ACTIVE ASSETS HELD */}
@@ -357,7 +332,6 @@ export default function EmployeeHistoryModal({
                           <th className="p-3">Quantity & SN</th>
                           <th className="p-3">Location</th>
                           <th className="p-3">Return Status</th>
-                          <th className="p-3">Maintenance Cycle</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
@@ -414,22 +388,6 @@ export default function EmployeeHistoryModal({
                                 </div>
                               ) : (
                                 <span className="text-slate-400 text-[11px]">Standard Issue</span>
-                              )}
-                            </td>
-                            <td className="p-3">
-                              {asset.serviceIntervalMonths ? (
-                                <div>
-                                  <span className="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
-                                    {asset.serviceStage || `${asset.serviceIntervalMonths}m cycle`}
-                                  </span>
-                                  {asset.serviceCount != null && asset.serviceCount > 0 && (
-                                    <p className="text-[10px] text-slate-500 mt-0.5">
-                                      Done: {asset.serviceCount}x
-                                    </p>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-slate-400 text-[11px]">-</span>
                               )}
                             </td>
                           </tr>
@@ -556,48 +514,6 @@ export default function EmployeeHistoryModal({
                           >
                             <Receipt className="h-3.5 w-3.5" /> View Slip / Bill
                           </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* TAB 4: MAINTENANCE LOG */}
-            {activeTab === "SERVICES" && (
-              <div className="space-y-3">
-                {data.serviceHistory.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-400 border border-dashed rounded-xl">
-                    No completed service records found for this employee.
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {data.serviceHistory.map((s, idx) => (
-                      <div
-                        key={`${s.issueId}-${idx}`}
-                        className="rounded-xl border border-slate-200 bg-slate-50/50 p-3.5 text-xs flex items-center justify-between"
-                      >
-                        <div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-bold text-slate-800">{s.productName}</span>
-                            <span className="rounded bg-blue-100 text-blue-800 px-1.5 py-0.2 text-[10px] font-bold">
-                              Service #{s.serviceNumber}
-                            </span>
-                            <span className="text-slate-500 text-[11px]">
-                              {new Date(s.completedAt).toLocaleDateString("en-IN")}
-                            </span>
-                          </div>
-                          {s.notes && (
-                            <p className="text-slate-600 mt-1 italic">
-                              Remarks: {s.notes}
-                            </p>
-                          )}
-                        </div>
-                        {s.performedBy && (
-                          <span className="text-slate-500 text-[11px] shrink-0">
-                            By: {s.performedBy}
-                          </span>
                         )}
                       </div>
                     ))}

@@ -22,13 +22,10 @@ import {
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
-import ServiceCycleBadge from "@/app/components/ServiceCycleBadge";
 import WarningPopup from "@/app/components/WarningPopup";
 import IssueBillModal, { IssueBillData } from "@/app/components/IssueBillModal";
 import ProductHistoryModal from "@/app/components/ProductHistoryModal";
 import EmployeeHistoryModal from "@/app/components/EmployeeHistoryModal";
-import ServiceCycleModal from "@/app/employee-issues/ServiceCycleModal";
-import { formatServiceInterval } from "@/lib/serviceCycle";
 import {
   reasonLabels,
   type Employee,
@@ -57,10 +54,6 @@ export default function AssetHistoryPage() {
   const [pageSize, setPageSize] = useState(15);
 
   // Modals
-  const [activeModalIssue, setActiveModalIssue] = useState<{
-    issueId: string;
-    itemIndex: number;
-  } | null>(null);
   const [billIssue, setBillIssue] = useState<IssueBillData | null>(null);
   const [historyProductId, setHistoryProductId] = useState<string | null>(null);
   const [historyEmployee, setHistoryEmployee] = useState<string | null>(null);
@@ -231,13 +224,6 @@ export default function AssetHistoryPage() {
     const start = (page - 1) * pageSize;
     return filteredRecords.slice(start, start + pageSize);
   }, [filteredRecords, page, pageSize]);
-
-  const activeModalData = useMemo(() => {
-    if (!activeModalIssue) return null;
-    const issue = issues.find((item) => item._id === activeModalIssue.issueId);
-    if (!issue || !issue.items[activeModalIssue.itemIndex]) return null;
-    return { issue, itemIndex: activeModalIssue.itemIndex };
-  }, [activeModalIssue, issues]);
 
   function openBill(issue: EmployeeIssue) {
     const emp = employees.find(
@@ -488,7 +474,7 @@ export default function AssetHistoryPage() {
                   <th className="px-4 py-3">Issue Slip</th>
                   <th className="px-4 py-3">Location & Serial</th>
                   <th className="px-4 py-3">Issued Date</th>
-                  <th className="px-4 py-3">Return Due / Cycle</th>
+                  <th className="px-4 py-3">Return Due</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right print:hidden">Actions</th>
                 </tr>
@@ -624,13 +610,6 @@ export default function AssetHistoryPage() {
                                 </span>
                               )}
                             </div>
-                          ) : item.serviceIntervalMonths ? (
-                            <ServiceCycleBadge
-                              intervalMonths={item.serviceIntervalMonths}
-                              lastServiceDate={item.lastServiceDate}
-                              issuedAt={issue.createdAt}
-                              hideDueDate={item.holdingStatus === "RETURNED"}
-                            />
                           ) : (
                             <span className="text-[10px] text-slate-400">Standard Issue</span>
                           )}
@@ -654,20 +633,6 @@ export default function AssetHistoryPage() {
                         {/* Actions */}
                         <td className="px-4 py-3 text-right print:hidden">
                           <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setActiveModalIssue({
-                                  issueId: issue._id,
-                                  itemIndex,
-                                })
-                              }
-                              className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 transition"
-                              title="Manage Maintenance, Service or Return"
-                            >
-                              <Wrench className="h-3 w-3 inline mr-1 text-slate-500" />
-                              Manage
-                            </button>
                             <button
                               type="button"
                               onClick={() => openBill(issue)}
@@ -700,19 +665,6 @@ export default function AssetHistoryPage() {
           )}
         </div>
       </div>
-
-      {/* Service / Custody Cycle Modal */}
-      {activeModalData && (
-        <ServiceCycleModal
-          issue={activeModalData.issue}
-          itemIndex={activeModalData.itemIndex}
-          onClose={() => setActiveModalIssue(null)}
-          onUpdated={() => {
-            void fetchData();
-            setActiveModalIssue(null);
-          }}
-        />
-      )}
 
       {/* Issue Bill Modal */}
       {billIssue && (

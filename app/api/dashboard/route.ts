@@ -387,6 +387,10 @@ export async function GET() {
             typeof item.productId === "object" && item.productId && "sku" in item.productId
               ? item.productId.sku
               : "-",
+          rackId:
+            typeof item.rackId === "object" && item.rackId && "_id" in item.rackId
+              ? String((item.rackId as { _id: unknown })._id)
+              : String(item.rackId),
           rackName:
             typeof item.rackId === "object" && item.rackId && "name" in item.rackId
               ? item.rackId.name
@@ -401,8 +405,7 @@ export async function GET() {
         serviceAlerts,
         reusableAlerts,
         stockAlerts,
-        totalAlertCount:
-          serviceAlerts.length + reusableAlerts.length + stockAlerts.length,
+        totalAlertCount: reusableAlerts.length + stockAlerts.length,
       },
     });
   } catch (error) {

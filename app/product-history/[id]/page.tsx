@@ -482,20 +482,6 @@ export default function ProductDetailPage({
                           <span>Unit Price: <b className="text-slate-800">₹{data.product.price.toLocaleString("en-IN")}</b></span>
                         </div>
                       )}
-
-                      {data.product.warrantyMonths ? (
-                        <div className="flex items-center gap-1">
-                          <ShieldCheck className="h-3.5 w-3.5 text-blue-500" />
-                          <span>Warranty: <b>{data.product.warrantyMonths} months</b></span>
-                        </div>
-                      ) : null}
-
-                      {data.product.serviceIntervalMonths ? (
-                        <div className="flex items-center gap-1">
-                          <Wrench className="h-3.5 w-3.5 text-amber-500" />
-                          <span>Service Cycle: <b>Every {data.product.serviceIntervalMonths}m</b></span>
-                        </div>
-                      ) : null}
                     </div>
                   </div>
                 </div>

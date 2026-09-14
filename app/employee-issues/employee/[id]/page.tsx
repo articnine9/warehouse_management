@@ -628,29 +628,11 @@ export default function EmployeeDetailPage({
                     </div>
                   </div>
                 </div>
-
-                {/* Right Hero Badge: Asset Value in Custody */}
-                <div className="rounded-xl border border-blue-200/80 bg-white p-4 shadow-xs flex items-center gap-4 min-w-[220px]">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-                    <ShieldCheck className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">
-                      Current Custody Value
-                    </span>
-                    <span className="text-xl font-extrabold text-blue-700">
-                      ₹{data.summary.totalActiveValue.toLocaleString("en-IN")}
-                    </span>
-                    <span className="text-[11px] text-slate-500 block">
-                      Across {data.summary.activeUnitsCount} active units
-                    </span>
-                  </div>
-                </div>
               </div>
             </div>
 
             {/* ─── SUMMARY KPI METRICS STRIP ─── */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
               <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
                 <span className="text-[10px] font-bold uppercase text-slate-400 block">
                   Total Taken Ever
@@ -712,17 +694,6 @@ export default function EmployeeDetailPage({
                 <span className="text-[11px] opacity-80">
                   {data.summary.overdueCount > 0 ? "Requires return/renewal" : "All returns on time"}
                 </span>
-              </div>
-
-              <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
-                <span className="text-[10px] font-bold uppercase text-slate-400 block">
-                  Services Done
-                </span>
-                <p className="text-xl font-black text-slate-800 mt-0.5">
-                  {data.summary.servicesCompletedCount}{" "}
-                  <span className="text-xs font-semibold text-slate-500">cycles</span>
-                </p>
-                <span className="text-[11px] text-slate-400">Maintenance completed</span>
               </div>
             </div>
 
@@ -791,22 +762,6 @@ export default function EmployeeDetailPage({
                   Issue Vouchers / Slips
                   <span className="ml-1 rounded-full bg-slate-200 px-2 py-0.2 text-[10px] font-extrabold text-slate-700">
                     {data.issueSlips.length}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("SERVICES")}
-                  className={`rounded-xl px-4 py-2 text-xs font-bold transition flex items-center gap-1.5 ${
-                    activeTab === "SERVICES"
-                      ? "bg-white text-blue-700 shadow-xs border border-slate-200"
-                      : "text-slate-600 hover:text-slate-900"
-                  }`}
-                >
-                  <Wrench className="h-3.5 w-3.5 text-amber-600" />
-                  Service Records
-                  <span className="ml-1 rounded-full bg-amber-100 px-2 py-0.2 text-[10px] font-extrabold text-amber-800">
-                    {data.serviceHistory.length}
                   </span>
                 </button>
               </div>
@@ -898,14 +853,13 @@ export default function EmployeeDetailPage({
                         <th className="px-5 py-3">Location & Serial</th>
                         <th className="px-5 py-3">Qty & Value</th>
                         <th className="px-5 py-3">Return Due / Overdue</th>
-                        <th className="px-5 py-3">Service Cycle</th>
                         <th className="px-5 py-3 text-center">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {filteredActiveAssets.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="p-8 text-center text-slate-400">
+                          <td colSpan={6} className="p-8 text-center text-slate-400">
                             No active items currently held in custody.
                           </td>
                         </tr>
@@ -1001,14 +955,6 @@ export default function EmployeeDetailPage({
                                 ) : (
                                   <span className="text-slate-400">Standard / Permanent</span>
                                 )}
-                              </td>
-
-                              <td className="px-5 py-3.5">
-                                <ServiceCycleBadge
-                                  intervalMonths={item.serviceIntervalMonths}
-                                  lastServiceDate={item.lastServiceDate ? new Date(item.lastServiceDate) : undefined}
-                                  issuedAt={item.issuedAt}
-                                />
                               </td>
 
                               <td className="px-5 py-3.5 text-center">
@@ -1316,60 +1262,7 @@ export default function EmployeeDetailPage({
                 </div>
               )}
 
-              {/* ─── TAB 5: SERVICE RECORDS ─── */}
-              {activeTab === "SERVICES" && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs">
-                    <thead className="bg-slate-50 text-[11px] font-semibold uppercase text-slate-500 border-b border-slate-200">
-                      <tr>
-                        <th className="px-5 py-3">Product Name & SKU</th>
-                        <th className="px-5 py-3">Service #</th>
-                        <th className="px-5 py-3">Completed Date</th>
-                        <th className="px-5 py-3">Technician / Performed By</th>
-                        <th className="px-5 py-3">Notes & Observations</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {filteredServices.length === 0 ? (
-                        <tr>
-                          <td colSpan={5} className="p-8 text-center text-slate-400">
-                            No service maintenance history recorded for items held by this employee.
-                          </td>
-                        </tr>
-                      ) : (
-                        (paginatedItems.rows as typeof filteredServices).map((srv, idx) => (
-                          <tr key={`srv-${idx}`} className="hover:bg-slate-50/70 transition">
-                            <td className="px-5 py-3.5">
-                              <span className="font-bold text-slate-800">{srv.productName}</span>
-                              <span className="text-[11px] text-slate-400 block">
-                                SKU: {srv.sku} {srv.serialNumber && `• SN: ${srv.serialNumber}`}
-                              </span>
-                            </td>
-                            <td className="px-5 py-3.5">
-                              <span className="rounded-full bg-amber-100 text-amber-800 font-bold px-2 py-0.5 text-[10px]">
-                                Service #{srv.serviceNumber}
-                              </span>
-                            </td>
-                            <td className="px-5 py-3.5 text-slate-700">
-                              {new Date(srv.completedAt).toLocaleDateString("en-IN", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                            </td>
-                            <td className="px-5 py-3.5 font-medium text-slate-700">
-                              {srv.performedBy || "Authorized Service Partner"}
-                            </td>
-                            <td className="px-5 py-3.5 text-slate-600">
-                              {srv.notes || "Periodic preventative maintenance completed successfully."}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+
 
               {/* Pagination */}
               {paginatedItems.total > 0 && (

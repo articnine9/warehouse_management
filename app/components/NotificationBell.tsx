@@ -266,7 +266,7 @@ export default function NotificationBell() {
     }
   }
 
-  const totalCount = serviceAlerts.length + reusableAlerts.length + stockAlerts.length;
+  const totalCount = reusableAlerts.length + stockAlerts.length;
 
   return (
     <div ref={dropdownRef} className="relative inline-block">
@@ -358,17 +358,6 @@ export default function NotificationBell() {
                 }`}
               >
                 Stock ({stockAlerts.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab("SERVICE")}
-                className={`rounded-lg px-2.5 py-1 font-semibold transition shrink-0 ${
-                  activeTab === "SERVICE"
-                    ? "bg-blue-600 text-white"
-                    : "text-blue-700 hover:bg-blue-50"
-                }`}
-              >
-                Service ({serviceAlerts.length})
               </button>
             </div>
 
@@ -493,54 +482,6 @@ export default function NotificationBell() {
                       >
                         Restock Inventory →
                       </Link>
-                    </div>
-                  </div>
-                ))}
-
-              {/* 3. Service Maintenance Alerts */}
-              {(activeTab === "ALL" || activeTab === "SERVICE") &&
-                serviceAlerts.map((alert, idx) => (
-                  <div
-                    key={`service-${alert.issueId}-${alert.itemIndex}-${idx}`}
-                    onClick={() => setSelectedServiceAlert(alert)}
-                    className={`cursor-pointer rounded-xl p-3 border transition hover:shadow-xs ${
-                      alert.isOverdue
-                        ? "bg-red-50/70 border-red-200 hover:bg-red-50"
-                        : "bg-blue-50/70 border-blue-200 hover:bg-blue-50"
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-1">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="rounded-md bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold text-white uppercase">
-                            Service Due
-                          </span>
-                          <span className="font-bold text-slate-800 text-xs truncate">
-                            {alert.productName}
-                          </span>
-                        </div>
-                        <p className="text-[11px] text-slate-600 mt-1">
-                          Holder: <b>{alert.employeeName}</b> ({alert.employeeDepartment})
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
-                          alert.isOverdue
-                            ? "bg-red-600 text-white"
-                            : "bg-blue-600 text-white"
-                        }`}
-                      >
-                        {alert.isOverdue ? "OVERDUE" : "DUE SOON"}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 mt-1.5 pt-1.5 border-t border-slate-200/40">
-                      <span className="font-semibold text-slate-700">{alert.serviceStage}</span>
-                      <span>
-                        {alert.isOverdue
-                          ? `Overdue by ${Math.abs(alert.daysRemaining)}d`
-                          : `${alert.daysRemaining} days left`}
-                      </span>
                     </div>
                   </div>
                 ))}

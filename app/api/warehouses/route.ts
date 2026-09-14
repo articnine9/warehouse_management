@@ -2,7 +2,10 @@ import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
 import Warehouse from "@/models/Warehouse";
 import Inventory from "@/models/Inventory";
-
+import Rack from "@/models/Rack";
+import StockMovement from "@/models/StockMovement";
+import Invoice from "@/models/Invoice";
+import EmployeeIssue from "@/models/EmployeeIssue";
 
 export async function GET() {
   try {
@@ -14,19 +17,54 @@ export async function GET() {
 
     const warehouseIds = warehouses.map((w) => w._id);
 
-    const productCounts = await Inventory.aggregate([
-      { $match: { warehouseId: { $in: warehouseIds } } },
-      { $group: { _id: "$warehouseId", productCount: { $sum: 1 } } },
+    const [productCounts, rackCounts] = await Promise.all([
+      Inventory.aggregate([
+        { $match: { warehouseId: { $in: warehouseIds } } },
+        { $group: { _id: "$warehouseId", productCount: { $sum: 1 }, totalUnits: { $sum: "$quantity" } } },
+      ]),
+      Rack.aggregate([
+        { $match: { warehouseId: { $in: warehouseIds } } },
+        { $group: { _id: "$warehouseId", rackCount: { $sum: 1 } } },
+      ]),
     ]);
 
     const countMap = new Map(
-      productCounts.map((item) => [item._id.toString(), item.productCount])
+      productCounts.map((item) => [
+        item._id.toString(),
+        { productCount: item.productCount, totalUnits: item.totalUnits },
+      ])
+    );
+    const rackCountMap = new Map(
+      rackCounts.map((item) => [item._id.toString(), item.rackCount])
     );
 
-    const data = warehouses.map((w) => ({
-      ...w.toObject(),
-      productCount: countMap.get(w._id.toString()) || 0,
-    }));
+    const data = warehouses.map((w) => {
+      const invStats = countMap.get(w._id.toString());
+      return {
+        ...w.toObject(),
+        productCount: invStats?.productCount || 0,
+        totalUnits: invStats?.totalUnits || 0,
+        rackCount: rackCountMap.get(w._id.toString()) || 0,
+      };
+    });
+
+    // Auto-sync warehouse names in background for any renamed warehouse
+    for (const w of warehouses) {
+      void StockMovement.updateMany(
+        { warehouseId: w._id, warehouseName: { $ne: w.name } },
+        { $set: { warehouseName: w.name } }
+      ).exec();
+      void Invoice.updateMany(
+        { "items.warehouseId": w._id, "items.warehouseName": { $ne: w.name } },
+        { $set: { "items.$[elem].warehouseName": w.name } },
+        { arrayFilters: [{ "elem.warehouseId": w._id, "elem.warehouseName": { $ne: w.name } }] }
+      ).exec();
+      void EmployeeIssue.updateMany(
+        { "items.warehouseId": w._id, "items.warehouseName": { $ne: w.name } },
+        { $set: { "items.$[elem].warehouseName": w.name } },
+        { arrayFilters: [{ "elem.warehouseId": w._id, "elem.warehouseName": { $ne: w.name } }] }
+      ).exec();
+    }
 
     return Response.json({
       success: true,

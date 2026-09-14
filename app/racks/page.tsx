@@ -1,11 +1,13 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { Tag } from "lucide-react";
+import { Tag, Box, Eye, Warehouse as WarehouseIcon } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
+import WarehouseDetailsModal from "@/app/components/WarehouseDetailsModal";
+import RackDetailsModal from "@/app/components/RackDetailsModal";
 
 type Warehouse = {
   _id: string;
@@ -35,6 +37,10 @@ export default function RacksPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+
+  // Modal inspection state
+  const [selectedRackId, setSelectedRackId] = useState<string | null>(null);
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -307,46 +313,97 @@ export default function RacksPage() {
                     <th className="px-5 py-3">Rack Name</th>
                     <th className="px-5 py-3">Code</th>
                     <th className="px-5 py-3">Warehouse</th>
-                    <th className="px-5 py-3">Products</th>
+                    <th className="px-5 py-3">Stored Products</th>
                     <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">Actions</th>
+                    <th className="px-5 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedRacks.map((rack) => (
-                    <tr key={rack._id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                      <td className="px-5 py-3 font-medium text-slate-800">{rack.name}</td>
-                      <td className="px-5 py-3 text-slate-600">{rack.code}</td>
-                      <td className="px-5 py-3 text-slate-500">
-                        {rack.warehouseId?.name || "-"} ({rack.warehouseId?.code || "-"})
+                    <tr
+                      key={rack._id}
+                      onClick={() => setSelectedRackId(rack._id)}
+                      className="border-t border-slate-100 hover:bg-indigo-50/40 transition cursor-pointer"
+                    >
+                      <td className="px-5 py-3 font-medium text-slate-800">
+                        <div className="font-bold text-blue-600 hover:text-blue-800 flex items-center gap-1.5 group">
+                          <Box className="h-4 w-4 text-indigo-500 shrink-0 group-hover:scale-110 transition" />
+                          <span>{rack.name}</span>
+                        </div>
                       </td>
                       <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                          <Tag className="h-3 w-3" /> {rack.productCount ?? 0}
+                        <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                          {rack.code}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3">
+                        {rack.warehouseId?._id ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedWarehouseId(rack.warehouseId._id);
+                            }}
+                            className="text-blue-600 hover:text-blue-800 hover:underline font-semibold text-xs flex items-center gap-1 cursor-pointer"
+                            title="Click to view this warehouse details & all its racks"
+                          >
+                            <WarehouseIcon className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+                            <span>{rack.warehouseId.name}</span>
+                            <span className="font-mono text-slate-400 font-normal">({rack.warehouseId.code})</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700"
+                          title="Products stored in this rack"
+                        >
+                          <Tag className="h-3 w-3" /> {rack.productCount ?? 0} Products
                         </span>
                       </td>
                       <td className="px-5 py-3">
                         <span
-                          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                          className={`rounded-full px-2.5 py-1 text-xs font-bold ${
                             rack.status === "ACTIVE"
-                              ? "bg-emerald-50 text-emerald-700"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                               : "bg-slate-100 text-slate-600"
                           }`}
                         >
                           {rack.status}
                         </span>
                       </td>
-                      <td className="px-5 py-3">
-                        <div className="flex gap-2">
+                      <td className="px-5 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={() => openEdit(rack)}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedRackId(rack._id);
+                            }}
+                            className="rounded-lg border border-blue-200 bg-blue-50/50 px-2.5 py-1 text-xs font-bold text-blue-700 hover:bg-blue-100 transition flex items-center gap-1 cursor-pointer"
+                            title="View Rack Details & Products"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> Details
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEdit(rack);
+                            }}
+                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 cursor-pointer"
                           >
                             Edit
                           </button>
                           <button
-                            onClick={() => setDeleteId(rack._id)}
-                            className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteId(rack._id);
+                            }}
+                            className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 cursor-pointer"
                           >
                             Delete
                           </button>
@@ -363,37 +420,73 @@ export default function RacksPage() {
           {!fetching && paginatedRacks.length > 0 && (
             <div className="space-y-3 p-4 md:hidden">
               {paginatedRacks.map((rack) => (
-                <div key={rack._id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
+                <div
+                  key={rack._id}
+                  onClick={() => setSelectedRackId(rack._id)}
+                  className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-2 cursor-pointer hover:border-indigo-300 transition"
+                >
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="font-semibold text-slate-800">{rack.name}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{rack.code}</p>
+                      <div className="font-bold text-blue-600 text-sm">
+                        {rack.name}
+                      </div>
+                      <p className="mt-0.5 text-xs text-slate-500 font-mono font-semibold">{rack.code}</p>
                     </div>
                     <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${
                         rack.status === "ACTIVE"
-                          ? "bg-emerald-50 text-emerald-700"
+                          ? "bg-emerald-100 text-emerald-800"
                           : "bg-slate-100 text-slate-600"
                       }`}
                     >
                       {rack.status}
                     </span>
                   </div>
-                  <p className="mt-2 text-xs text-slate-500">
-                    Warehouse: {rack.warehouseId?.name || "-"} ({rack.warehouseId?.code || "-"})
-                  </p>
-                  <div className="mt-1 flex items-center gap-1 text-xs text-slate-600">
-                    <Tag className="h-3 w-3" /> Products: {rack.productCount ?? 0}
-                  </div>
-                  <div className="mt-3 flex gap-2">
+                  {rack.warehouseId && (
                     <button
-                      onClick={() => openEdit(rack)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedWarehouseId(rack.warehouseId._id);
+                      }}
+                      className="text-xs text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <WarehouseIcon className="h-3 w-3 text-slate-400" />
+                      <span>{rack.warehouseId.name} ({rack.warehouseId.code})</span>
+                    </button>
+                  )}
+                  <div className="pt-1">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-blue-700">
+                      <Tag className="h-3 w-3" /> {rack.productCount ?? 0} Products
+                    </span>
+                  </div>
+                  <div className="mt-3 flex gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedRackId(rack._id);
+                      }}
+                      className="flex-1 rounded-lg border border-blue-200 bg-blue-50/60 px-3 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition flex items-center justify-center gap-1"
+                    >
+                      <Eye className="h-3.5 w-3.5" /> Details
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openEdit(rack);
+                      }}
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                     >
                       Edit
                     </button>
                     <button
-                      onClick={() => setDeleteId(rack._id)}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteId(rack._id);
+                      }}
                       className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
                     >
                       Delete
@@ -523,6 +616,30 @@ export default function RacksPage() {
           </div>
         )}
       </div>
+
+      {/* Rack Details Inspection Modal */}
+      <RackDetailsModal
+        rackId={selectedRackId}
+        onClose={() => setSelectedRackId(null)}
+        onEditRack={(r) => {
+          setSelectedRackId(null);
+          openEdit(r as Rack);
+        }}
+        onSelectWarehouse={(whId) => {
+          setSelectedRackId(null);
+          setSelectedWarehouseId(whId);
+        }}
+      />
+
+      {/* Warehouse Details Inspection Modal */}
+      <WarehouseDetailsModal
+        warehouseId={selectedWarehouseId}
+        onClose={() => setSelectedWarehouseId(null)}
+        onSelectRack={(rkId) => {
+          setSelectedWarehouseId(null);
+          setSelectedRackId(rkId);
+        }}
+      />
 
       <WarningPopup
         open={warningOpen}
