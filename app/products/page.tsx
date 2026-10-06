@@ -1,16 +1,26 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { FolderTree, History, RotateCcw, Box } from "lucide-react";
+import { FolderTree, History, RotateCcw, Box, Warehouse as WarehouseIcon, Plus } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
 import Link from "next/link";
 import WarningPopup from "@/app/components/WarningPopup";
+import AddProductModal from "@/app/components/AddProductModal";
+import AddCategoryModal from "@/app/components/AddCategoryModal";
 import {
   CUSTOM_INTERVAL_VALUE,
   normalizeIntervalMonths,
 } from "@/lib/serviceCycle";
+
+type ProductLocation = {
+  warehouseId: string;
+  warehouseName: string;
+  rackId: string;
+  rackName: string;
+  quantity: number;
+};
 
 type Product = {
   _id: string;
@@ -26,6 +36,8 @@ type Product = {
   price?: number;
   description?: string;
   status: "ACTIVE" | "INACTIVE";
+  totalStock?: number;
+  locations?: ProductLocation[];
   createdAt?: string;
   updatedAt?: string;
 };
@@ -36,31 +48,33 @@ type Category = {
   code: string;
 };
 
+type Warehouse = {
+  _id: string;
+  name: string;
+  code: string;
+};
+
+type Rack = {
+  _id: string;
+  name: string;
+  code: string;
+  warehouseId: string | { _id: string; name: string; code: string };
+};
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [racks, setRacks] = useState<Rack[]>([]);
+
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("ALL");
   const [selectedTypeFilter, setSelectedTypeFilter] = useState<"ALL" | "REUSABLE" | "NON_REUSABLE">("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [addLoading, setAddLoading] = useState(false);
-
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-
-  const [name, setName] = useState("");
-  const [sku, setSku] = useState("");
-  const [category, setCategory] = useState("");
-  const [productType, setProductType] = useState<"NON_REUSABLE" | "REUSABLE">("NON_REUSABLE");
-  const [returnDays, setReturnDays] = useState("30");
-  const [serviceInterval, setServiceInterval] = useState("3");
-  const [customServiceInterval, setCustomServiceInterval] = useState("");
-  const [warrantyMonths, setWarrantyMonths] = useState("12");
-  const [serialNumber, setSerialNumber] = useState("");
-  const [description, setDescription] = useState("");
-  const [sellerName, setSellerName] = useState("");
-  const [price, setPrice] = useState("");
 
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -77,6 +91,7 @@ export default function ProductsPage() {
   const [editPrice, setEditPrice] = useState("");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [editLoading, setEditLoading] = useState(false);
+  const [isEditCategoryModalOpen, setIsEditCategoryModalOpen] = useState(false);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -111,9 +126,35 @@ export default function ProductsPage() {
     }
   }
 
+  async function fetchWarehouses() {
+    try {
+      const response = await fetch("/api/warehouses");
+      const result = await response.json();
+      if (result.success) {
+        setWarehouses(result.data || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch warehouses:", error);
+    }
+  }
+
+  async function fetchRacks() {
+    try {
+      const response = await fetch("/api/racks");
+      const result = await response.json();
+      if (result.success) {
+        setRacks(result.data || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch racks:", error);
+    }
+  }
+
   useEffect(() => {
     void fetchProducts();
     void fetchCategories();
+    void fetchWarehouses();
+    void fetchRacks();
   }, []);
 
   // Category select options
@@ -136,59 +177,6 @@ export default function ProductsPage() {
     ];
   }, [categories]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setAddLoading(true);
-
-    const intervalVal = normalizeIntervalMonths(
-      serviceInterval === CUSTOM_INTERVAL_VALUE ? customServiceInterval : serviceInterval
-    );
-
-    try {
-      const response = await fetch("/api/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          sku,
-          category,
-          productType,
-          returnDays: productType === "REUSABLE" ? Math.max(1, Number(returnDays) || 30) : 0,
-          serviceIntervalMonths: intervalVal,
-          warrantyMonths: Math.max(0, Number(warrantyMonths) || 0),
-          serialNumber: serialNumber.trim() || undefined,
-          sellerName,
-          price: Number(price),
-          description,
-        }),
-      });
-      const result = await response.json();
-      if (!result.success) {
-        setWarningMessage(result.message || "Failed to add product");
-        setWarningOpen(true);
-        return;
-      }
-      setName("");
-      setSku("");
-      setCategory("");
-      setProductType("NON_REUSABLE");
-      setReturnDays("30");
-      setServiceInterval("3");
-      setCustomServiceInterval("");
-      setWarrantyMonths("12");
-      setSerialNumber("");
-      setSellerName("");
-      setPrice("");
-      setDescription("");
-      await fetchProducts();
-    } catch (error) {
-      console.error("Failed to create product:", error);
-      setWarningMessage("Something went wrong");
-      setWarningOpen(true);
-    } finally {
-      setAddLoading(false);
-    }
-  }
 
   function openEdit(product: Product) {
     setEditId(product._id);
@@ -318,7 +306,14 @@ export default function ProductsPage() {
               Manage your product catalog and categories ({products.length} total products)
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition"
+            >
+              <Plus className="h-4 w-4" /> Add Product
+            </button>
             <Link
               href="/categories"
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 self-start sm:self-auto"
@@ -379,157 +374,18 @@ export default function ProductsPage() {
           })}
         </div>
 
-        {/* Add product form */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-800">Add Product</h2>
-          <form
-            onSubmit={handleSubmit}
-            className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 items-end"
-          >
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Product Name</label>
-              <input
-                type="text"
-                placeholder="Product name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">SKU Code</label>
-              <input
-                type="text"
-                placeholder="SKU (e.g. LAP001)"
-                value={sku}
-                onChange={(e) => setSku(e.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Category</label>
-              <SearchableSelect
-                options={categoryOptions}
-                value={category}
-                onChange={setCategory}
-                placeholder="Search category..."
-              />
-            </div>
-
-
-
-            {/* Product Type (Reusable vs Normal) */}
-            <div className="md:col-span-2 lg:col-span-3 rounded-xl bg-slate-50/70 p-3.5 border border-slate-200/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-slate-700 uppercase">
-                    Product Classification
-                  </p>
-                  <p className="text-[11px] text-slate-500">
-                    Is this an internal returnable asset or a non-returnable normal item?
-                  </p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 max-w-md">
-                <button
-                  type="button"
-                  onClick={() => setProductType("NON_REUSABLE")}
-                  className={`flex items-center justify-center gap-2 rounded-lg border p-2.5 text-xs font-semibold transition ${
-                    productType === "NON_REUSABLE"
-                      ? "border-blue-600 bg-blue-600 text-white shadow-xs"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <Box className="h-4 w-4" />
-                  Normal Item
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setProductType("REUSABLE")}
-                  className={`flex items-center justify-center gap-2 rounded-lg border p-2.5 text-xs font-semibold transition ${
-                    productType === "REUSABLE"
-                      ? "border-indigo-600 bg-indigo-600 text-white shadow-xs"
-                      : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                  }`}
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Reusable Asset
-                </button>
-              </div>
-
-              {productType === "REUSABLE" && (
-                <div className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 max-w-md">
-                  <label className="block text-xs font-semibold text-indigo-950 uppercase mb-1">
-                    Return / Renewal Period (Days)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    placeholder="Days (default 30)"
-                    value={returnDays}
-                    onChange={(e) => setReturnDays(e.target.value)}
-                    required
-                    className="w-full rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-900 outline-none focus:border-indigo-500"
-                  />
-                  <p className="mt-1 text-[11px] text-indigo-600">
-                    When this product is issued, the holder must return it or renew the period before these days elapse.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Seller Name</label>
-              <input
-                type="text"
-                placeholder="Seller name"
-                value={sellerName}
-                onChange={(e) => setSellerName(e.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Price (₹)</label>
-              <input
-                type="number"
-                placeholder="Price (₹)"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                min="0"
-                step="0.01"
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Description (Optional)</label>
-              <input
-                type="text"
-                placeholder="Description (Optional)"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={addLoading}
-              className="h-[42px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50 md:col-span-2 lg:col-span-3"
-            >
-              {addLoading ? "Adding..." : "+ Add Product"}
-            </button>
-          </form>
-        </div>
+        {/* Add Product Modal */}
+        <AddProductModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          categories={categories}
+          warehouses={warehouses}
+          racks={racks}
+          onSuccess={() => void fetchProducts()}
+          onCategoriesChanged={() => void fetchCategories()}
+          onWarehousesChanged={() => void fetchWarehouses()}
+          onRacksChanged={() => void fetchRacks()}
+        />
 
         {/* Product list */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -617,6 +473,7 @@ export default function ProductsPage() {
                     <th className="px-5 py-3">Type / Validity</th>
                     <th className="px-5 py-3">SKU</th>
                     <th className="px-5 py-3">Category</th>
+                    <th className="px-5 py-3">Storage & Stock</th>
                     <th className="px-5 py-3">Seller</th>
                     <th className="px-5 py-3">Price</th>
                     <th className="px-5 py-3">Status</th>
@@ -651,6 +508,49 @@ export default function ProductsPage() {
                           </span>
                         ) : (
                           <span className="text-slate-400">-</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        {product.locations && product.locations.length > 0 ? (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200/60 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                <WarehouseIcon className="h-3 w-3" />
+                                {product.locations[0].warehouseName}
+                              </span>
+                              <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono text-slate-700">
+                                Rack: {product.locations[0].rackName}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`text-xs font-bold ${
+                                  (product.totalStock ?? 0) === 0
+                                    ? "text-red-600"
+                                    : (product.totalStock ?? 0) <= 10
+                                    ? "text-amber-600"
+                                    : "text-emerald-600"
+                                }`}
+                              >
+                                {product.totalStock ?? 0} in stock
+                              </span>
+                              {product.locations.length > 1 && (
+                                <span className="text-[10px] text-slate-500 font-medium">
+                                  (+{product.locations.length - 1} more)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="space-y-0.5">
+                            <span className="text-xs text-slate-400 italic block">No rack assigned</span>
+                            <Link
+                              href={`/inventory?productId=${product._id}`}
+                              className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-0.5"
+                            >
+                              + Assign in Inventory
+                            </Link>
+                          </div>
                         )}
                       </td>
                       <td className="px-5 py-3 text-slate-500">
@@ -742,6 +642,25 @@ export default function ProductsPage() {
                     </span>
                   </div>
 
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/50">
+                    <span className="text-slate-500">Storage Location:</span>
+                    {product.locations && product.locations.length > 0 ? (
+                      <span className="font-semibold text-slate-700 text-right">
+                        {product.locations[0].warehouseName} (Rack {product.locations[0].rackName})
+                        <span className={`ml-1.5 font-bold ${product.totalStock === 0 ? "text-red-600" : "text-emerald-600"}`}>
+                          • {product.totalStock ?? 0} units
+                        </span>
+                      </span>
+                    ) : (
+                      <Link
+                        href={`/inventory?productId=${product._id}`}
+                        className="text-blue-600 font-semibold hover:underline"
+                      >
+                        + Assign Rack
+                      </Link>
+                    )}
+                  </div>
+
                   <div className="mt-2 flex gap-2">
                     <button
                       onClick={() => openEdit(product)}
@@ -818,6 +737,8 @@ export default function ProductsPage() {
                     value={editCategory}
                     onChange={setEditCategory}
                     placeholder="Search category..."
+                    onAddNew={() => setIsEditCategoryModalOpen(true)}
+                    addNewLabel="Add Category"
                   />
                 </div>
 
@@ -972,6 +893,16 @@ export default function ProductsPage() {
         open={warningOpen}
         message={warningMessage}
         onClose={() => setWarningOpen(false)}
+      />
+
+      <AddCategoryModal
+        isOpen={isEditCategoryModalOpen}
+        onClose={() => setIsEditCategoryModalOpen(false)}
+        onSuccess={(newCat) => {
+          void fetchCategories();
+          setEditCategory(newCat.name);
+        }}
+        zIndex="z-[70]"
       />
     </ProtectedPage>
   );

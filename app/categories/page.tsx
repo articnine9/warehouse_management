@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
+import { Plus } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
+import AddCategoryModal from "@/app/components/AddCategoryModal";
 
 type Category = {
   _id: string;
@@ -15,9 +17,7 @@ type Category = {
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [description, setDescription] = useState("");
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -57,44 +57,6 @@ export default function CategoriesPage() {
   useEffect(() => {
     void fetchCategories();
   }, []);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-
-    try {
-      const response = await fetch("/api/categories", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          code,
-          description,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        setWarningMessage(result.message || "Failed to add category");
-        setWarningOpen(true);
-        return;
-      }
-
-      setName("");
-      setCode("");
-      setDescription("");
-      await fetchCategories();
-    } catch (error) {
-      console.error(error);
-      setWarningMessage("Something went wrong");
-      setWarningOpen(true);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   function openEdit(category: Category) {
     setEditId(category._id);
@@ -193,65 +155,28 @@ export default function CategoriesPage() {
   return (
     <ProtectedPage allowedRoles={["ADMIN"]}>
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Product Categories</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Organize products into categories for easy filtering and tracking ({categories.length} total categories)
-          </p>
-        </div>
-
-        {/* Add Category Form */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-800">Add Category</h2>
-
-          <form
-            onSubmit={handleSubmit}
-            className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4 items-end"
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Product Categories</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Organize products into categories for easy filtering and tracking ({categories.length} total categories)
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition self-start sm:self-auto"
           >
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Category Name</label>
-              <input
-                type="text"
-                placeholder="e.g. Electronics"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Category Code</label>
-              <input
-                type="text"
-                placeholder="e.g. ELEC"
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Description (Optional)</label>
-              <input
-                type="text"
-                placeholder="Description"
-                value={description}
-                onChange={(event) => setDescription(event.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="h-[42px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
-            >
-              {loading ? "Adding..." : "+ Add Category"}
-            </button>
-          </form>
+            <Plus className="h-4 w-4" /> Add Category
+          </button>
         </div>
+
+        {/* Modal for adding category */}
+        <AddCategoryModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onSuccess={() => void fetchCategories()}
+        />
 
         {/* Category List */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">

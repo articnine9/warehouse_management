@@ -1,13 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { Tag, Box, Eye, Warehouse as WarehouseIcon } from "lucide-react";
+import { Tag, Box, Eye, Warehouse as WarehouseIcon, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 import WarehouseDetailsModal from "@/app/components/WarehouseDetailsModal";
 import RackDetailsModal from "@/app/components/RackDetailsModal";
+import AddWarehouseModal from "@/app/components/AddWarehouseModal";
 
 type Warehouse = {
   _id: string;
@@ -23,9 +24,7 @@ type Warehouse = {
 export default function WarehousesPage() {
   const router = useRouter();
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [address, setAddress] = useState("");
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -70,44 +69,6 @@ export default function WarehousesPage() {
   useEffect(() => {
     void fetchWarehouses();
   }, []);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setLoading(true);
-
-    try {
-      const response = await fetch("/api/warehouses", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          code,
-          address,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!result.success) {
-        setWarningMessage(result.message || "Failed to add warehouse");
-        setWarningOpen(true);
-        return;
-      }
-
-      setName("");
-      setCode("");
-      setAddress("");
-      await fetchWarehouses();
-    } catch (error) {
-      console.error(error);
-      setWarningMessage("Something went wrong");
-      setWarningOpen(true);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   function openEdit(warehouse: Warehouse) {
     setEditId(warehouse._id);
@@ -206,65 +167,28 @@ export default function WarehousesPage() {
   return (
     <ProtectedPage allowedRoles={["ADMIN"]}>
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Warehouses</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Manage company warehouse locations and capacity ({warehouses.length} total warehouses)
-          </p>
-        </div>
-
-        {/* Add warehouse form */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-800">Add Warehouse</h2>
-
-          <form
-            onSubmit={handleSubmit}
-            className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4 items-end"
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Warehouses</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Manage company warehouse locations and capacity ({warehouses.length} total warehouses)
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition self-start sm:self-auto"
           >
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Warehouse Name</label>
-              <input
-                type="text"
-                placeholder="e.g. Chennai Central Hub"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Warehouse Code</label>
-              <input
-                type="text"
-                placeholder="e.g. WH-01"
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Address (Optional)</label>
-              <input
-                type="text"
-                placeholder="Address"
-                value={address}
-                onChange={(event) => setAddress(event.target.value)}
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="h-[42px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
-            >
-              {loading ? "Adding..." : "+ Add Warehouse"}
-            </button>
-          </form>
+            <Plus className="h-4 w-4" /> Add Warehouse
+          </button>
         </div>
+
+        {/* Modal for adding warehouse */}
+        <AddWarehouseModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onSuccess={() => void fetchWarehouses()}
+        />
 
         {/* Warehouse list */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">

@@ -1,13 +1,15 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { Tag, Box, Eye, Warehouse as WarehouseIcon } from "lucide-react";
+import { Tag, Box, Eye, Warehouse as WarehouseIcon, Plus } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 import WarehouseDetailsModal from "@/app/components/WarehouseDetailsModal";
 import RackDetailsModal from "@/app/components/RackDetailsModal";
+import AddRackModal from "@/app/components/AddRackModal";
+import AddWarehouseModal from "@/app/components/AddWarehouseModal";
 
 type Warehouse = {
   _id: string;
@@ -31,9 +33,8 @@ type Rack = {
 export default function RacksPage() {
   const [racks, setRacks] = useState<Rack[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAddWarehouseModalOpen, setIsAddWarehouseModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -94,39 +95,6 @@ export default function RacksPage() {
       subLabel: w.code,
     }));
   }, [warehouses]);
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!warehouseId) {
-      setWarningMessage("Please select a warehouse");
-      setWarningOpen(true);
-      return;
-    }
-    setLoading(true);
-    try {
-      const response = await fetch("/api/racks", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, code, warehouseId }),
-      });
-      const result = await response.json();
-      if (!result.success) {
-        setWarningMessage(result.message || "Failed to add rack");
-        setWarningOpen(true);
-        return;
-      }
-      setName("");
-      setCode("");
-      setWarehouseId("");
-      await fetchRacks();
-    } catch (error) {
-      console.error("Failed to create rack:", error);
-      setWarningMessage("Something went wrong");
-      setWarningOpen(true);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   function openEdit(rack: Rack) {
     setEditId(rack._id);
@@ -218,64 +186,38 @@ export default function RacksPage() {
   return (
     <ProtectedPage allowedRoles={["ADMIN"]}>
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Racks</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            Manage warehouse storage racks and shelf allocations ({racks.length} total racks)
-          </p>
-        </div>
-
-        {/* Add rack form */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-800">Add Rack</h2>
-          <form
-            onSubmit={handleSubmit}
-            className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4 items-end"
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Racks</h1>
+            <p className="mt-1 text-sm text-slate-500">
+              Manage warehouse storage racks and shelf allocations ({racks.length} total racks)
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setIsAddModalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition self-start sm:self-auto"
           >
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Rack Name</label>
-              <input
-                type="text"
-                placeholder="e.g. Aisle 1 - Top Shelf"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Rack Code</label>
-              <input
-                type="text"
-                placeholder="e.g. RACK-A1"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                required
-                className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Warehouse</label>
-              <SearchableSelect
-                options={warehouseOptions}
-                value={warehouseId}
-                onChange={setWarehouseId}
-                placeholder="Search warehouse..."
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="h-[42px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
-            >
-              {loading ? "Adding..." : "+ Add Rack"}
-            </button>
-          </form>
+            <Plus className="h-4 w-4" /> Add Rack
+          </button>
         </div>
+
+        {/* Modal for adding rack */}
+        <AddRackModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          warehouses={warehouses}
+          onAddNewWarehouse={() => setIsAddWarehouseModalOpen(true)}
+          onSuccess={() => void fetchRacks()}
+        />
+
+        {/* Nested modal for creating warehouse on the fly */}
+        <AddWarehouseModal
+          isOpen={isAddWarehouseModalOpen}
+          onClose={() => setIsAddWarehouseModalOpen(false)}
+          zIndex="z-[70]"
+          onSuccess={() => void fetchWarehouses()}
+        />
 
         {/* Rack list */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -552,6 +494,8 @@ export default function RacksPage() {
                     value={editWarehouseId}
                     onChange={setEditWarehouseId}
                     placeholder="Search warehouse..."
+                    onAddNew={() => setIsAddWarehouseModalOpen(true)}
+                    addNewLabel="Add Warehouse"
                     required
                   />
                 </div>

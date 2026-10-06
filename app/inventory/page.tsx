@@ -2,12 +2,13 @@
 
 import { FormEvent, useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, RotateCcw, Pencil, Eye, Trash2, Printer, X, Box } from "lucide-react";
+import { AlertTriangle, RotateCcw, Pencil, Eye, Trash2, Printer, X, Box, Plus } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 import ProductHistoryModal from "@/app/components/ProductHistoryModal";
+import AddInventoryModal from "@/app/components/AddInventoryModal";
 
 type Product = {
   _id: string;
@@ -37,6 +38,7 @@ function InventoryContent() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [racks, setRacks] = useState<Rack[]>([]);
   const [inventory, setInventory] = useState<Inventory[]>([]);
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   // Filtering state
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusParam);
@@ -120,16 +122,7 @@ function InventoryContent() {
     if (rParam) setRackId(rParam);
 
     if (pParam || wParam || isRestock) {
-      setTimeout(() => {
-        const el = document.getElementById("inventory-form-container");
-        if (el) {
-          el.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
-        const qtyInput = document.getElementById("inventory-qty-input");
-        if (qtyInput) {
-          qtyInput.focus();
-        }
-      }, 350);
+      setIsAddModalOpen(true);
     }
   }, [searchParams, products, warehouses, racks]);
 
@@ -387,11 +380,20 @@ function InventoryContent() {
 
   return (
     <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Inventory</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Manage and track product stock distribution across all warehouses and racks ({inventory.length} total entries)
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Inventory</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Manage and track product stock distribution across all warehouses and racks ({inventory.length} total entries)
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsAddModalOpen(true)}
+          className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition self-start sm:self-auto"
+        >
+          <Plus className="h-4 w-4" /> Add Stock Entry
+        </button>
       </div>
 
       {/* Stock Status Filter Cards */}
@@ -467,115 +469,22 @@ function InventoryContent() {
         </button>
       </div>
 
-      {/* Add inventory form */}
-      <div id="inventory-form-container" className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm scroll-mt-20">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-3">
-          <h2 className="text-lg font-semibold text-slate-800">
-            {searchParams.get("restock") ? "Restock Product Stock" : "Add Stock to Location"}
-          </h2>
-          {searchParams.get("restock") && (
-            <span className="rounded-full bg-amber-100 text-amber-900 px-2.5 py-0.5 text-xs font-bold w-fit">
-              Restock Action Active
-            </span>
-          )}
-        </div>
-
-        {/* Quick Restock Alert Banner */}
-        {/* {searchParams.get("restock") && (
-          <div className="mb-4 rounded-xl bg-gradient-to-r from-amber-50 to-orange-50/50 border border-amber-200 p-3.5 text-xs text-amber-950 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-2xs">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
-              <div>
-                <span className="font-extrabold uppercase tracking-wide text-amber-900">Restock Mode:</span>{" "}
-                Product, Warehouse & Rack have been <b>automatically pre-filled</b>. Enter the incoming quantity below to restock!
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                setProductId("");
-                setWarehouseId("");
-                setRackId("");
-                setQuantity("");
-              }}
-              className="text-[11px] font-bold text-amber-800 underline hover:text-amber-950 shrink-0"
-            >
-              Clear Pre-fill
-            </button>
-          </div>
-        )} */}
-
-        <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 items-end">
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Product</label>
-            <SearchableSelect
-              options={productOptions}
-              value={productId}
-              onChange={setProductId}
-              placeholder="Search & select product..."
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Warehouse</label>
-            <SearchableSelect
-              options={warehouseOptions}
-              value={warehouseId}
-              onChange={(wId) => {
-                setWarehouseId(wId);
-                setRackId("");
-              }}
-              placeholder="Search & select warehouse..."
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Rack Location</label>
-            <SearchableSelect
-              options={rackOptions}
-              value={rackId}
-              onChange={setRackId}
-              placeholder={warehouseId ? "Search & select rack..." : "Select warehouse first"}
-              disabled={!warehouseId}
-              required
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
-              {searchParams.get("restock") ? "Quantity to Add (Restock Units)" : "Quantity"}
-            </label>
-            <input
-              id="inventory-qty-input"
-              type="number"
-              min="1"
-              placeholder={searchParams.get("restock") ? "Enter restock quantity (e.g. 50)" : "Quantity"}
-              value={quantity}
-              onChange={(e) => setQuantity(e.target.value)}
-              required
-              className={`w-full ${inputCls}`}
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className={`h-[42px] rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] disabled:opacity-50 ${
-              searchParams.get("restock")
-                ? "bg-amber-600 hover:bg-amber-700"
-                : "bg-blue-600 hover:bg-blue-700"
-            }`}
-          >
-            {loading
-              ? "Saving..."
-              : searchParams.get("restock")
-              ? "+ Add Restocked Units"
-              : "+ Add Stock Entry"}
-          </button>
-        </form>
-      </div>
+      {/* Modal for adding inventory / restock */}
+      <AddInventoryModal
+        isOpen={isAddModalOpen}
+        onClose={() => setIsAddModalOpen(false)}
+        products={products}
+        warehouses={warehouses}
+        racks={racks}
+        defaultProductId={productId}
+        defaultWarehouseId={warehouseId}
+        defaultRackId={rackId}
+        isRestock={Boolean(searchParams.get("restock"))}
+        onSuccess={() => void fetchInventory()}
+        onProductsChanged={() => void fetchProducts()}
+        onWarehousesChanged={() => void fetchWarehouses()}
+        onRacksChanged={() => void fetchRacks()}
+      />
 
       {/* Inventory list */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
