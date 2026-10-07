@@ -1,8 +1,22 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { PackageCheck, Search, Trash2, X, Wrench, RotateCcw, Eye, ExternalLink, History, Box } from "lucide-react";
+import {
+  PackageCheck,
+  Search,
+  Trash2,
+  X,
+  Wrench,
+  RotateCcw,
+  Eye,
+  ExternalLink,
+  History,
+  Box,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+} from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
@@ -66,6 +80,19 @@ export default function EmployeeIssuesPage() {
   const [issueDateTo, setIssueDateTo] = useState("");
   const [issuePage, setIssuePage] = useState(1);
   const [issuePageSize, setIssuePageSize] = useState(10);
+  const [expandedIssueIds, setExpandedIssueIds] = useState<Set<string>>(new Set());
+
+  function toggleExpandIssue(issueId: string) {
+    setExpandedIssueIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(issueId)) {
+        next.delete(issueId);
+      } else {
+        next.add(issueId);
+      }
+      return next;
+    });
+  }
 
   // Manage / Service Modal State
   const [activeModalIssue, setActiveModalIssue] = useState<{
@@ -262,23 +289,9 @@ export default function EmployeeIssuesPage() {
     };
   }, [issues, selectedLookupEmployeeId, lookupEmployee]);
 
-  // Flatten issues into individual item custody records so filters strictly isolate matching records
-  const allCustodyRecords = useMemo(() => {
-    const records: Array<{
-      issue: EmployeeIssue;
-      item: SelectedLineItem;
-      itemIndex: number;
-    }> = [];
-    for (const issue of issues) {
-      issue.items.forEach((item, itemIndex) => {
-        records.push({ issue, item, itemIndex });
-      });
-    }
-    return records;
-  }, [issues]);
-
-  const filteredCustodyRecords = useMemo(() => {
-    return allCustodyRecords.filter(({ issue, item }) => {
+  // Filter issues keeping multiple items grouped together under a single issue entry
+  const filteredIssues = useMemo(() => {
+    return issues.filter((issue) => {
       // 1. Employee Lookup Filter
       if (selectedLookupEmployeeId) {
         const matchId = issue.employeeId === selectedLookupEmployeeId;
@@ -290,14 +303,24 @@ export default function EmployeeIssuesPage() {
 
       // 2. Status Filter
       if (statusFilter !== "ALL") {
-        const currentStatus = item.holdingStatus || "ACTIVE";
-        if (currentStatus !== statusFilter) return false;
+        const hasMatchingStatus = issue.items.some(
+          (item) => (item.holdingStatus || "ACTIVE") === statusFilter
+        );
+        if (!hasMatchingStatus) return false;
       }
 
       // 3. Product Type Filter
-      const isReusable = item.productType === "REUSABLE" || Boolean(item.returnDueDate);
-      if (issueTypeFilter === "REUSABLE" && !isReusable) return false;
-      if (issueTypeFilter === "NON_REUSABLE" && isReusable) return false;
+      if (issueTypeFilter === "REUSABLE") {
+        const hasReusable = issue.items.some(
+          (item) => item.productType === "REUSABLE" || Boolean(item.returnDueDate)
+        );
+        if (!hasReusable) return false;
+      } else if (issueTypeFilter === "NON_REUSABLE") {
+        const hasNonReusable = issue.items.some(
+          (item) => item.productType !== "REUSABLE" && !item.returnDueDate
+        );
+        if (!hasNonReusable) return false;
+      }
 
       // 4. Date Range Filter
       if (issueDateFrom) {
@@ -324,12 +347,14 @@ export default function EmployeeIssuesPage() {
           reasonLabels[issue.reason]?.toLowerCase().includes(query) ||
           issue.issuedByName?.toLowerCase().includes(query);
 
-        const matchItem =
-          item.productName.toLowerCase().includes(query) ||
-          item.sku.toLowerCase().includes(query) ||
-          item.serialNumber?.toLowerCase().includes(query) ||
-          item.warehouseName?.toLowerCase().includes(query) ||
-          item.rackName?.toLowerCase().includes(query);
+        const matchItem = issue.items.some(
+          (item) =>
+            item.productName.toLowerCase().includes(query) ||
+            item.sku.toLowerCase().includes(query) ||
+            item.serialNumber?.toLowerCase().includes(query) ||
+            item.warehouseName?.toLowerCase().includes(query) ||
+            item.rackName?.toLowerCase().includes(query)
+        );
 
         return matchIssue || matchItem;
       }
@@ -337,7 +362,7 @@ export default function EmployeeIssuesPage() {
       return true;
     });
   }, [
-    allCustodyRecords,
+    issues,
     selectedLookupEmployeeId,
     lookupEmployee,
     statusFilter,
@@ -360,10 +385,10 @@ export default function EmployeeIssuesPage() {
     issuePageSize,
   ]);
 
-  const paginatedRecords = useMemo(() => {
+  const paginatedIssues = useMemo(() => {
     const start = (issuePage - 1) * issuePageSize;
-    return filteredCustodyRecords.slice(start, start + issuePageSize);
-  }, [filteredCustodyRecords, issuePage, issuePageSize]);
+    return filteredIssues.slice(start, start + issuePageSize);
+  }, [filteredIssues, issuePage, issuePageSize]);
 
   // Resolved from the live list so the modal always shows the latest saved values.
   const activeModalData = useMemo(() => {
@@ -1001,7 +1026,7 @@ export default function EmployeeIssuesPage() {
           <div className="border-b border-slate-100 p-4 md:p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
-                Asset Movement & Custody History ({filteredCustodyRecords.length})
+                Asset Movement & Custody History ({filteredIssues.length})
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 Monitor products held by employees, returnable return/renewal periods, recurring service cycles, and custody status.
@@ -1189,152 +1214,467 @@ export default function EmployeeIssuesPage() {
           )}
 
           {/* Desktop Table */}
-          {paginatedRecords.length > 0 && (
+          {paginatedIssues.length > 0 && (
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full text-left text-xs">
                 <thead className="bg-slate-50 text-[11px] font-semibold uppercase text-slate-500 border-b border-slate-200">
                   <tr>
                     <th className="px-5 py-3">Issue # & Date</th>
                     <th className="px-5 py-3">Employee (Holder)</th>
-                    <th className="px-5 py-3">Product & Type</th>
-                    <th className="px-5 py-3 text-center">Status</th>
+                    <th className="px-5 py-3">Products & Quantity</th>
+                    <th className="px-5 py-3 text-center">Custody Status</th>
                     <th className="px-5 py-3">Return / Renew Due</th>
                     <th className="px-5 py-3 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paginatedRecords.map(({ issue, item, itemIndex }) => {
+                  {paginatedIssues.map((issue) => {
+                    const isExpanded = expandedIssueIds.has(issue._id);
+                    const totalUnits = issue.items.reduce((acc, it) => acc + (it.quantity || 1), 0);
                     const issuedDate = new Date(issue.createdAt).toLocaleDateString("en-IN", {
                       day: "2-digit",
                       month: "short",
                       year: "numeric",
                     });
 
-                    const isReusable = item.productType === "REUSABLE" || Boolean(item.returnDueDate);
+                    // Return due date calculation
+                    const activeReturnables = issue.items.filter(
+                      (it) =>
+                        (it.productType === "REUSABLE" || Boolean(it.returnDueDate)) &&
+                        it.holdingStatus !== "RETURNED" &&
+                        it.returnDueDate
+                    );
+
+                    let earliestReturnItem: (typeof issue.items)[0] | null = null;
                     let returnDaysLeft: number | null = null;
-                    if (isReusable && item.returnDueDate) {
-                      const dueTime = new Date(item.returnDueDate).setHours(0, 0, 0, 0);
+                    if (activeReturnables.length > 0) {
+                      const sorted = [...activeReturnables].sort(
+                        (a, b) =>
+                          new Date(a.returnDueDate!).getTime() -
+                          new Date(b.returnDueDate!).getTime()
+                      );
+                      earliestReturnItem = sorted[0];
+                      const dueTime = new Date(earliestReturnItem.returnDueDate!).setHours(0, 0, 0, 0);
                       const nowTime = new Date().setHours(0, 0, 0, 0);
                       returnDaysLeft = Math.round((dueTime - nowTime) / 86400000);
                     }
 
+                    // Status counts
+                    const activeCount = issue.items.filter(
+                      (it) => (it.holdingStatus || "ACTIVE") === "ACTIVE"
+                    ).length;
+                    const returnedCount = issue.items.filter(
+                      (it) => it.holdingStatus === "RETURNED"
+                    ).length;
+                    const serviceCount = issue.items.filter(
+                      (it) => it.holdingStatus === "UNDER_SERVICE"
+                    ).length;
+                    const inactiveCount = issue.items.filter(
+                      (it) => it.holdingStatus === "INACTIVE"
+                    ).length;
+                    const damagedCount = issue.items.filter(
+                      (it) => it.holdingStatus === "DAMAGED"
+                    ).length;
+                    const allReturned = returnedCount === issue.items.length && issue.items.length > 0;
+                    const allActive = activeCount === issue.items.length;
+
                     return (
-                      <tr key={`${issue._id}-${itemIndex}`} className="hover:bg-slate-50/70 transition">
-                        <td className="px-5 py-3.5">
-                          <p className="font-bold text-slate-800">{issue.issueNumber}</p>
-                          <span className="text-[11px] text-slate-400">{issuedDate}</span>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <Link
-                            href={`/employee-issues/employee/${encodeURIComponent(issue.employeeId || issue.employeeName)}`}
-                            prefetch={true}
-                            className="font-semibold text-slate-800 text-left hover:text-blue-600 hover:underline transition flex items-center gap-1 group"
-                            title="Click to view complete top-to-bottom employee asset history"
-                          >
-                            <span>{issue.employeeName}</span>
-                            <ExternalLink className="h-2.5 w-2.5 text-blue-600 opacity-0 group-hover:opacity-100 transition" />
-                          </Link>
-                          <p className="text-[11px] text-slate-400">
-                            {issue.employeeDepartment || "-"} • {issue.employeePhone || "-"}
-                          </p>
-                        </td>
-                        <td className="px-5 py-3.5">
-                          <Link
-                            href={`/product-history/${encodeURIComponent(item.productId?.toString() || item.sku)}`}
-                            prefetch={true}
-                            className="font-semibold text-slate-800 text-left hover:text-blue-600 hover:underline transition flex items-center gap-1 group"
-                            title="Click to view complete top-to-bottom product history"
-                          >
-                            <span>{item.productName}</span>
-                            <span className="font-bold text-blue-600">({item.quantity} units)</span>
-                            <ExternalLink className="h-2.5 w-2.5 text-blue-600 opacity-0 group-hover:opacity-100 transition" />
-                          </Link>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-[11px] text-slate-400">
-                              SKU: {item.sku} {item.serialNumber && `• SN: ${item.serialNumber}`}
-                            </span>
-                            {isReusable && (
-                              <span className="rounded bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 text-[9px] font-bold text-indigo-700">
-                                Returnable
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-5 py-3.5 text-center">
-                          <span
-                            className={`inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
-                              item.holdingStatus === "ACTIVE"
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : item.holdingStatus === "INACTIVE"
-                                ? "bg-slate-100 text-slate-600 border border-slate-200"
-                                : item.holdingStatus === "UNDER_SERVICE"
-                                ? "bg-amber-50 text-amber-700 border border-amber-200"
-                                : item.holdingStatus === "RETURNED"
-                                ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                : "bg-red-50 text-red-700 border border-red-200"
-                            }`}
-                          >
-                            {item.holdingStatus || "ACTIVE"}
-                          </span>
-                        </td>
-
-                        {/* Return / Renew Due Column */}
-                        <td className="px-5 py-3.5">
-                          {item.holdingStatus === "RETURNED" ? (
-                            <span className="text-slate-400 text-xs">Item Returned</span>
-                          ) : isReusable && item.returnDueDate ? (
-                            <div>
-                              <p className="font-bold text-xs text-slate-800">
-                                {new Date(item.returnDueDate).toLocaleDateString("en-IN", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                })}
-                              </p>
-                              {returnDaysLeft !== null && (
-                                <span
-                                  className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold mt-0.5 ${
-                                    returnDaysLeft < 0
-                                      ? "bg-red-100 text-red-700"
-                                      : returnDaysLeft <= 7
-                                      ? "bg-amber-100 text-amber-800"
-                                      : "bg-emerald-50 text-emerald-700"
-                                  }`}
-                                >
-                                  {returnDaysLeft < 0
-                                    ? `Overdue by ${Math.abs(returnDaysLeft)}d`
-                                    : returnDaysLeft === 0
-                                    ? "Due Today"
-                                    : `${returnDaysLeft}d remaining`}
-                                </span>
-                              )}
+                      <Fragment key={issue._id}>
+                        <tr
+                          className={`hover:bg-slate-50/80 transition cursor-pointer select-none ${
+                            isExpanded ? "bg-blue-50/30 font-medium" : ""
+                          }`}
+                          onClick={() => toggleExpandIssue(issue._id)}
+                        >
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpandIssue(issue._id);
+                                }}
+                                className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-500 hover:text-blue-600 hover:border-blue-300 transition shrink-0 shadow-2xs"
+                                title={isExpanded ? "Collapse product list" : "Expand product list"}
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="h-3.5 w-3.5 text-blue-600" />
+                                ) : (
+                                  <ChevronDown className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                              <div>
+                                <p className="font-bold text-slate-800">{issue.issueNumber}</p>
+                                <span className="text-[11px] text-slate-400">{issuedDate}</span>
+                              </div>
                             </div>
-                          ) : (
-                            <span className="text-slate-400 text-xs">Standard Item</span>
-                          )}
-                        </td>
+                          </td>
+                          <td className="px-5 py-3.5" onClick={(e) => e.stopPropagation()}>
+                            <Link
+                              href={`/employee-issues/employee/${encodeURIComponent(
+                                issue.employeeId || issue.employeeName
+                              )}`}
+                              prefetch={true}
+                              className="font-semibold text-slate-800 text-left hover:text-blue-600 hover:underline transition flex items-center gap-1 group"
+                              title="Click to view complete top-to-bottom employee asset history"
+                            >
+                              <span>{issue.employeeName}</span>
+                              <ExternalLink className="h-2.5 w-2.5 text-blue-600 opacity-0 group-hover:opacity-100 transition" />
+                            </Link>
+                            <p className="text-[11px] text-slate-400">
+                              {issue.employeeDepartment || "-"} • {issue.employeePhone || "-"}
+                            </p>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs font-bold text-blue-700">
+                                <Layers className="h-3.5 w-3.5" />
+                                {issue.items.length}{" "}
+                                {issue.items.length === 1 ? "Product" : "Products"} ({totalUnits}{" "}
+                                units)
+                              </span>
+                            </div>
+                            <p
+                              className="text-[11px] text-slate-500 mt-1 truncate max-w-xs"
+                              title={issue.items.map((it) => it.productName).join(", ")}
+                            >
+                              {issue.items.map((it) => it.productName).slice(0, 2).join(", ")}
+                              {issue.items.length > 2 && ` +${issue.items.length - 2} more`}
+                            </p>
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            {allReturned ? (
+                              <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                RETURNED
+                              </span>
+                            ) : allActive ? (
+                              <span className="inline-block rounded-full px-2.5 py-0.5 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                ACTIVE
+                              </span>
+                            ) : (
+                              <div className="flex flex-wrap items-center justify-center gap-1">
+                                {activeCount > 0 && (
+                                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Active ({activeCount})
+                                  </span>
+                                )}
+                                {returnedCount > 0 && (
+                                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                    Returned ({returnedCount})
+                                  </span>
+                                )}
+                                {serviceCount > 0 && (
+                                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    Service ({serviceCount})
+                                  </span>
+                                )}
+                                {damagedCount > 0 && (
+                                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-red-50 text-red-700 border border-red-200">
+                                    Damaged ({damagedCount})
+                                  </span>
+                                )}
+                                {inactiveCount > 0 && (
+                                  <span className="rounded-full px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                    Inactive ({inactiveCount})
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
 
-                        <td className="px-5 py-3.5 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              type="button"
-                              onClick={() => openBill(issue)}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-emerald-600 hover:bg-emerald-50 transition shadow-2xs active:scale-95"
-                              title="View Bill / Issue Voucher"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteIssueId(issue._id)}
-                              className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-2xs active:scale-95"
-                              title="Delete this issue record"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                          {/* Return / Renew Due Column */}
+                          <td className="px-5 py-3.5">
+                            {allReturned ? (
+                              <span className="text-slate-400 text-xs">All Items Returned</span>
+                            ) : earliestReturnItem && earliestReturnItem.returnDueDate ? (
+                              <div>
+                                <div className="flex items-center gap-1">
+                                  <span className="font-bold text-xs text-slate-800">
+                                    {new Date(earliestReturnItem.returnDueDate).toLocaleDateString(
+                                      "en-IN",
+                                      {
+                                        day: "2-digit",
+                                        month: "short",
+                                        year: "numeric",
+                                      }
+                                    )}
+                                  </span>
+                                  {activeReturnables.length > 1 && (
+                                    <span className="text-[10px] text-slate-400 font-medium">
+                                      ({activeReturnables.length} due)
+                                    </span>
+                                  )}
+                                </div>
+                                {returnDaysLeft !== null && (
+                                  <span
+                                    className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold mt-0.5 ${
+                                      returnDaysLeft < 0
+                                        ? "bg-red-100 text-red-700"
+                                        : returnDaysLeft <= 7
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-emerald-50 text-emerald-700"
+                                    }`}
+                                  >
+                                    {returnDaysLeft < 0
+                                      ? `Overdue by ${Math.abs(returnDaysLeft)}d`
+                                      : returnDaysLeft === 0
+                                      ? "Due Today"
+                                      : `${returnDaysLeft}d remaining`}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 text-xs">Standard Items</span>
+                            )}
+                          </td>
+
+                          <td className="px-5 py-3.5 text-center" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandIssue(issue._id)}
+                                className={`flex h-8 items-center gap-1 px-2.5 rounded-lg border text-xs font-semibold transition shadow-2xs active:scale-95 ${
+                                  isExpanded
+                                    ? "border-blue-300 bg-blue-50 text-blue-700"
+                                    : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                                }`}
+                                title={isExpanded ? "Collapse product list" : "View all products"}
+                              >
+                                {isExpanded ? (
+                                  <ChevronUp className="h-3.5 w-3.5" />
+                                ) : (
+                                  <ChevronDown className="h-3.5 w-3.5" />
+                                )}
+                                <span>{isExpanded ? "Close" : "Details"}</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => openBill(issue)}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-emerald-600 hover:bg-emerald-50 transition shadow-2xs active:scale-95"
+                                title="View Bill / Issue Voucher"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteIssueId(issue._id)}
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-2xs active:scale-95"
+                                title="Delete this issue record"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* 🔽 Expandable Detailed Products Sub-Table */}
+                        {isExpanded && (
+                          <tr className="bg-slate-50/70 border-b border-slate-200">
+                            <td colSpan={6} className="px-6 py-4">
+                              <div className="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+                                <div className="bg-gradient-to-r from-slate-100 via-blue-50/40 to-slate-50 px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Layers className="h-4 w-4 text-blue-600" />
+                                    <span className="text-xs font-bold text-slate-800">
+                                      Products in Voucher #{issue.issueNumber} ({issue.items.length}{" "}
+                                      items • {totalUnits} total units)
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
+                                    {issue.reason && (
+                                      <span>
+                                        Reason:{" "}
+                                        <b className="text-slate-700">
+                                          {reasonLabels[issue.reason] || issue.reason}
+                                        </b>
+                                      </span>
+                                    )}
+                                    {issue.siteName && (
+                                      <span>
+                                        Site: <b className="text-slate-700">{issue.siteName}</b>
+                                      </span>
+                                    )}
+                                    {issue.issuedByName && (
+                                      <span>
+                                        Issued By:{" "}
+                                        <b className="text-slate-700">{issue.issuedByName}</b>
+                                      </span>
+                                    )}
+                                    {issue.notes && (
+                                      <span className="italic text-slate-600">
+                                        Note: &ldquo;{issue.notes}&rdquo;
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-left text-xs">
+                                    <thead className="bg-slate-50 text-[10px] font-bold uppercase text-slate-500 border-b border-slate-200">
+                                      <tr>
+                                        <th className="px-3 py-2 text-center w-10">#</th>
+                                        <th className="px-4 py-2">Product Name & SKU</th>
+                                        <th className="px-3 py-2">Warehouse / Rack</th>
+                                        <th className="px-3 py-2 text-center">Qty & Price</th>
+                                        <th className="px-3 py-2">Serial / Tag</th>
+                                        <th className="px-3 py-2">Classification & Due</th>
+                                        <th className="px-3 py-2 text-center">Status</th>
+                                        <th className="px-3 py-2 text-center">Manage</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                      {issue.items.map((item, itemIdx) => {
+                                        const isReusable =
+                                          item.productType === "REUSABLE" ||
+                                          Boolean(item.returnDueDate);
+                                        let itemDaysLeft: number | null = null;
+                                        if (isReusable && item.returnDueDate) {
+                                          const dueTime = new Date(item.returnDueDate).setHours(
+                                            0,
+                                            0,
+                                            0,
+                                            0
+                                          );
+                                          const nowTime = new Date().setHours(0, 0, 0, 0);
+                                          itemDaysLeft = Math.round((dueTime - nowTime) / 86400000);
+                                        }
+
+                                        return (
+                                          <tr
+                                            key={`${issue._id}-item-${itemIdx}`}
+                                            className="hover:bg-slate-50/60 transition"
+                                          >
+                                            <td className="px-3 py-2.5 text-center text-slate-400 font-bold text-[11px]">
+                                              {itemIdx + 1}
+                                            </td>
+                                            <td className="px-4 py-2.5">
+                                              <Link
+                                                href={`/product-history/${encodeURIComponent(
+                                                  item.productId?.toString() || item.sku
+                                                )}`}
+                                                className="font-bold text-slate-800 hover:text-blue-600 hover:underline transition inline-flex items-center gap-1 group"
+                                                title="View product history"
+                                              >
+                                                <span>{item.productName}</span>
+                                                <ExternalLink className="h-2.5 w-2.5 text-blue-600 opacity-0 group-hover:opacity-100 transition" />
+                                              </Link>
+                                              <p className="text-[10px] text-slate-400">
+                                                SKU: {item.sku}
+                                              </p>
+                                            </td>
+                                            <td className="px-3 py-2.5">
+                                              <span className="font-medium text-slate-700">
+                                                {item.warehouseName || "-"}
+                                              </span>
+                                              {item.rackName && (
+                                                <span className="text-[10px] text-slate-400 block">
+                                                  Rack: {item.rackName}
+                                                </span>
+                                              )}
+                                            </td>
+                                            <td className="px-3 py-2.5 text-center">
+                                              <span className="font-bold text-blue-600">
+                                                {item.quantity} units
+                                              </span>
+                                              {item.unitPrice ? (
+                                                <span className="text-[10px] text-slate-400 block">
+                                                  ₹{item.unitPrice.toLocaleString("en-IN")}
+                                                </span>
+                                              ) : null}
+                                            </td>
+                                            <td className="px-3 py-2.5">
+                                              {item.serialNumber ? (
+                                                <span className="font-mono text-[11px] text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                                                  {item.serialNumber}
+                                                </span>
+                                              ) : (
+                                                <span className="text-slate-400 text-[11px]">-</span>
+                                              )}
+                                            </td>
+                                            <td className="px-3 py-2.5">
+                                              {item.holdingStatus === "RETURNED" ? (
+                                                <span className="text-slate-400 text-[11px]">
+                                                  Item Returned
+                                                </span>
+                                              ) : isReusable && item.returnDueDate ? (
+                                                <div>
+                                                  <div className="flex items-center gap-1">
+                                                    <span className="rounded bg-indigo-50 border border-indigo-200 px-1 py-0.2 text-[9px] font-bold text-indigo-700">
+                                                      Returnable
+                                                    </span>
+                                                    <span className="font-semibold text-[11px] text-slate-700">
+                                                      {new Date(
+                                                        item.returnDueDate
+                                                      ).toLocaleDateString("en-IN", {
+                                                        day: "2-digit",
+                                                        month: "short",
+                                                        year: "numeric",
+                                                      })}
+                                                    </span>
+                                                  </div>
+                                                  {itemDaysLeft !== null && (
+                                                    <span
+                                                      className={`inline-block rounded px-1.5 py-0.2 text-[9px] font-extrabold mt-0.5 ${
+                                                        itemDaysLeft < 0
+                                                          ? "bg-red-100 text-red-700"
+                                                          : itemDaysLeft <= 7
+                                                          ? "bg-amber-100 text-amber-800"
+                                                          : "bg-emerald-50 text-emerald-700"
+                                                      }`}
+                                                    >
+                                                      {itemDaysLeft < 0
+                                                        ? `Overdue by ${Math.abs(itemDaysLeft)}d`
+                                                        : itemDaysLeft === 0
+                                                        ? "Due Today"
+                                                        : `${itemDaysLeft}d remaining`}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                              ) : (
+                                                <span className="text-slate-400 text-[11px]">
+                                                  Standard Item
+                                                </span>
+                                              )}
+                                            </td>
+                                            <td className="px-3 py-2.5 text-center">
+                                              <span
+                                                className={`inline-block rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                                  item.holdingStatus === "ACTIVE"
+                                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                                    : item.holdingStatus === "INACTIVE"
+                                                    ? "bg-slate-100 text-slate-600 border border-slate-200"
+                                                    : item.holdingStatus === "UNDER_SERVICE"
+                                                    ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                                    : item.holdingStatus === "RETURNED"
+                                                    ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                                    : "bg-red-50 text-red-700 border border-red-200"
+                                                }`}
+                                              >
+                                                {item.holdingStatus || "ACTIVE"}
+                                              </span>
+                                            </td>
+                                            <td className="px-3 py-2.5 text-center">
+                                              <button
+                                                type="button"
+                                                onClick={() => openServiceModal(issue, itemIdx)}
+                                                className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition shadow-2xs active:scale-95"
+                                                title="Manage status, service cycle, or return item"
+                                              >
+                                                <Wrench className="h-3 w-3 text-slate-500" />
+                                                <span>Manage</span>
+                                              </button>
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -1343,30 +1683,38 @@ export default function EmployeeIssuesPage() {
           )}
 
           {/* Mobile Cards */}
-          {paginatedRecords.length > 0 && (
+          {paginatedIssues.length > 0 && (
             <div className="space-y-3 p-4 md:hidden">
-              {paginatedRecords.map(({ issue, item, itemIndex }) => {
+              {paginatedIssues.map((issue) => {
+                const isExpanded = expandedIssueIds.has(issue._id);
+                const totalUnits = issue.items.reduce((acc, it) => acc + (it.quantity || 1), 0);
+                const issuedDate = new Date(issue.createdAt).toLocaleDateString("en-IN", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                });
+
                 return (
                   <div
-                    key={`${issue._id}-${itemIndex}`}
-                    className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-2.5"
+                    key={issue._id}
+                    className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-3"
                   >
                     <div className="flex items-start justify-between">
                       <div>
-                        <Link
-                          href={`/product-history/${encodeURIComponent(item.productId?.toString() || item.sku)}`}
-                          className="font-bold text-slate-800 text-left hover:text-blue-600 hover:underline transition flex items-center gap-1"
-                          title="Click to view complete product history"
-                        >
-                          <span>{item.productName}</span>
-                          <ExternalLink className="h-3 w-3 text-blue-600" />
-                        </Link>
-                        <p className="text-xs text-slate-500 mt-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-slate-800 text-sm">
+                            {issue.issueNumber}
+                          </span>
+                          <span className="text-[11px] text-slate-400">{issuedDate}</span>
+                        </div>
+                        <p className="text-xs text-slate-600 mt-0.5">
                           Holder:{" "}
                           <Link
-                            href={`/employee-issues/employee/${encodeURIComponent(issue.employeeId || issue.employeeName)}`}
+                            href={`/employee-issues/employee/${encodeURIComponent(
+                              issue.employeeId || issue.employeeName
+                            )}`}
                             className="font-bold text-blue-600 underline hover:text-blue-800"
-                            title="Click to view complete employee asset history"
+                            title="Click to view employee asset history"
                           >
                             {issue.employeeName}
                           </Link>{" "}
@@ -1374,21 +1722,18 @@ export default function EmployeeIssuesPage() {
                         </p>
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <span
-                          className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                            item.holdingStatus === "ACTIVE"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : item.holdingStatus === "INACTIVE"
-                              ? "bg-slate-100 text-slate-600"
-                              : "bg-amber-50 text-amber-700"
-                          }`}
+                        <button
+                          type="button"
+                          onClick={() => openBill(issue)}
+                          className="p-1.5 rounded-lg border border-slate-200 text-emerald-600 hover:bg-emerald-50"
+                          title="View Bill"
                         >
-                          {item.holdingStatus}
-                        </span>
+                          <Eye className="h-4 w-4" />
+                        </button>
                         <button
                           type="button"
                           onClick={() => setDeleteIssueId(issue._id)}
-                          className="p-1 text-red-500 hover:text-red-700"
+                          className="p-1.5 rounded-lg border border-slate-200 text-red-500 hover:bg-red-50"
                           title="Delete issue"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -1396,36 +1741,111 @@ export default function EmployeeIssuesPage() {
                       </div>
                     </div>
 
-                    <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg space-y-1.5">
-                      <p>
-                        Issue #{issue.issueNumber} • Qty: <b>{item.quantity}</b> {item.serialNumber && `• SN: ${item.serialNumber}`}
-                      </p>
-                    </div>
-
-                    <div className="pt-1 flex items-center">
+                    <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-lg text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <Layers className="h-4 w-4 text-blue-600" />
+                        <span className="font-bold text-slate-800">
+                          {issue.items.length}{" "}
+                          {issue.items.length === 1 ? "Product" : "Products"} ({totalUnits} units)
+                        </span>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => openBill(issue)}
-                        className="w-full rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-emerald-600 hover:bg-emerald-50 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
-                        title="View Bill / Issue Voucher"
+                        onClick={() => toggleExpandIssue(issue._id)}
+                        className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800"
                       >
-                        <Eye className="h-4 w-4" /> View Bill
+                        <span>{isExpanded ? "Hide Details" : "View Details"}</span>
+                        {isExpanded ? (
+                          <ChevronUp className="h-3.5 w-3.5" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5" />
+                        )}
                       </button>
                     </div>
+
+                    {isExpanded && (
+                      <div className="space-y-2 pt-1 border-t border-slate-100">
+                        {issue.items.map((item, itemIdx) => {
+                          const isReusable =
+                            item.productType === "REUSABLE" || Boolean(item.returnDueDate);
+                          return (
+                            <div
+                              key={`${issue._id}-m-${itemIdx}`}
+                              className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs space-y-1.5"
+                            >
+                              <div className="flex items-start justify-between">
+                                <div>
+                                  <Link
+                                    href={`/product-history/${encodeURIComponent(
+                                      item.productId?.toString() || item.sku
+                                    )}`}
+                                    className="font-bold text-slate-800 hover:text-blue-600 underline"
+                                  >
+                                    {item.productName}
+                                  </Link>
+                                  <p className="text-[11px] text-slate-400">
+                                    SKU: {item.sku}{" "}
+                                    {item.serialNumber && `• SN: ${item.serialNumber}`}
+                                  </p>
+                                </div>
+                                <span
+                                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                    item.holdingStatus === "ACTIVE"
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                      : item.holdingStatus === "RETURNED"
+                                      ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                      : "bg-amber-50 text-amber-700 border border-amber-200"
+                                  }`}
+                                >
+                                  {item.holdingStatus || "ACTIVE"}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-[11px] text-slate-600">
+                                <span>
+                                  Qty: <b>{item.quantity}</b> • {item.warehouseName}
+                                </span>
+                                {isReusable && (
+                                  <span className="text-indigo-700 font-semibold">
+                                    Returnable{" "}
+                                    {item.returnDueDate
+                                      ? `(${new Date(item.returnDueDate).toLocaleDateString(
+                                          "en-IN",
+                                          { day: "2-digit", month: "short" }
+                                        )})`
+                                      : ""}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="pt-1 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => openServiceModal(issue, itemIdx)}
+                                  className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600"
+                                >
+                                  <Wrench className="h-3 w-3" /> Manage / Service
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
           )}
 
-          {filteredCustodyRecords.length === 0 && (
-            <p className="p-8 text-center text-sm text-slate-400">No matching issued product records found.</p>
+          {filteredIssues.length === 0 && (
+            <p className="p-8 text-center text-sm text-slate-400">
+              No matching issued product records found.
+            </p>
           )}
 
-          {filteredCustodyRecords.length > 0 && (
+          {filteredIssues.length > 0 && (
             <Pagination
               currentPage={issuePage}
-              totalItems={filteredCustodyRecords.length}
+              totalItems={filteredIssues.length}
               pageSize={issuePageSize}
               onPageChange={(p) => setIssuePage(p)}
               onPageSizeChange={(s) => setIssuePageSize(s)}
