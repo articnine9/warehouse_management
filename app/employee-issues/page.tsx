@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { PackageCheck, Search, Trash2, X, Wrench, RotateCcw, Eye, ExternalLink, History } from "lucide-react";
+import { PackageCheck, Search, Trash2, X, Wrench, RotateCcw, Eye, ExternalLink, History, Box } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
@@ -46,7 +46,7 @@ export default function EmployeeIssuesPage() {
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const [itemQuantity, setItemQuantity] = useState("1");
   const [itemSerial, setItemSerial] = useState("");
-  const [itemReturnableQuantity, setItemReturnableQuantity] = useState("0");
+  const [itemProductType, setItemProductType] = useState<"NON_REUSABLE" | "REUSABLE">("NON_REUSABLE");
   const [itemReturnDueDays, setItemReturnDueDays] = useState("30");
   const [itemWarrantyMonths, setItemWarrantyMonths] = useState("12");
   const [itemServiceInterval, setItemServiceInterval] = useState("3"); // default 3 months
@@ -390,8 +390,9 @@ export default function EmployeeIssuesPage() {
     setProductSearchQuery(`${inventory.productId.name} (${inventory.productId.sku})`);
     setProductDropdownOpen(false);
     setItemQuantity("1");
-    setItemReturnableQuantity("0");
-    setItemReturnDueDays("30");
+    const isReusable = inventory.productId.productType === "REUSABLE";
+    setItemProductType(isReusable ? "REUSABLE" : "NON_REUSABLE");
+    setItemReturnDueDays(inventory.productId.returnDays?.toString() || "30");
 
     // Auto-populate service interval, warranty, and serial from Product definition
     const productInterval = inventory.productId.serviceIntervalMonths ?? 3;
@@ -447,14 +448,6 @@ export default function EmployeeIssuesPage() {
       return;
     }
 
-    const returnableQuantity = Number(itemReturnableQuantity) || 0;
-    if (!Number.isInteger(returnableQuantity) || returnableQuantity < 0 || returnableQuantity > quantity) {
-      setWarningMessage("Returnable quantity must be between 0 and the total issue quantity");
-      setWarningOpen(true);
-      return;
-    }
-    const nonReturnableQuantity = quantity - returnableQuantity;
-
     const unitPrice = Number(currentSelectedInventory.productId.price) || 0;
     const warrantyMonths = Number(itemWarrantyMonths) || 0;
     const intervalMonths = normalizeIntervalMonths(
@@ -469,15 +462,27 @@ export default function EmployeeIssuesPage() {
       endDate = ed.toISOString().slice(0, 10);
     }
 
-    const returnDueDays = Math.max(1, Number(itemReturnDueDays) || 30);
-    const commonItem = {
+    const isReusable = itemProductType === "REUSABLE";
+    const returnDueDays = isReusable ? Math.max(1, Number(itemReturnDueDays) || 30) : 0;
+    const returnDueDate = isReusable
+      ? new Date(Date.now() + returnDueDays * 86400000).toISOString().slice(0, 10)
+      : undefined;
+
+    const newItem: SelectedLineItem = {
       inventoryId: currentSelectedInventory._id,
       productName: currentSelectedInventory.productId.name,
       sku: currentSelectedInventory.productId.sku,
+      productType: isReusable ? "REUSABLE" : "NON_REUSABLE",
+      returnDueDays,
+      returnDueDate,
+      renewalCount: 0,
+      renewalHistory: [],
       warehouseName: currentSelectedInventory.warehouseId.name,
       rackName: currentSelectedInventory.rackId.name,
       unitPrice,
       maxStock: currentSelectedInventory.quantity,
+      quantity,
+      totalValue: unitPrice * quantity,
       serialNumber: itemSerial.trim() || undefined,
       warrantyMonths,
       warrantyStartDate: startDate.toISOString().slice(0, 10),
@@ -487,34 +492,11 @@ export default function EmployeeIssuesPage() {
       serviceHistory: [],
       holdingStatus: itemHoldingStatus,
     };
-    const newItems: SelectedLineItem[] = [];
-    if (nonReturnableQuantity > 0) {
-      newItems.push({
-        ...commonItem,
-        productType: "NON_REUSABLE",
-        returnDueDays: 0,
-        quantity: nonReturnableQuantity,
-        totalValue: unitPrice * nonReturnableQuantity,
-      });
-    }
-    if (returnableQuantity > 0) {
-      newItems.push({
-        ...commonItem,
-        productType: "REUSABLE",
-        returnDueDays,
-        returnDueDate: new Date(Date.now() + returnDueDays * 86400000).toISOString().slice(0, 10),
-        renewalCount: 0,
-        renewalHistory: [],
-        quantity: returnableQuantity,
-        totalValue: unitPrice * returnableQuantity,
-      });
-    }
 
-    setLineItems((prev) => [...prev, ...newItems]);
+    setLineItems((prev) => [...prev, newItem]);
     setSelectedInventoryId("");
     setProductSearchQuery("");
     setItemQuantity("1");
-    setItemReturnableQuantity("0");
     setItemSerial("");
   }
 
@@ -826,52 +808,54 @@ export default function EmployeeIssuesPage() {
                 </div>
               </div>
 
-              {/* Classification is decided per issue, so one stock line can be split by quantity. */}
+              {/* Product Classification & Return Period */}
               {currentSelectedInventory && (
-                <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3.5 space-y-3">
-                  <div>
-                    <p className="flex items-center gap-1.5 text-xs font-bold text-indigo-950 uppercase">
-                      <RotateCcw className="h-4 w-4 text-indigo-600" />
-                      Issue Classification & Quantity Split
-                    </p>
-                    <p className="mt-0.5 text-[11px] text-indigo-700">
-                      Choose how many of this issue must be returned. The remaining quantity is non-returnable.
-                    </p>
+                <div
+                  className={`rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border transition ${
+                    itemProductType === "REUSABLE"
+                      ? "bg-indigo-50/70 border-indigo-200"
+                      : "bg-slate-50 border-slate-200"
+                  }`}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2.5">
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Issue Type:
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setItemProductType("REUSABLE")}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition select-none ${
+                          itemProductType === "REUSABLE"
+                            ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        Returnable Asset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setItemProductType("NON_REUSABLE")}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition select-none ${
+                          itemProductType === "NON_REUSABLE"
+                            ? "bg-slate-700 text-white border-slate-700 shadow-sm"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        <Box className="h-3.5 w-3.5" />
+                        Non-Returnable
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <div className="rounded-lg border border-indigo-200 bg-white p-3">
-                      <label className="block text-[11px] font-bold text-indigo-950 uppercase mb-1">
-                        Returnable Quantity
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        max={Math.max(0, Number(itemQuantity) || 0)}
-                        step="1"
-                        value={itemReturnableQuantity}
-                        onChange={(e) => setItemReturnableQuantity(e.target.value)}
-                        className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-bold text-indigo-900 outline-none focus:border-indigo-600"
-                      />
-                      <p className="mt-1 text-[10px] text-indigo-600">Return / renewal tracking enabled</p>
-                    </div>
-                    <div className="rounded-lg border border-slate-200 bg-white p-3">
-                      <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
-                        Non-returnable Quantity
-                      </label>
-                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">
-                        {Math.max(0, (Number(itemQuantity) || 0) - (Number(itemReturnableQuantity) || 0))}
-                      </div>
-                      <p className="mt-1 text-[10px] text-slate-500">Calculated from the total issue quantity</p>
-                    </div>
-                  </div>
-
-                  {(Number(itemReturnableQuantity) || 0) > 0 && (
-                    <div className="flex items-center gap-2 flex-wrap border-t border-indigo-200 pt-3">
+                  {itemProductType === "REUSABLE" ? (
+                    <div className="flex items-center gap-2 flex-wrap pt-1 sm:pt-0">
                       <label className="text-[11px] font-bold text-indigo-950">Return Within:</label>
                       <input
                         type="number"
                         min="1"
+                        max="365"
                         value={itemReturnDueDays}
                         onChange={(e) => setItemReturnDueDays(e.target.value)}
                         className="w-20 rounded-md border border-indigo-200 bg-white px-2 py-1 text-xs font-bold text-slate-800 outline-none focus:border-indigo-600"
@@ -885,7 +869,7 @@ export default function EmployeeIssuesPage() {
                             onClick={() => setItemReturnDueDays(d.toString())}
                             className={`px-2 py-0.5 rounded text-[10px] font-bold border transition ${
                               itemReturnDueDays === d.toString()
-                                ? "bg-indigo-600 text-white border-indigo-600"
+                                ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
                                 : "bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50"
                             }`}
                           >
@@ -894,6 +878,10 @@ export default function EmployeeIssuesPage() {
                         ))}
                       </div>
                     </div>
+                  ) : (
+                    <span className="text-[11px] text-slate-500 italic">
+                      Consumable / Normal issue (No return required)
+                    </span>
                   )}
                 </div>
               )}

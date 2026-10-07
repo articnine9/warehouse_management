@@ -18,6 +18,8 @@ export type InventoryItem = {
     _id: string;
     name: string;
     sku: string;
+    productType?: "REUSABLE" | "NON_REUSABLE";
+    returnDays?: number;
     category?: string;
     price?: number;
     sellerName?: string;
