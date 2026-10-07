@@ -105,6 +105,7 @@ interface EmployeeHistoryData {
     issueNumber: string;
     date: string;
     reason: string;
+    siteName?: string;
     totalItems: number;
     totalQuantity: number;
     totalValue: number;
@@ -484,7 +485,8 @@ export default function EmployeeDetailPage({
       employeePhone: data.employee.phone,
       employeeEmail: data.employee.email,
       employeeDesignation: data.employee.designation,
-      reason: slip.reason as "STAFF_USE",
+      reason: slip.reason,
+      siteName: slip.siteName,
       notes: slip.notes,
       issuedByName: slip.issuedByName,
       items: [...itemsFromActive, ...itemsFromReturned],

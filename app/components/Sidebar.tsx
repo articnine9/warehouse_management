@@ -28,6 +28,7 @@ import {
   Menu,
   ArrowLeftRight,
   History,
+  UserCheck,
 } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import NotificationBell from "./NotificationBell";
@@ -42,10 +43,14 @@ const iconMap: Record<string, React.ReactNode> = {
   Racks: <Box className="h-4 w-4" />,
   Categories: <FolderTree className="h-4 w-4" />,
   Products: <Tag className="h-4 w-4" />,
+  Users: <UserCheck className="h-4 w-4" />,
+  Employees: <UserCheck className="h-4 w-4" />,
   Inventory: <ClipboardList className="h-4 w-4" />,
+  "User Asset Management": <PackageCheck className="h-4 w-4" />,
   "Employee Asset Management": <PackageCheck className="h-4 w-4" />,
   "Asset Movement & History": <History className="h-4 w-4" />,
   "Assest Moment & History": <History className="h-4 w-4" />,
+  "User Issue": <PackageCheck className="h-4 w-4" />,
   "Employee Issue": <PackageCheck className="h-4 w-4" />,
   "Stock Movements": <ArrowLeftRight className="h-4 w-4" />,
   Staff: <Users className="h-4 w-4" />,
@@ -74,6 +79,8 @@ export default function Sidebar() {
     "/racks",
     "/categories",
     "/products",
+    "/users",
+    "/employees",
   ].some((p) => pathname === p);
 
   const isItemActive = (itemPath?: string) => {
@@ -106,10 +113,11 @@ export default function Sidebar() {
               { name: "Racks", path: "/racks" },
               { name: "Categories", path: "/categories" },
               { name: "Products", path: "/products" },
+              { name: "Users", path: "/users" },
             ],
           },
           { name: "Inventory", path: "/inventory" },
-          { name: "Employee Asset Management", path: "/employee-issues" },
+          { name: "User Asset Management", path: "/employee-issues" },
           { name: "Asset Movement & History", path: "/asset-history" },
           { name: "Stock Movements", path: "/movements" },
           // { name: "Billing", path: "/billing" },
@@ -119,7 +127,7 @@ export default function Sidebar() {
       : [
           { name: "Dashboard", path: "/dashboard" },
           { name: "Inventory", path: "/inventory" },
-          { name: "Employee Asset Management", path: "/employee-issues" },
+          { name: "User Asset Management", path: "/employee-issues" },
           { name: "Asset Movement & History", path: "/asset-history" },
           { name: "Stock Movements", path: "/movements" },
           // { name: "Billing", path: "/billing" },

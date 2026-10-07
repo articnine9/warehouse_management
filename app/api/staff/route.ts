@@ -16,7 +16,7 @@ export async function GET() {
     if (currentUser.role === "ADMIN") {
       const staff = await User.find({ role: "STAFF" })
         .select("-passwordHash")
-        .populate("warehouseId", "name code address")
+        .populate("warehouseIds", "name code address")
         .sort({ createdAt: -1 });
 
       return Response.json({
@@ -30,7 +30,13 @@ export async function GET() {
     const warehouseId = getUserWarehouseId(currentUser);
     const userWarehouse = getUserWarehouse(currentUser);
 
-    if (!warehouseId) {
+    const warehouseIdsArray = Array.isArray(warehouseId)
+      ? warehouseId
+      : warehouseId
+      ? [warehouseId]
+      : [];
+
+    if (warehouseIdsArray.length === 0) {
       return Response.json(
         {
           success: false,
@@ -60,8 +66,8 @@ export async function GET() {
     void Warehouse;
     void Category;
 
-    // Fetch ALL inventory records for this warehouse
-    const inventory = await Inventory.find({ warehouseId })
+    // Fetch ALL inventory records for this warehouse / warehouses
+    const inventory = await Inventory.find({ warehouseId: { $in: warehouseIdsArray } })
       .populate("productId", "name sku category price sellerName description")
       .populate("rackId", "name code")
       .populate("warehouseId", "name code address")
@@ -99,12 +105,21 @@ export async function GET() {
       };
     });
 
+    const isMultiple = warehouseIdsArray.length > 1;
+    const warehouseTitle = isMultiple
+      ? {
+          name: "All Assigned Warehouses (Both)",
+          code: "BOTH",
+          address: "Multi-warehouse access",
+        }
+      : userWarehouse;
+
     return Response.json({
       success: true,
       role: "STAFF",
       data: {
         user: toSafeUser(currentUser),
-        warehouse: userWarehouse,
+        warehouse: warehouseTitle,
         summary: {
           totalUnits,
           distinctProducts: distinctProductIds.size,
@@ -157,7 +172,11 @@ export async function POST(request: Request) {
     const email = body.email?.trim().toLowerCase();
     const password = body.password?.trim();
     const role = body.role === "ADMIN" ? "ADMIN" : "STAFF";
-    const warehouseId = body.warehouseId?.trim();
+    const warehouseIds = Array.isArray(body.warehouseIds)
+      ? body.warehouseIds.map((id: string) => id.trim()).filter(Boolean)
+      : body.warehouseId
+        ? [body.warehouseId.trim()]
+        : [];
 
     if (!name || !email || !password) {
       return Response.json(
@@ -173,18 +192,18 @@ export async function POST(request: Request) {
       );
     }
 
-    if (role === "STAFF" && !warehouseId) {
+    if (role === "STAFF" && warehouseIds.length === 0) {
       return Response.json(
-        { success: false, message: "Please assign a warehouse for staff members" },
+        { success: false, message: "Please assign at least one warehouse for staff members" },
         { status: 400 }
       );
     }
 
-    if (warehouseId) {
-      const warehouse = await Warehouse.findById(warehouseId);
-      if (!warehouse) {
+    if (warehouseIds.length > 0) {
+      const warehouses = await Warehouse.find({ _id: { $in: warehouseIds } });
+      if (warehouses.length !== warehouseIds.length) {
         return Response.json(
-          { success: false, message: "Selected warehouse does not exist" },
+          { success: false, message: "One or more selected warehouses do not exist" },
           { status: 404 }
         );
       }
@@ -206,13 +225,14 @@ export async function POST(request: Request) {
       email,
       passwordHash,
       role,
-      warehouseId: warehouseId || undefined,
+      warehouseIds: warehouseIds.length > 0 ? warehouseIds : undefined,
+      warehouseId: warehouseIds.length > 0 ? warehouseIds[0] : undefined,
       status: "ACTIVE",
     });
 
     const populatedUser = await User.findById(user._id)
       .select("-passwordHash")
-      .populate("warehouseId", "name code address");
+      .populate("warehouseIds", "name code address");
 
     return Response.json({
       success: true,

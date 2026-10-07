@@ -12,7 +12,11 @@ export async function POST(request: Request) {
     const email = body.email?.trim().toLowerCase();
     const password = body.password?.trim();
     const role = "STAFF";
-    const warehouseId = body.warehouseId?.trim();
+    const warehouseIds = Array.isArray(body.warehouseIds)
+      ? body.warehouseIds.map((id: string) => id.trim()).filter(Boolean)
+      : body.warehouseId
+        ? [body.warehouseId.trim()]
+        : [];
 
     if (!name || !email || !password) {
       return Response.json(
@@ -34,28 +38,26 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!warehouseId) {
+    if (warehouseIds.length === 0) {
       return Response.json(
         {
           success: false,
-          message: "Please choose a warehouse for staff",
+          message: "Please choose at least one warehouse for staff",
         },
         { status: 400 }
       );
     }
 
-    if (warehouseId) {
-      const warehouse = await Warehouse.findById(warehouseId);
+    const warehouses = await Warehouse.find({ _id: { $in: warehouseIds } });
 
-      if (!warehouse) {
-        return Response.json(
-          {
-            success: false,
-            message: "Selected warehouse does not exist",
-          },
-          { status: 404 }
-        );
-      }
+    if (warehouses.length !== warehouseIds.length) {
+      return Response.json(
+        {
+          success: false,
+          message: "One or more selected warehouses do not exist",
+        },
+        { status: 404 }
+      );
     }
 
     const existingUser = await User.findOne({ email });
@@ -77,14 +79,14 @@ export async function POST(request: Request) {
       email,
       passwordHash,
       role,
-      warehouseId,
+      warehouseIds,
       status: "ACTIVE",
       lastLoginAt: new Date(),
     });
 
     const populatedUser = await User.findById(user._id)
       .select("-passwordHash")
-      .populate("warehouseId", "name code");
+      .populate("warehouseIds", "name code");
 
     await setSessionCookie(user._id.toString(), role);
 

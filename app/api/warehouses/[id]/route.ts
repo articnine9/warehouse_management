@@ -60,7 +60,7 @@ export async function GET(
 
     // 2. Get all inventory items in this warehouse
     const inventory = await Inventory.find({ warehouseId: id })
-      .populate("productId", "name sku price category productType unit")
+      .populate("productId", "name sku price category unit")
       .populate("rackId", "name code")
       .sort({ updatedAt: -1 });
 

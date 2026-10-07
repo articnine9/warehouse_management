@@ -417,8 +417,6 @@ export async function GET(
           category: product.category,
           price: product.price,
           description: product.description,
-          productType: product.productType || "NON_REUSABLE",
-          returnDays: product.returnDays || 30,
           warrantyMonths: product.warrantyMonths || 0,
           serviceIntervalMonths: product.serviceIntervalMonths || 0,
           sellerName: product.sellerName,

@@ -5,8 +5,6 @@ export interface IProduct {
     sku: string;
     category?: string;
     categoryId?: mongoose.Types.ObjectId;
-    productType?: "REUSABLE" | "NON_REUSABLE";
-    returnDays?: number;
     serviceIntervalMonths?: number;
     warrantyMonths?: number;
     serialNumber?: string;
@@ -43,18 +41,6 @@ const productSchema = new Schema<IProduct>(
             type: Schema.Types.ObjectId,
             ref: "Category",
             index: true,
-        },
-
-        productType: {
-            type: String,
-            enum: ["REUSABLE", "NON_REUSABLE"],
-            default: "NON_REUSABLE",
-        },
-
-        returnDays: {
-            type: Number,
-            default: 0,
-            min: 0,
         },
 
         serviceIntervalMonths: {

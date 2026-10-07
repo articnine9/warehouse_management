@@ -19,6 +19,31 @@ export async function GET(request: Request) {
     void Inventory;
 
     const { searchParams } = new URL(request.url);
+    const checkNameParam = searchParams.get("checkName");
+    if (checkNameParam?.trim()) {
+      const escaped = checkNameParam.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const existing = await Product.findOne({
+        name: { $regex: new RegExp(`^${escaped}$`, "i") },
+      });
+      if (existing) {
+        const inventories = await Inventory.find({ productId: existing._id });
+        const totalStock = inventories.reduce((sum, inv) => sum + (inv.quantity || 0), 0);
+        return Response.json({
+          success: true,
+          exists: true,
+          product: {
+            _id: existing._id.toString(),
+            name: existing.name,
+            sku: existing.sku,
+            category: existing.category,
+            price: existing.price,
+            totalStock,
+          },
+        });
+      }
+      return Response.json({ success: true, exists: false });
+    }
+
     const query = searchParams.get("q") || searchParams.get("query") || searchParams.get("search");
     const categoryParam = searchParams.get("category");
     const pageParam = searchParams.get("page");
@@ -168,6 +193,155 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
+    // Handle restocking existing product directly
+    if (body.action === "RESTOCK_EXISTING") {
+      const {
+        existingProductId,
+        warehouseId,
+        rackId,
+        quantity,
+      } = body;
+
+      if (!existingProductId || !warehouseId || !rackId || quantity === undefined) {
+        return Response.json(
+          {
+            success: false,
+            message: "Product, warehouse, rack, and quantity are required to add stock",
+          },
+          { status: 400 }
+        );
+      }
+
+      const existingProduct = await Product.findById(existingProductId);
+      if (!existingProduct) {
+        return Response.json(
+          {
+            success: false,
+            message: "Target product not found",
+          },
+          { status: 404 }
+        );
+      }
+
+      const rackDoc = await Rack.findOne({
+        _id: rackId,
+        warehouseId: warehouseId,
+      });
+
+      if (!rackDoc) {
+        return Response.json(
+          {
+            success: false,
+            message: "Selected rack does not belong to the selected warehouse",
+          },
+          { status: 400 }
+        );
+      }
+
+      const warehouseDoc = await Warehouse.findById(warehouseId);
+      const addQty = Math.max(1, Number(quantity) || 1);
+
+      let inv = await Inventory.findOne({
+        productId: existingProductId,
+        warehouseId,
+        rackId,
+      });
+
+      if (inv) {
+        inv.quantity = (inv.quantity || 0) + addQty;
+        if (inv.quantity === 0) {
+          inv.status = "OUT_OF_STOCK";
+        } else if (inv.quantity <= 10) {
+          inv.status = "LOW_STOCK";
+        } else {
+          inv.status = "AVAILABLE";
+        }
+        await inv.save();
+      } else {
+        const invStatus = addQty === 0 ? "OUT_OF_STOCK" : addQty <= 10 ? "LOW_STOCK" : "AVAILABLE";
+        inv = await Inventory.create({
+          productId: existingProductId,
+          warehouseId,
+          rackId,
+          quantity: addQty,
+          status: invStatus,
+        });
+      }
+
+      // Log Stock Movement
+      try {
+        await StockMovement.create({
+          productId: existingProduct._id,
+          productName: existingProduct.name,
+          sku: existingProduct.sku,
+          category: existingProduct.category,
+          warehouseId: warehouseDoc?._id || warehouseId,
+          warehouseName: warehouseDoc?.name || "Warehouse",
+          rackId: rackDoc._id,
+          rackName: rackDoc.name,
+          movementType: "INWARD",
+          reason: "RESTOCK",
+          quantity: addQty,
+          unitPrice: existingProduct.price || 0,
+          totalValue: (existingProduct.price || 0) * addQty,
+          referenceNumber: "RESTOCK",
+          entityName: `Stock added to ${warehouseDoc?.name || "Warehouse"} / ${rackDoc.name}`,
+          notes: `Restocked ${addQty} units for existing product "${existingProduct.name}"`,
+          performedBy: user.id,
+          performedByName: user.name,
+        });
+      } catch (smErr) {
+        console.error("Failed to log stock movement in RESTOCK_EXISTING:", smErr);
+      }
+
+      return Response.json({
+        success: true,
+        restocked: true,
+        data: existingProduct,
+        message: `Successfully added ${addQty} units to existing product "${existingProduct.name}".`,
+      });
+    }
+
+    const trimmedName = String(body.name || "").trim();
+    if (!trimmedName) {
+      return Response.json(
+        {
+          success: false,
+          message: "Product name is required",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Check if a product with the same name already exists
+    const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existingSameName = await Product.findOne({
+      name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+    });
+
+    if (existingSameName && !body.allowDuplicate) {
+      const inventories = await Inventory.find({ productId: existingSameName._id });
+      const totalStock = inventories.reduce((sum, inv) => sum + (inv.quantity || 0), 0);
+
+      return Response.json(
+        {
+          success: false,
+          isDuplicate: true,
+          existingProduct: {
+            _id: existingSameName._id.toString(),
+            name: existingSameName.name,
+            sku: existingSameName.sku,
+            category: existingSameName.category,
+            price: existingSameName.price,
+            sellerName: existingSameName.sellerName,
+            totalStock,
+          },
+          message: `A product named "${existingSameName.name}" already exists in the catalog (SKU: ${existingSameName.sku}).`,
+        },
+        { status: 409 }
+      );
+    }
+
     const {
       warehouseId,
       rackId,
@@ -209,12 +383,10 @@ export async function POST(request: Request) {
     }
 
     const product = await Product.create({
-      name: body.name,
+      name: trimmedName,
       sku: body.sku,
       category: body.category,
       categoryId: body.categoryId,
-      productType: body.productType === "REUSABLE" ? "REUSABLE" : "NON_REUSABLE",
-      returnDays: body.productType === "REUSABLE" ? Math.max(1, Number(body.returnDays) || 30) : 0,
       serviceIntervalMonths: body.serviceIntervalMonths !== undefined ? Number(body.serviceIntervalMonths) : 3,
       warrantyMonths: body.warrantyMonths !== undefined ? Number(body.warrantyMonths) : 12,
       serialNumber: body.serialNumber ? String(body.serialNumber).trim() : undefined,

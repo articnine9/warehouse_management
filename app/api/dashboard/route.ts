@@ -65,11 +65,11 @@ export type StockAlert = {
 /**
  * Items whose recurring service cycle is due soon or already overdue.
  */
-async function buildServiceAlerts(warehouseId?: unknown): Promise<ServiceAlert[]> {
+async function buildServiceAlerts(warehouseIds?: unknown[]): Promise<ServiceAlert[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filter: Record<string, any> = {};
-  if (warehouseId) {
-    filter["items.warehouseId"] = warehouseId;
+  if (warehouseIds && warehouseIds.length > 0) {
+    filter["items.warehouseId"] = { $in: warehouseIds };
   }
 
   const issues = await EmployeeIssue.find(filter).sort({ createdAt: -1 }).limit(300);
@@ -78,7 +78,7 @@ async function buildServiceAlerts(warehouseId?: unknown): Promise<ServiceAlert[]
   for (const issue of issues) {
     issue.items.forEach((item, itemIndex) => {
       if (item.holdingStatus === "RETURNED") return;
-      if (warehouseId && item.warehouseId?.toString() !== warehouseId.toString()) return;
+      if (warehouseIds && warehouseIds.length > 0 && !warehouseIds.includes(item.warehouseId?.toString())) return;
 
       const cycle = getServiceCycleInfo({
         intervalMonths: item.serviceIntervalMonths,
@@ -114,11 +114,11 @@ async function buildServiceAlerts(warehouseId?: unknown): Promise<ServiceAlert[]
 /**
  * Reusable items whose return/renewal period is ending soon or overdue.
  */
-async function buildReusableAlerts(warehouseId?: unknown): Promise<ReusableAlert[]> {
+async function buildReusableAlerts(warehouseIds?: unknown[]): Promise<ReusableAlert[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filter: Record<string, any> = {};
-  if (warehouseId) {
-    filter["items.warehouseId"] = warehouseId;
+  if (warehouseIds && warehouseIds.length > 0) {
+    filter["items.warehouseId"] = { $in: warehouseIds };
   }
 
   const issues = await EmployeeIssue.find(filter).sort({ createdAt: -1 }).limit(300);
@@ -129,7 +129,7 @@ async function buildReusableAlerts(warehouseId?: unknown): Promise<ReusableAlert
   for (const issue of issues) {
     issue.items.forEach((item, itemIndex) => {
       if (item.holdingStatus === "RETURNED") return;
-      if (warehouseId && item.warehouseId?.toString() !== warehouseId.toString()) return;
+      if (warehouseIds && warehouseIds.length > 0 && !warehouseIds.includes(item.warehouseId?.toString())) return;
 
       const isReusable =
         item.productType === "REUSABLE" ||
@@ -142,7 +142,8 @@ async function buildReusableAlerts(warehouseId?: unknown): Promise<ReusableAlert
         dueDate = new Date(item.returnDueDate);
       } else {
         const days = Number(item.returnDueDays) || 30;
-        dueDate = new Date(issue.createdAt.getTime() + days * 86400000);
+        const createdTime = issue.createdAt ? new Date(issue.createdAt).getTime() : Date.now();
+        dueDate = new Date(createdTime + days * 86400000);
       }
       dueDate.setHours(0, 0, 0, 0);
 
@@ -177,13 +178,13 @@ async function buildReusableAlerts(warehouseId?: unknown): Promise<ReusableAlert
 /**
  * Items that are Low in Stock or Out of Stock.
  */
-async function buildStockAlerts(warehouseId?: unknown): Promise<StockAlert[]> {
+async function buildStockAlerts(warehouseIds?: unknown[]): Promise<StockAlert[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const filter: Record<string, any> = {
     status: { $in: ["LOW_STOCK", "OUT_OF_STOCK"] },
   };
-  if (warehouseId) {
-    filter.warehouseId = warehouseId;
+  if (warehouseIds && warehouseIds.length > 0) {
+    filter.warehouseId = { $in: warehouseIds };
   }
 
   const items = await Inventory.find(filter)
@@ -237,6 +238,14 @@ async function buildStockAlerts(warehouseId?: unknown): Promise<StockAlert[]> {
 export async function GET() {
   try {
     await connectDB();
+
+    void Product;
+    void Warehouse;
+    void Rack;
+    void Category;
+    void Inventory;
+    void EmployeeIssue;
+    void User;
 
     const user = await requireSessionUser();
 
@@ -305,10 +314,10 @@ export async function GET() {
       });
     }
 
-    const warehouseId = getUserWarehouseId(user);
+    const warehouseIds = getUserWarehouseId(user);
     const warehouse = getUserWarehouse(user);
 
-    if (!warehouseId) {
+    if (!warehouseIds || warehouseIds.length === 0) {
       return Response.json(
         {
           success: false,
@@ -331,7 +340,7 @@ export async function GET() {
       Inventory.aggregate([
         {
           $match: {
-            warehouseId,
+            warehouseId: { $in: warehouseIds },
           },
         },
         {
@@ -342,25 +351,25 @@ export async function GET() {
         },
       ]),
       Inventory.countDocuments({
-        warehouseId,
+        warehouseId: { $in: warehouseIds },
         status: "LOW_STOCK",
       }),
       Inventory.countDocuments({
-        warehouseId,
+        warehouseId: { $in: warehouseIds },
         status: "OUT_OF_STOCK",
       }),
       Inventory.find({
-        warehouseId,
+        warehouseId: { $in: warehouseIds },
         status: { $in: ["LOW_STOCK", "OUT_OF_STOCK"] },
       })
         .populate("productId", "name sku")
         .populate("rackId", "name code")
         .sort({ quantity: 1 })
         .limit(5),
-      Inventory.distinct("productId", { warehouseId }),
-      buildServiceAlerts(warehouseId),
-      buildReusableAlerts(warehouseId),
-      buildStockAlerts(warehouseId),
+      Inventory.distinct("productId", { warehouseId: { $in: warehouseIds } }),
+      buildServiceAlerts(warehouseIds),
+      buildReusableAlerts(warehouseIds),
+      buildStockAlerts(warehouseIds),
     ]);
 
     return Response.json({
@@ -425,6 +434,7 @@ export async function GET() {
       {
         success: false,
         message: "Failed to fetch dashboard summary",
+        error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
     );

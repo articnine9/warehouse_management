@@ -2,13 +2,14 @@
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { PackageCheck, Search, Trash2, X, Wrench, RotateCcw, Box, Eye, Receipt, ExternalLink, History } from "lucide-react";
+import { PackageCheck, Search, Trash2, X, Wrench, RotateCcw, Eye, ExternalLink, History } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 import IssueBillModal, { IssueBillData } from "@/app/components/IssueBillModal";
 import ProductHistoryModal from "@/app/components/ProductHistoryModal";
 import EmployeeHistoryModal from "@/app/components/EmployeeHistoryModal";
+import AddEmployeeModal from "@/app/components/AddEmployeeModal";
 import {
   CUSTOM_INTERVAL_VALUE,
   SERVICE_INTERVAL_OPTIONS,
@@ -35,6 +36,7 @@ export default function EmployeeIssuesPage() {
   const [warningOpen, setWarningOpen] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
 
+  const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
   const [employeeDropdownOpen, setEmployeeDropdownOpen] = useState(false);
@@ -44,7 +46,7 @@ export default function EmployeeIssuesPage() {
   const [productDropdownOpen, setProductDropdownOpen] = useState(false);
   const [itemQuantity, setItemQuantity] = useState("1");
   const [itemSerial, setItemSerial] = useState("");
-  const [itemProductType, setItemProductType] = useState<"NON_REUSABLE" | "REUSABLE">("NON_REUSABLE");
+  const [itemReturnableQuantity, setItemReturnableQuantity] = useState("0");
   const [itemReturnDueDays, setItemReturnDueDays] = useState("30");
   const [itemWarrantyMonths, setItemWarrantyMonths] = useState("12");
   const [itemServiceInterval, setItemServiceInterval] = useState("3"); // default 3 months
@@ -53,7 +55,8 @@ export default function EmployeeIssuesPage() {
 
   const [lineItems, setLineItems] = useState<SelectedLineItem[]>([]);
 
-  const [reason, setReason] = useState<EmployeeIssue["reason"]>("STAFF_USE");
+  const [reason, setReason] = useState<EmployeeIssue["reason"]>("INSTALLATION_WORK");
+  const [siteName, setSiteName] = useState("");
   const [notes, setNotes] = useState("");
   const [selectedLookupEmployeeId, setSelectedLookupEmployeeId] = useState("");
   const [issueSearchQuery, setIssueSearchQuery] = useState("");
@@ -97,6 +100,7 @@ export default function EmployeeIssuesPage() {
       employeeEmail: issue.employeeEmail || emp?.email,
       employeeDesignation: emp?.designation,
       reason: issue.reason,
+      siteName: issue.siteName,
       notes: issue.notes,
       issuedByName: issue.issuedByName,
       items: issue.items.map((it) => ({
@@ -316,6 +320,7 @@ export default function EmployeeIssuesPage() {
           issue.employeeEmail.toLowerCase().includes(query) ||
           issue.employeePhone?.toLowerCase().includes(query) ||
           issue.employeeDepartment?.toLowerCase().includes(query) ||
+          issue.siteName?.toLowerCase().includes(query) ||
           reasonLabels[issue.reason]?.toLowerCase().includes(query) ||
           issue.issuedByName?.toLowerCase().includes(query);
 
@@ -385,9 +390,8 @@ export default function EmployeeIssuesPage() {
     setProductSearchQuery(`${inventory.productId.name} (${inventory.productId.sku})`);
     setProductDropdownOpen(false);
     setItemQuantity("1");
-    const isReusable = inventory.productId.productType === "REUSABLE";
-    setItemProductType(isReusable ? "REUSABLE" : "NON_REUSABLE");
-    setItemReturnDueDays(inventory.productId.returnDays?.toString() || "30");
+    setItemReturnableQuantity("0");
+    setItemReturnDueDays("30");
 
     // Auto-populate service interval, warranty, and serial from Product definition
     const productInterval = inventory.productId.serviceIntervalMonths ?? 3;
@@ -426,17 +430,30 @@ export default function EmployeeIssuesPage() {
     }
 
     const quantity = Number(itemQuantity);
-    if (!quantity || quantity <= 0) {
+    if (!Number.isInteger(quantity) || quantity <= 0) {
       setWarningMessage("Please enter a valid quantity");
       setWarningOpen(true);
       return;
     }
 
-    if (quantity > currentSelectedInventory.quantity) {
-      setWarningMessage(`Requested quantity exceeds available stock (${currentSelectedInventory.quantity})`);
+    const alreadyAddedQuantity = lineItems
+      .filter((item) => item.inventoryId === currentSelectedInventory._id)
+      .reduce((sum, item) => sum + item.quantity, 0);
+    const remainingStock = currentSelectedInventory.quantity - alreadyAddedQuantity;
+
+    if (quantity > remainingStock) {
+      setWarningMessage(`Requested quantity exceeds remaining stock (${Math.max(0, remainingStock)})`);
       setWarningOpen(true);
       return;
     }
+
+    const returnableQuantity = Number(itemReturnableQuantity) || 0;
+    if (!Number.isInteger(returnableQuantity) || returnableQuantity < 0 || returnableQuantity > quantity) {
+      setWarningMessage("Returnable quantity must be between 0 and the total issue quantity");
+      setWarningOpen(true);
+      return;
+    }
+    const nonReturnableQuantity = quantity - returnableQuantity;
 
     const unitPrice = Number(currentSelectedInventory.productId.price) || 0;
     const warrantyMonths = Number(itemWarrantyMonths) || 0;
@@ -452,27 +469,15 @@ export default function EmployeeIssuesPage() {
       endDate = ed.toISOString().slice(0, 10);
     }
 
-    const isReusable = itemProductType === "REUSABLE";
-    const returnDueDays = isReusable ? Math.max(1, Number(itemReturnDueDays) || 30) : 0;
-    const returnDueDate = isReusable
-      ? new Date(Date.now() + returnDueDays * 86400000).toISOString().slice(0, 10)
-      : undefined;
-
-    const newItem: SelectedLineItem = {
+    const returnDueDays = Math.max(1, Number(itemReturnDueDays) || 30);
+    const commonItem = {
       inventoryId: currentSelectedInventory._id,
       productName: currentSelectedInventory.productId.name,
       sku: currentSelectedInventory.productId.sku,
-      productType: isReusable ? "REUSABLE" : "NON_REUSABLE",
-      returnDueDays,
-      returnDueDate,
-      renewalCount: 0,
-      renewalHistory: [],
       warehouseName: currentSelectedInventory.warehouseId.name,
       rackName: currentSelectedInventory.rackId.name,
       unitPrice,
       maxStock: currentSelectedInventory.quantity,
-      quantity,
-      totalValue: unitPrice * quantity,
       serialNumber: itemSerial.trim() || undefined,
       warrantyMonths,
       warrantyStartDate: startDate.toISOString().slice(0, 10),
@@ -482,11 +487,34 @@ export default function EmployeeIssuesPage() {
       serviceHistory: [],
       holdingStatus: itemHoldingStatus,
     };
+    const newItems: SelectedLineItem[] = [];
+    if (nonReturnableQuantity > 0) {
+      newItems.push({
+        ...commonItem,
+        productType: "NON_REUSABLE",
+        returnDueDays: 0,
+        quantity: nonReturnableQuantity,
+        totalValue: unitPrice * nonReturnableQuantity,
+      });
+    }
+    if (returnableQuantity > 0) {
+      newItems.push({
+        ...commonItem,
+        productType: "REUSABLE",
+        returnDueDays,
+        returnDueDate: new Date(Date.now() + returnDueDays * 86400000).toISOString().slice(0, 10),
+        renewalCount: 0,
+        renewalHistory: [],
+        quantity: returnableQuantity,
+        totalValue: unitPrice * returnableQuantity,
+      });
+    }
 
-    setLineItems((prev) => [...prev, newItem]);
+    setLineItems((prev) => [...prev, ...newItems]);
     setSelectedInventoryId("");
     setProductSearchQuery("");
     setItemQuantity("1");
+    setItemReturnableQuantity("0");
     setItemSerial("");
   }
 
@@ -497,7 +525,7 @@ export default function EmployeeIssuesPage() {
   async function handleSubmitIssue(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selectedEmployeeId) {
-      setWarningMessage("Please select an employee");
+      setWarningMessage("Please select a user");
       setWarningOpen(true);
       return;
     }
@@ -515,6 +543,7 @@ export default function EmployeeIssuesPage() {
         body: JSON.stringify({
           employeeId: selectedEmployeeId,
           reason,
+          siteName,
           notes,
           items: lineItems,
         }),
@@ -532,7 +561,8 @@ export default function EmployeeIssuesPage() {
       setEmployeeSearchQuery("");
       setLineItems([]);
       setNotes("");
-      setReason("STAFF_USE");
+      setReason("INSTALLATION_WORK");
+      setSiteName("");
       await fetchIssues();
       await fetchInventory();
     } catch (error) {
@@ -588,10 +618,10 @@ export default function EmployeeIssuesPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">
-              Employee Asset Management
+              User Asset Management
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Issue products to employees, configure service interval cycles, and manage custody handovers.
+              Issue products to users, configure service interval cycles, and manage custody handovers.
             </p>
           </div>
           <div>
@@ -609,20 +639,29 @@ export default function EmployeeIssuesPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm space-y-5">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
             <PackageCheck className="h-5 w-5 text-blue-600" />
-            <h2 className="text-lg font-bold text-slate-800">Issue Product to Employee</h2>
+            <h2 className="text-lg font-bold text-slate-800">Issue Product to User</h2>
           </div>
 
           <form onSubmit={handleSubmitIssue} className="space-y-4">
-            {/* Employee Selection */}
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            {/* User Selection */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
               <div ref={employeeDropdownRef} className="relative">
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
-                  Select Employee *
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-600 uppercase">
+                    Select User *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddEmployeeOpen(true)}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition"
+                  >
+                    + Add New User
+                  </button>
+                </div>
                 <div className="relative">
                   <input
                     type="text"
-                    placeholder="Type employee name, code, department..."
+                    placeholder="Type user name, code, department..."
                     value={employeeSearchQuery}
                     onChange={(e) => {
                       setEmployeeSearchQuery(e.target.value);
@@ -668,19 +707,31 @@ export default function EmployeeIssuesPage() {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
-                  Reason for Issue
+                  Reason for Use
                 </label>
                 <select
                   value={reason}
                   onChange={(e) => setReason(e.target.value as EmployeeIssue["reason"])}
                   className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 >
-                  <option value="STAFF_USE">Staff Use</option>
-                  <option value="OFFICE_USE">Office Equipment / Device</option>
-                  <option value="UNIFORM">Uniform / Safety Gear</option>
-                  <option value="REPLACEMENT">Tool / Replacement</option>
+                  <option value="INSTALLATION_WORK">Installation Work</option>
+                  <option value="MAINTENANCE_AMC">Maintenance / AMC</option>
+                  <option value="EQUIPMENT_REPLACEMENT">Equipment Replacement</option>
                   <option value="OTHER">Other</option>
                 </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
+                  Site Name
+                </label>
+                <input
+                  type="text"
+                  value={siteName}
+                  onChange={(e) => setSiteName(e.target.value)}
+                  placeholder="Enter site name"
+                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                />
               </div>
             </div>
 
@@ -775,40 +826,49 @@ export default function EmployeeIssuesPage() {
                 </div>
               </div>
 
-              {/* Product Classification & Return Period (Auto-inherited from product definition) */}
+              {/* Classification is decided per issue, so one stock line can be split by quantity. */}
               {currentSelectedInventory && (
-                <div
-                  className={`rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border ${
-                    itemProductType === "REUSABLE"
-                      ? "bg-indigo-50/80 border-indigo-200"
-                      : "bg-slate-50 border-slate-200"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="font-bold text-xs text-slate-800 flex items-center gap-1.5">
-                      {itemProductType === "REUSABLE" ? (
-                        <>
-                          <RotateCcw className="h-4 w-4 text-indigo-600" />
-                          <span className="text-indigo-950 font-bold">Returnable Asset</span>
-                          <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-800">
-                            Return / Renewal Tracking Enabled
-                          </span>
-                        </>
-                      ) : (
-                        <>
-                          <Box className="h-4 w-4 text-slate-600" />
-                          <span className="text-slate-800 font-bold">Normal / Consumable Item</span>
-                          <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">
-                            No return required
-                          </span>
-                        </>
-                      )}
-                    </span>
+                <div className="rounded-xl border border-indigo-200 bg-indigo-50/60 p-3.5 space-y-3">
+                  <div>
+                    <p className="flex items-center gap-1.5 text-xs font-bold text-indigo-950 uppercase">
+                      <RotateCcw className="h-4 w-4 text-indigo-600" />
+                      Issue Classification & Quantity Split
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-indigo-700">
+                      Choose how many of this issue must be returned. The remaining quantity is non-returnable.
+                    </p>
                   </div>
 
-                  {itemProductType === "REUSABLE" && (
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <label className="text-[11px] font-bold text-indigo-950">Return Validity:</label>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div className="rounded-lg border border-indigo-200 bg-white p-3">
+                      <label className="block text-[11px] font-bold text-indigo-950 uppercase mb-1">
+                        Returnable Quantity
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max={Math.max(0, Number(itemQuantity) || 0)}
+                        step="1"
+                        value={itemReturnableQuantity}
+                        onChange={(e) => setItemReturnableQuantity(e.target.value)}
+                        className="w-full rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm font-bold text-indigo-900 outline-none focus:border-indigo-600"
+                      />
+                      <p className="mt-1 text-[10px] text-indigo-600">Return / renewal tracking enabled</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 bg-white p-3">
+                      <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1">
+                        Non-returnable Quantity
+                      </label>
+                      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800">
+                        {Math.max(0, (Number(itemQuantity) || 0) - (Number(itemReturnableQuantity) || 0))}
+                      </div>
+                      <p className="mt-1 text-[10px] text-slate-500">Calculated from the total issue quantity</p>
+                    </div>
+                  </div>
+
+                  {(Number(itemReturnableQuantity) || 0) > 0 && (
+                    <div className="flex items-center gap-2 flex-wrap border-t border-indigo-200 pt-3">
+                      <label className="text-[11px] font-bold text-indigo-950">Return Within:</label>
                       <input
                         type="number"
                         min="1"
@@ -968,7 +1028,7 @@ export default function EmployeeIssuesPage() {
                 onChange={(e) => setSelectedLookupEmployeeId(e.target.value)}
                 className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 font-semibold text-slate-700"
               >
-                <option value="">All Employees</option>
+                <option value="">All Users</option>
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
                     {emp.employeeCode} - {emp.name} ({emp.department || "General"})
@@ -1466,6 +1526,16 @@ export default function EmployeeIssuesPage() {
             }}
           />
         )}
+
+        {/* ➕ Quick Add Employee Modal */}
+        <AddEmployeeModal
+          isOpen={isAddEmployeeOpen}
+          onClose={() => setIsAddEmployeeOpen(false)}
+          onSuccess={(newEmp) => {
+            void fetchIssues();
+            handleSelectEmployee(newEmp);
+          }}
+        />
       </div>
     </ProtectedPage>
   );

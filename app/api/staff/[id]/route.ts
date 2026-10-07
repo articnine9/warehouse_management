@@ -31,7 +31,11 @@ export async function PUT(
     const name = body.name?.trim();
     const email = body.email?.trim().toLowerCase();
     const role = body.role === "ADMIN" ? "ADMIN" : "STAFF";
-    const warehouseId = body.warehouseId?.trim();
+    const warehouseIds = Array.isArray(body.warehouseIds)
+      ? body.warehouseIds.map((id: string) => id.trim()).filter(Boolean)
+      : body.warehouseId
+        ? [body.warehouseId.trim()]
+        : [];
     const status = body.status === "INACTIVE" ? "INACTIVE" : "ACTIVE";
     const newPassword = body.password?.trim();
 
@@ -42,9 +46,9 @@ export async function PUT(
       );
     }
 
-    if (role === "STAFF" && !warehouseId) {
+    if (role === "STAFF" && warehouseIds.length === 0) {
       return Response.json(
-        { success: false, message: "Please assign a warehouse for staff members" },
+        { success: false, message: "Please assign at least one warehouse for staff members" },
         { status: 400 }
       );
     }
@@ -60,11 +64,11 @@ export async function PUT(
       }
     }
 
-    if (warehouseId) {
-      const warehouse = await Warehouse.findById(warehouseId);
-      if (!warehouse) {
+    if (warehouseIds.length > 0) {
+      const warehouses = await Warehouse.find({ _id: { $in: warehouseIds } });
+      if (warehouses.length !== warehouseIds.length) {
         return Response.json(
-          { success: false, message: "Selected warehouse does not exist" },
+          { success: false, message: "One or more selected warehouses do not exist" },
           { status: 404 }
         );
       }
@@ -73,7 +77,8 @@ export async function PUT(
     staffMember.name = name;
     staffMember.email = email;
     staffMember.role = role;
-    staffMember.warehouseId = role === "STAFF" ? warehouseId : undefined;
+    staffMember.warehouseIds = role === "STAFF" ? warehouseIds : [];
+    staffMember.warehouseId = role === "STAFF" ? (warehouseIds[0] || null) : null;
     staffMember.status = status;
 
     // If new password is provided, validate and update hash
@@ -91,7 +96,7 @@ export async function PUT(
 
     const updatedUser = await User.findById(id)
       .select("-passwordHash")
-      .populate("warehouseId", "name code address");
+      .populate("warehouseIds", "name code address");
 
     return Response.json({
       success: true,

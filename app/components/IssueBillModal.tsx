@@ -1,6 +1,6 @@
 "use client";
 
-import { Printer, X, ShieldCheck, Calendar, User, Building2, Package, CheckCircle2 } from "lucide-react";
+import { Printer, X } from "lucide-react";
 
 export type IssueBillItem = {
   productId?: string;
@@ -31,6 +31,7 @@ export type IssueBillData = {
   employeeEmail?: string;
   employeeDesignation?: string;
   reason?: string;
+  siteName?: string;
   notes?: string;
   issuedByName?: string;
   items: IssueBillItem[];
@@ -195,9 +196,16 @@ export default function IssueBillModal({ issue, onClose }: IssueBillModalProps) 
               <p className="text-slate-600">
                 Purpose / Reason:{" "}
                 <b className="text-slate-800 uppercase">
-                  {(issue.reason || "STAFF_USE").replace("_", " ")}
+                  {issue.reason === "MAINTENANCE_AMC"
+                    ? "Maintenance / AMC"
+                    : (issue.reason || "INSTALLATION_WORK").replaceAll("_", " ")}
                 </b>
               </p>
+              {issue.siteName && (
+                <p className="text-slate-600">
+                  Site Name: <b className="text-slate-800">{issue.siteName}</b>
+                </p>
+              )}
               {issue.notes && (
                 <p className="text-slate-500 italic mt-1 bg-white p-1.5 rounded border border-slate-200 text-[11px]">
                   Notes: {issue.notes}

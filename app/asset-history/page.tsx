@@ -189,6 +189,7 @@ export default function AssetHistoryPage() {
           issue.employeeEmail.toLowerCase().includes(q) ||
           issue.employeePhone?.toLowerCase().includes(q) ||
           issue.employeeDepartment?.toLowerCase().includes(q) ||
+          issue.siteName?.toLowerCase().includes(q) ||
           reasonLabels[issue.reason]?.toLowerCase().includes(q) ||
           issue.issuedByName?.toLowerCase().includes(q);
 
@@ -242,6 +243,7 @@ export default function AssetHistoryPage() {
       employeeEmail: issue.employeeEmail || emp?.email,
       employeeDesignation: emp?.designation,
       reason: issue.reason,
+      siteName: issue.siteName,
       notes: issue.notes,
       issuedByName: issue.issuedByName,
       items: issue.items.map((it) => ({

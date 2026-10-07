@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation";
 import { AlertTriangle, Search, X, UserPlus, KeyRound, Eye, EyeOff } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
-import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import { useAuth } from "@/app/components/AuthProvider";
 import WarningPopup from "@/app/components/WarningPopup";
 
@@ -21,6 +20,7 @@ type StaffMember = {
   email: string;
   role: "ADMIN" | "STAFF";
   warehouse: { id: string; name: string; code: string; address?: string } | null;
+  warehouses?: { id: string; name: string; code: string; address?: string }[];
   status?: "ACTIVE" | "INACTIVE";
 };
 
@@ -71,7 +71,7 @@ function StaffContent() {
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
   const [addRole, setAddRole] = useState<"STAFF" | "ADMIN">("STAFF");
-  const [addWarehouseId, setAddWarehouseId] = useState("");
+  const [addWarehouseSelection, setAddWarehouseSelection] = useState<string>("ALL");
   const [addLoading, setAddLoading] = useState(false);
   const [showAddPassword, setShowAddPassword] = useState(false);
 
@@ -80,7 +80,7 @@ function StaffContent() {
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editRole, setEditRole] = useState<"STAFF" | "ADMIN">("STAFF");
-  const [editWarehouseId, setEditWarehouseId] = useState("");
+  const [editWarehouseSelection, setEditWarehouseSelection] = useState<string>("ALL");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [editPassword, setEditPassword] = useState("");
   const [showEditPassword, setShowEditPassword] = useState(false);
@@ -134,8 +134,13 @@ function StaffContent() {
     try {
       const response = await fetch("/api/warehouses");
       const result = await response.json();
-      if (result.success) {
-        setWarehouses(result.data || []);
+      if (result.success && Array.isArray(result.data)) {
+        setWarehouses(result.data);
+        if (result.data.length >= 2) {
+          setAddWarehouseSelection((prev) => (prev ? prev : "ALL"));
+        } else if (result.data.length > 0) {
+          setAddWarehouseSelection((prev) => (prev ? prev : result.data[0]._id));
+        }
       }
     } catch (error) {
       console.error("Failed to fetch warehouses:", error);
@@ -147,14 +152,6 @@ function StaffContent() {
     void fetchWarehouses();
   }, []);
 
-  const warehouseOptions: SelectOption[] = useMemo(() => {
-    return warehouses.map((w) => ({
-      value: w._id,
-      label: w.name,
-      subLabel: w.code,
-    }));
-  }, [warehouses]);
-
   async function handleAddStaffSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!addName.trim() || !addEmail.trim() || !addPassword.trim()) {
@@ -163,8 +160,17 @@ function StaffContent() {
       return;
     }
 
-    if (addRole === "STAFF" && !addWarehouseId) {
-      setWarningMessage("Please assign a warehouse for this staff member");
+    const assignedWarehouseIds =
+      addRole === "STAFF"
+        ? addWarehouseSelection === "ALL"
+          ? warehouses.map((w) => w._id)
+          : addWarehouseSelection
+          ? [addWarehouseSelection]
+          : []
+        : [];
+
+    if (addRole === "STAFF" && assignedWarehouseIds.length === 0) {
+      setWarningMessage("Please select an assigned warehouse for this staff member");
       setWarningOpen(true);
       return;
     }
@@ -180,7 +186,8 @@ function StaffContent() {
           email: addEmail.trim(),
           password: addPassword.trim(),
           role: addRole,
-          warehouseId: addWarehouseId,
+          warehouseId: assignedWarehouseIds[0] || undefined,
+          warehouseIds: assignedWarehouseIds,
         }),
       });
 
@@ -197,7 +204,7 @@ function StaffContent() {
       setAddEmail("");
       setAddPassword("");
       setAddRole("STAFF");
-      setAddWarehouseId("");
+      setAddWarehouseSelection(warehouses.length >= 2 ? "ALL" : (warehouses[0]?._id || ""));
       await fetchStaffView();
     } catch (error) {
       console.error("Failed to create staff:", error);
@@ -213,7 +220,25 @@ function StaffContent() {
     setEditName(member.name);
     setEditEmail(member.email);
     setEditRole(member.role);
-    setEditWarehouseId(member.warehouse?.id || "");
+
+    const memberWhIds =
+      member.warehouses && member.warehouses.length > 0
+        ? member.warehouses.map((w) => w.id)
+        : member.warehouse?.id
+        ? [member.warehouse.id]
+        : [];
+
+    if (
+      memberWhIds.length > 1 ||
+      (warehouses.length >= 2 && memberWhIds.length >= warehouses.length)
+    ) {
+      setEditWarehouseSelection("ALL");
+    } else if (memberWhIds.length === 1) {
+      setEditWarehouseSelection(memberWhIds[0]);
+    } else {
+      setEditWarehouseSelection(warehouses.length >= 2 ? "ALL" : (warehouses[0]?._id || ""));
+    }
+
     setEditStatus(member.status || "ACTIVE");
     setEditPassword("");
     setShowEditPassword(false);
@@ -229,8 +254,17 @@ function StaffContent() {
       return;
     }
 
-    if (editRole === "STAFF" && !editWarehouseId) {
-      setWarningMessage("Please assign a warehouse for staff members");
+    const assignedWarehouseIds =
+      editRole === "STAFF"
+        ? editWarehouseSelection === "ALL"
+          ? warehouses.map((w) => w._id)
+          : editWarehouseSelection
+          ? [editWarehouseSelection]
+          : []
+        : [];
+
+    if (editRole === "STAFF" && assignedWarehouseIds.length === 0) {
+      setWarningMessage("Please select an assigned warehouse for staff members");
       setWarningOpen(true);
       return;
     }
@@ -251,7 +285,8 @@ function StaffContent() {
           name: editName.trim(),
           email: editEmail.trim(),
           role: editRole,
-          warehouseId: editWarehouseId,
+          warehouseId: assignedWarehouseIds[0] || undefined,
+          warehouseIds: assignedWarehouseIds,
           status: editStatus,
           password: editPassword.trim() || undefined,
         }),
@@ -387,87 +422,148 @@ function StaffContent() {
 
             <form
               onSubmit={handleAddStaffSubmit}
-              className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 items-end"
+              className="space-y-4"
             >
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Full Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Rahul Kumar"
-                  value={addName}
-                  onChange={(e) => setAddName(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Email Address</label>
-                <input
-                  type="email"
-                  placeholder="e.g. rahul@warehouse.com"
-                  value={addEmail}
-                  onChange={(e) => setAddEmail(e.target.value)}
-                  required
-                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Account Password</label>
-                <div className="relative">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Full Name *</label>
                   <input
-                    type={showAddPassword ? "text" : "password"}
-                    placeholder="Min. 6 characters"
-                    value={addPassword}
-                    onChange={(e) => setAddPassword(e.target.value)}
+                    type="text"
+                    placeholder="e.g. Rahul Kumar"
+                    value={addName}
+                    onChange={(e) => setAddName(e.target.value)}
                     required
-                    minLength={6}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                   />
-                  <button
-                    type="button"
-                    onClick={() => setShowAddPassword(!showAddPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    title={showAddPassword ? "Hide password" : "Show password"}
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Email Address *</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. rahul@warehouse.com"
+                    value={addEmail}
+                    onChange={(e) => setAddEmail(e.target.value)}
+                    required
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Account Password *</label>
+                  <div className="relative">
+                    <input
+                      type={showAddPassword ? "text" : "password"}
+                      placeholder="Min. 6 characters"
+                      value={addPassword}
+                      onChange={(e) => setAddPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 pr-10 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPassword(!showAddPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      title={showAddPassword ? "Hide password" : "Show password"}
+                    >
+                      {showAddPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Role *</label>
+                  <select
+                    value={addRole}
+                    onChange={(e) => setAddRole(e.target.value as "STAFF" | "ADMIN")}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                   >
-                    {showAddPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                    <option value="STAFF">STAFF (Warehouse Access)</option>
+                    <option value="ADMIN">ADMIN (Full System Access)</option>
+                  </select>
                 </div>
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Role</label>
-                <select
-                  value={addRole}
-                  onChange={(e) => setAddRole(e.target.value as "STAFF" | "ADMIN")}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="STAFF">STAFF (Warehouse Access)</option>
-                  <option value="ADMIN">ADMIN (Full System Access)</option>
-                </select>
-              </div>
+              {/* Assigned Warehouse Radio Selection */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div className="space-y-1.5 flex-1">
+                  <div className="flex items-center gap-2">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                      Assigned Warehouse {addRole === "STAFF" ? "*" : "(Optional)"}
+                    </label>
+                    <span className="text-[11px] text-slate-500">
+                      (Select individual warehouse or &quot;Both Warehouses&quot;)
+                    </span>
+                  </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
-                  Assigned Warehouse {addRole === "STAFF" ? "*" : "(Optional)"}
-                </label>
-                <SearchableSelect
-                  options={warehouseOptions}
-                  value={addWarehouseId}
-                  onChange={setAddWarehouseId}
-                  placeholder="Select warehouse..."
-                  required={addRole === "STAFF"}
-                />
-              </div>
+                  {addRole === "ADMIN" ? (
+                    <p className="text-xs text-slate-500 italic">
+                      Administrators automatically have access to all warehouses.
+                    </p>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                      {warehouses.map((w) => {
+                        const isSelected = addWarehouseSelection === w._id;
+                        return (
+                          <label
+                            key={w._id}
+                            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border text-xs font-medium cursor-pointer transition select-none ${
+                              isSelected
+                                ? "border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-500/20 shadow-sm"
+                                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="addWarehouseSelection"
+                              value={w._id}
+                              checked={isSelected}
+                              onChange={() => setAddWarehouseSelection(w._id)}
+                              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300"
+                            />
+                            <span className="font-semibold text-slate-800">{w.name}</span>
+                            <span className="text-[11px] text-slate-400">({w.code})</span>
+                          </label>
+                        );
+                      })}
 
-              <button
-                type="submit"
-                disabled={addLoading}
-                className="h-[42px] rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
-              >
-                {addLoading ? "Creating Account..." : "+ Add Staff Account"}
-              </button>
+                      {warehouses.length >= 2 && (
+                        <label
+                          className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border text-xs font-semibold cursor-pointer transition select-none ${
+                            addWarehouseSelection === "ALL"
+                              ? "border-purple-600 bg-purple-50 text-purple-700 ring-2 ring-purple-500/20 shadow-sm"
+                              : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="addWarehouseSelection"
+                            value="ALL"
+                            checked={addWarehouseSelection === "ALL"}
+                            onChange={() => setAddWarehouseSelection("ALL")}
+                            className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-slate-300"
+                          />
+                          <span className="text-purple-900 font-bold">Both Warehouses</span>
+                          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700 border border-purple-200">
+                            Both ({warehouses.length})
+                          </span>
+                        </label>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-shrink-0 self-end md:self-center">
+                  <button
+                    type="submit"
+                    disabled={addLoading}
+                    className="h-[42px] rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
+                  >
+                    {addLoading ? "Creating Account..." : "+ Add Staff Account"}
+                  </button>
+                </div>
+              </div>
             </form>
           </div>
 
@@ -517,7 +613,16 @@ function StaffContent() {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-slate-600">
-                          {member.warehouse ? (
+                          {member.warehouses && member.warehouses.length > 1 ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="inline-flex w-fit items-center rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-200">
+                                Both Warehouses
+                              </span>
+                              <span className="text-[11px] text-slate-400">
+                                {member.warehouses.map((w) => `${w.name} (${w.code})`).join(" & ")}
+                              </span>
+                            </div>
+                          ) : member.warehouse ? (
                             <div>
                               <span className="font-semibold text-slate-800">{member.warehouse.name}</span>
                               <span className="ml-1 text-xs text-slate-400">({member.warehouse.code})</span>
@@ -571,11 +676,16 @@ function StaffContent() {
                         {member.role}
                       </span>
                     </div>
-                    {member.warehouse && (
+                    {member.warehouses && member.warehouses.length > 1 ? (
+                      <p className="mt-2 text-xs text-slate-600">
+                        Warehouse: <b className="text-purple-700">Both Warehouses</b>{" "}
+                        <span className="text-slate-400">({member.warehouses.map((w) => w.code).join(", ")})</span>
+                      </p>
+                    ) : member.warehouse ? (
                       <p className="mt-2 text-xs text-slate-600">
                         Warehouse: <b>{member.warehouse.name}</b> ({member.warehouse.code})
                       </p>
-                    )}
+                    ) : null}
                     <div className="mt-3 flex gap-2">
                       <button
                         type="button"
@@ -682,16 +792,70 @@ function StaffContent() {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">
-                      Assigned Warehouse {editRole === "STAFF" ? "*" : "(Optional)"}
-                    </label>
-                    <SearchableSelect
-                      options={warehouseOptions}
-                      value={editWarehouseId}
-                      onChange={setEditWarehouseId}
-                      placeholder="Select warehouse..."
-                      required={editRole === "STAFF"}
-                    />
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Assigned Warehouse {editRole === "STAFF" ? "*" : "(Optional)"}
+                      </label>
+                      <span className="text-[11px] text-slate-500">
+                        (Choose individual warehouse or &quot;Both Warehouses&quot;)
+                      </span>
+                    </div>
+
+                    {editRole === "ADMIN" ? (
+                      <p className="text-xs text-slate-500 italic p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+                        Administrators automatically have access to all warehouses.
+                      </p>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                        {warehouses.map((w) => {
+                          const isSelected = editWarehouseSelection === w._id;
+                          return (
+                            <label
+                              key={w._id}
+                              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border text-xs font-medium cursor-pointer transition select-none ${
+                                isSelected
+                                  ? "border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-500/20 shadow-sm"
+                                  : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                              }`}
+                            >
+                              <input
+                                type="radio"
+                                name="editWarehouseSelection"
+                                value={w._id}
+                                checked={isSelected}
+                                onChange={() => setEditWarehouseSelection(w._id)}
+                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-slate-300"
+                              />
+                              <span className="font-semibold text-slate-800">{w.name}</span>
+                              <span className="text-[11px] text-slate-400">({w.code})</span>
+                            </label>
+                          );
+                        })}
+
+                        {warehouses.length >= 2 && (
+                          <label
+                            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg border text-xs font-semibold cursor-pointer transition select-none ${
+                              editWarehouseSelection === "ALL"
+                                ? "border-purple-600 bg-purple-50 text-purple-700 ring-2 ring-purple-500/20 shadow-sm"
+                                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50"
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="editWarehouseSelection"
+                              value="ALL"
+                              checked={editWarehouseSelection === "ALL"}
+                              onChange={() => setEditWarehouseSelection("ALL")}
+                              className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-slate-300"
+                            />
+                            <span className="text-purple-900 font-bold">Both Warehouses</span>
+                            <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700 border border-purple-200">
+                              Both ({warehouses.length})
+                            </span>
+                          </label>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Password Reset Section */}

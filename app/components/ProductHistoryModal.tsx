@@ -37,8 +37,6 @@ interface ProductHistoryData {
     price?: number;
     unit?: string;
     description?: string;
-    productType?: "REUSABLE" | "NON_REUSABLE";
-    returnDays?: number;
     warrantyMonths?: number;
     serviceIntervalMonths?: number;
     sellerName?: string;
@@ -250,15 +248,6 @@ export default function ProductHistoryModal({
                     ? "Loading Product History..."
                     : data?.product.name || "Product History"}
                 </h2>
-                {data?.product.productType === "REUSABLE" ? (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[11px] font-bold text-indigo-700">
-                    <RotateCcw className="h-3 w-3" /> Reusable ({data.product.returnDays || 30}d)
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
-                    Standard Product
-                  </span>
-                )}
               </div>
               <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-2 flex-wrap">
                 <span>SKU: <b className="text-slate-700 font-mono">{data?.product.sku || "-"}</b></span>

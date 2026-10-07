@@ -73,7 +73,7 @@ export async function GET(request: Request) {
             const [total, inventory] = await Promise.all([
                 Inventory.countDocuments(filter),
                 Inventory.find(filter)
-                    .populate("productId", "name sku price sellerName category productType returnDays serviceIntervalMonths warrantyMonths serialNumber")
+                    .populate("productId", "name sku price sellerName category serviceIntervalMonths warrantyMonths serialNumber")
                     .populate("warehouseId", "name code")
                     .populate("rackId", "name code")
                     .sort({ createdAt: -1 })
@@ -95,7 +95,7 @@ export async function GET(request: Request) {
 
         // Return all records (used for selection dropdowns / backward compatibility)
         const inventory = await Inventory.find(filter)
-            .populate("productId", "name sku price sellerName category productType returnDays serviceIntervalMonths warrantyMonths serialNumber")
+            .populate("productId", "name sku price sellerName category serviceIntervalMonths warrantyMonths serialNumber")
             .populate("warehouseId", "name code")
             .populate("rackId", "name code")
             .sort({

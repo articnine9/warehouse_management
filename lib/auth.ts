@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
 import User from "@/models/User";
+import Warehouse from "@/models/Warehouse";
 
 const SESSION_COOKIE = "warehouse_session";
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
@@ -23,6 +24,7 @@ type SafeUserInput = {
   email: string;
   role: "ADMIN" | "STAFF";
   status: "ACTIVE" | "INACTIVE";
+  warehouseIds?: unknown;
   warehouseId?: unknown;
 };
 
@@ -175,9 +177,12 @@ export async function getSessionUser() {
     return null;
   }
 
+  void Warehouse;
+
   const user = await User.findById(session.userId)
     .select("-passwordHash")
-    .populate("warehouseId", "name code");
+    .populate({ path: "warehouseIds", select: "name code address", strictPopulate: false })
+    .populate({ path: "warehouseId", select: "name code address", strictPopulate: false });
 
   if (!user || user.status !== "ACTIVE") {
     return null;
@@ -207,27 +212,63 @@ function isPopulatedWarehouse(value: unknown): value is PopulatedWarehouse {
 }
 
 export function getUserWarehouseId(user: SafeUserInput) {
-  if (
-    user.warehouseId &&
-    typeof user.warehouseId === "object" &&
-    "_id" in user.warehouseId
-  ) {
-    return user.warehouseId._id;
+  if (Array.isArray(user.warehouseIds) && user.warehouseIds.length > 0) {
+    return user.warehouseIds
+      .map((w) => (typeof w === "object" && w && "_id" in w ? (w as any)._id : w))
+      .filter(Boolean);
   }
 
-  return user.warehouseId ?? null;
+  if (
+    user.warehouseIds &&
+    typeof user.warehouseIds === "object" &&
+    "_id" in user.warehouseIds
+  ) {
+    return [(user.warehouseIds as any)._id];
+  }
+
+  if (user.warehouseId) {
+    const wId = typeof user.warehouseId === "object" && "_id" in user.warehouseId ? (user.warehouseId as any)._id : user.warehouseId;
+    if (wId) return [wId];
+  }
+
+  return [];
 }
 
 export function getUserWarehouse(user: SafeUserInput) {
-  if (!isPopulatedWarehouse(user.warehouseId)) {
-    return null;
+  if (Array.isArray(user.warehouseIds) && user.warehouseIds.length > 0) {
+    const first = user.warehouseIds.find(isPopulatedWarehouse);
+    if (first) return first;
   }
 
-  return user.warehouseId;
+  if (isPopulatedWarehouse(user.warehouseIds)) {
+    return user.warehouseIds;
+  }
+
+  if (isPopulatedWarehouse(user.warehouseId)) {
+    return user.warehouseId;
+  }
+
+  return null;
 }
 
 export function toSafeUser(user: SafeUserInput) {
-  const warehouse = getUserWarehouse(user);
+  const warehouses = Array.isArray(user.warehouseIds)
+    ? user.warehouseIds.filter(isPopulatedWarehouse).map((w) => ({
+        id: w._id.toString(),
+        name: w.name,
+        code: w.code,
+      }))
+    : getUserWarehouse(user)
+      ? [
+          {
+            id: getUserWarehouse(user)!._id.toString(),
+            name: getUserWarehouse(user)!.name,
+            code: getUserWarehouse(user)!.code,
+          },
+        ]
+      : [];
+
+  const primaryWarehouse = warehouses[0] || null;
 
   return {
     id: user._id.toString(),
@@ -235,12 +276,7 @@ export function toSafeUser(user: SafeUserInput) {
     email: user.email,
     role: user.role,
     status: user.status,
-    warehouse: warehouse
-      ? {
-          id: warehouse._id.toString(),
-          name: warehouse.name,
-          code: warehouse.code,
-        }
-      : null,
+    warehouse: primaryWarehouse,
+    warehouses,
   };
 }

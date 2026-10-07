@@ -36,7 +36,6 @@ export type RackDetailsData = {
       sku: string;
       price?: number;
       category?: string;
-      productType?: string;
       unit?: string;
     };
     warehouseId: {

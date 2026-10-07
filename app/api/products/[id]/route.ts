@@ -43,8 +43,6 @@ export async function PUT(
         sku: body.sku,
         category: body.category,
         categoryId: body.categoryId,
-        productType: body.productType === "REUSABLE" ? "REUSABLE" : "NON_REUSABLE",
-        returnDays: body.productType === "REUSABLE" ? Math.max(1, Number(body.returnDays) || 30) : 0,
         serviceIntervalMonths: body.serviceIntervalMonths !== undefined ? Number(body.serviceIntervalMonths) : 3,
         warrantyMonths: body.warrantyMonths !== undefined ? Number(body.warrantyMonths) : 12,
         serialNumber: body.serialNumber ? String(body.serialNumber).trim() : undefined,

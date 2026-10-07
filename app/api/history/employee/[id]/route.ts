@@ -289,6 +289,7 @@ export async function GET(
           issueNumber: iss.issueNumber,
           date: iss.createdAt.toISOString(),
           reason: iss.reason,
+          siteName: iss.siteName,
           totalItems: iss.totalItems,
           totalQuantity: iss.totalQuantity,
           totalValue: iss.totalValue,

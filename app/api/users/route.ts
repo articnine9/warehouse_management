@@ -34,18 +34,19 @@ function isPopulatedWarehouse(value: unknown): value is PopulatedWarehouse {
   );
 }
 
-function formatEmployee(employee: EmployeeDocument, activeAssetsCount: number = 0) {
-  const warehouse = employee.warehouseId;
+function formatUser(userDoc: EmployeeDocument, activeAssetsCount: number = 0) {
+  const warehouse = userDoc.warehouseId;
 
   return {
-    id: employee._id.toString(),
-    employeeCode: employee.employeeCode,
-    name: employee.name,
-    phone: employee.phone || "",
-    email: employee.email || "",
-    department: employee.department,
-    designation: employee.designation,
-    status: employee.status,
+    id: userDoc._id.toString(),
+    userCode: userDoc.employeeCode,
+    employeeCode: userDoc.employeeCode,
+    name: userDoc.name,
+    phone: userDoc.phone || "",
+    email: userDoc.email || "",
+    department: userDoc.department,
+    designation: userDoc.designation,
+    status: userDoc.status,
     activeAssetsCount,
     warehouse: isPopulatedWarehouse(warehouse)
       ? {
@@ -54,8 +55,8 @@ function formatEmployee(employee: EmployeeDocument, activeAssetsCount: number = 
           code: warehouse.code,
         }
       : null,
-    createdAt: employee.createdAt,
-    updatedAt: employee.updatedAt,
+    createdAt: userDoc.createdAt,
+    updatedAt: userDoc.updatedAt,
   };
 }
 
@@ -99,11 +100,11 @@ export async function GET(request: Request) {
       ];
     }
 
-    const employees = await Employee.find(filter)
+    const users = await Employee.find(filter)
       .populate("warehouseId", "name code")
       .sort({ employeeCode: 1 });
 
-    // Aggregate active assets count for each employee
+    // Aggregate active assets count for each user
     const activeCountsMap = new Map<string, number>();
     try {
       const allIssues = await EmployeeIssue.find({}).lean();
@@ -126,14 +127,14 @@ export async function GET(request: Request) {
         }
       }
     } catch (countErr) {
-      console.error("Failed to calculate active asset counts for employees:", countErr);
+      console.error("Failed to calculate active asset counts for users:", countErr);
     }
 
-    const data = employees.map((employee) => {
-      const empIdStr = employee._id.toString();
-      const nameKey = `name:${employee.name.toLowerCase().trim()}`;
-      const count = activeCountsMap.get(empIdStr) || activeCountsMap.get(nameKey) || 0;
-      return formatEmployee(employee as unknown as EmployeeDocument, count);
+    const data = users.map((u) => {
+      const idStr = u._id.toString();
+      const nameKey = `name:${u.name.toLowerCase().trim()}`;
+      const count = activeCountsMap.get(idStr) || activeCountsMap.get(nameKey) || 0;
+      return formatUser(u as unknown as EmployeeDocument, count);
     });
 
     return Response.json({
@@ -146,11 +147,11 @@ export async function GET(request: Request) {
       return Response.json({ success: false, message: "Not authenticated" }, { status: 401 });
     }
 
-    console.error("GET /api/employees error:", error);
+    console.error("GET /api/users error:", error);
     return Response.json(
       {
         success: false,
-        message: "Failed to fetch employees",
+        message: "Failed to fetch users",
         error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }
@@ -165,7 +166,7 @@ export async function POST(request: Request) {
 
     if (user.role !== "ADMIN") {
       return Response.json(
-        { success: false, message: "Only administrators can add employees" },
+        { success: false, message: "Only administrators can add users" },
         { status: 403 }
       );
     }
@@ -175,10 +176,10 @@ export async function POST(request: Request) {
     const name = String(body.name || "").trim();
     const department = String(body.department || "").trim();
     const designation = String(body.designation || "").trim();
-    let employeeCode = String(body.employeeCode || "").trim().toUpperCase();
+    let userCode = String(body.userCode || body.employeeCode || "").trim().toUpperCase();
 
     if (!name) {
-      return Response.json({ success: false, message: "Employee name is required" }, { status: 400 });
+      return Response.json({ success: false, message: "User name is required" }, { status: 400 });
     }
 
     if (!department) {
@@ -189,32 +190,32 @@ export async function POST(request: Request) {
       return Response.json({ success: false, message: "Designation is required" }, { status: 400 });
     }
 
-    // Auto-generate employee code if missing
-    if (!employeeCode) {
-      const existingEmployees = await Employee.find({}, "employeeCode").lean();
+    // Auto-generate code if missing
+    if (!userCode) {
+      const existing = await Employee.find({}, "employeeCode").lean();
       let maxNum = 0;
-      for (const emp of existingEmployees) {
-        const match = emp.employeeCode?.match(/^EMP(\d+)$/i);
+      for (const item of existing) {
+        const match = item.employeeCode?.match(/^(?:USR|EMP)(\d+)$/i);
         if (match) {
           const num = parseInt(match[1], 10);
           if (num > maxNum) maxNum = num;
         }
       }
-      employeeCode = `EMP${String(maxNum + 1).padStart(3, "0")}`;
+      userCode = `USR${String(maxNum + 1).padStart(3, "0")}`;
     }
 
     // Verify code uniqueness
-    const existing = await Employee.findOne({ employeeCode });
-    if (existing) {
+    const existingUser = await Employee.findOne({ employeeCode: userCode });
+    if (existingUser) {
       return Response.json(
-        { success: false, message: `An employee with code "${employeeCode}" already exists` },
+        { success: false, message: `A user with code "${userCode}" already exists` },
         { status: 409 }
       );
     }
 
-    const employee = await Employee.create({
+    const created = await Employee.create({
       name,
-      employeeCode,
+      employeeCode: userCode,
       phone: body.phone ? String(body.phone).trim() : undefined,
       email: body.email ? String(body.email).trim().toLowerCase() : undefined,
       department,
@@ -223,13 +224,13 @@ export async function POST(request: Request) {
       status: body.status === "INACTIVE" ? "INACTIVE" : "ACTIVE",
     });
 
-    const populated = await Employee.findById(employee._id).populate("warehouseId", "name code");
+    const populated = await Employee.findById(created._id).populate("warehouseId", "name code");
 
     return Response.json(
       {
         success: true,
-        data: formatEmployee(populated as unknown as EmployeeDocument, 0),
-        message: `Employee "${name}" (${employeeCode}) created successfully`,
+        data: formatUser(populated as unknown as EmployeeDocument, 0),
+        message: `User "${name}" (${userCode}) created successfully`,
       },
       { status: 201 }
     );
@@ -238,11 +239,11 @@ export async function POST(request: Request) {
       return Response.json({ success: false, message: "Not authenticated" }, { status: 401 });
     }
 
-    console.error("POST /api/employees error:", error);
+    console.error("POST /api/users error:", error);
     return Response.json(
       {
         success: false,
-        message: "Failed to create employee",
+        message: "Failed to create user",
         error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 }

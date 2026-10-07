@@ -54,7 +54,16 @@ export interface IEmployeeIssue {
   employeeEmail: string;
   employeePhone?: string;
   employeeDepartment?: string;
-  reason: "STAFF_USE" | "OFFICE_USE" | "UNIFORM" | "REPLACEMENT" | "OTHER";
+  reason:
+    | "INSTALLATION_WORK"
+    | "MAINTENANCE_AMC"
+    | "EQUIPMENT_REPLACEMENT"
+    | "OTHER"
+    | "STAFF_USE"
+    | "OFFICE_USE"
+    | "UNIFORM"
+    | "REPLACEMENT";
+  siteName?: string;
   items: IEmployeeIssueItem[];
   totalItems: number;
   totalQuantity: number;
@@ -248,8 +257,21 @@ const employeeIssueSchema = new Schema<IEmployeeIssue>(
     },
     reason: {
       type: String,
-      enum: ["STAFF_USE", "OFFICE_USE", "UNIFORM", "REPLACEMENT", "OTHER"],
-      default: "STAFF_USE",
+      enum: [
+        "INSTALLATION_WORK",
+        "MAINTENANCE_AMC",
+        "EQUIPMENT_REPLACEMENT",
+        "OTHER",
+        "STAFF_USE",
+        "OFFICE_USE",
+        "UNIFORM",
+        "REPLACEMENT",
+      ],
+      default: "INSTALLATION_WORK",
+    },
+    siteName: {
+      type: String,
+      trim: true,
     },
     items: {
       type: [employeeIssueItemSchema],

@@ -21,8 +21,6 @@ export type InventoryItem = {
     category?: string;
     price?: number;
     sellerName?: string;
-    productType?: "REUSABLE" | "NON_REUSABLE";
-    returnDays?: number;
     serviceIntervalMonths?: number;
     warrantyMonths?: number;
     serialNumber?: string;
@@ -95,7 +93,16 @@ export type EmployeeIssue = {
   employeeEmail: string;
   employeePhone?: string;
   employeeDepartment?: string;
-  reason: "STAFF_USE" | "OFFICE_USE" | "UNIFORM" | "REPLACEMENT" | "OTHER";
+  reason:
+    | "INSTALLATION_WORK"
+    | "MAINTENANCE_AMC"
+    | "EQUIPMENT_REPLACEMENT"
+    | "OTHER"
+    | "STAFF_USE"
+    | "OFFICE_USE"
+    | "UNIFORM"
+    | "REPLACEMENT";
+  siteName?: string;
   items: SelectedLineItem[];
   totalItems: number;
   totalQuantity: number;
@@ -106,6 +113,9 @@ export type EmployeeIssue = {
 };
 
 export const reasonLabels: Record<EmployeeIssue["reason"], string> = {
+  INSTALLATION_WORK: "Installation Work",
+  MAINTENANCE_AMC: "Maintenance / AMC",
+  EQUIPMENT_REPLACEMENT: "Equipment Replacement",
   STAFF_USE: "Staff Use",
   OFFICE_USE: "Office Use",
   UNIFORM: "Uniform",

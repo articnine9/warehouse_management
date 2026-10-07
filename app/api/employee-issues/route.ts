@@ -9,10 +9,9 @@ import Warehouse from "@/models/Warehouse";
 import StockMovement from "@/models/StockMovement";
 
 const allowedReasons = new Set([
-  "STAFF_USE",
-  "OFFICE_USE",
-  "UNIFORM",
-  "REPLACEMENT",
+  "INSTALLATION_WORK",
+  "MAINTENANCE_AMC",
+  "EQUIPMENT_REPLACEMENT",
   "OTHER",
 ]);
 
@@ -95,6 +94,7 @@ export async function GET(request: Request) {
         { employeeName: regex },
         { employeeEmail: regex },
         { reason: regex },
+        { siteName: regex },
         { issuedByName: regex },
       ];
     }
@@ -144,7 +144,8 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const employeeId = body.employeeId?.trim();
-    const reason = allowedReasons.has(body.reason) ? body.reason : "STAFF_USE";
+    const reason = allowedReasons.has(body.reason) ? body.reason : "INSTALLATION_WORK";
+    const siteName = body.siteName?.trim() || "";
     const notes = body.notes?.trim() || "";
     const items = body.items;
 
@@ -169,6 +170,63 @@ export async function POST(request: Request) {
     }
 
     const staffWarehouseId = getUserWarehouseId(currentUser);
+    const requestedQuantityByInventory = new Map<string, number>();
+
+    for (const item of items) {
+      const inventoryId = String(item.inventoryId || "");
+      const quantity = Number(item.quantity);
+      if (!inventoryId || !Number.isInteger(quantity) || quantity <= 0) {
+        return Response.json(
+          { success: false, message: "Invalid product or quantity" },
+          { status: 400 }
+        );
+      }
+      requestedQuantityByInventory.set(
+        inventoryId,
+        (requestedQuantityByInventory.get(inventoryId) || 0) + quantity
+      );
+    }
+
+    // A quantity split creates two lines for one inventory record. Validate the
+    // combined request before deducting either line so a bad split cannot leave
+    // stock partially deducted.
+    const stockRows = await Inventory.find({
+      _id: { $in: [...requestedQuantityByInventory.keys()] },
+    })
+      .select("_id quantity warehouseId")
+      .lean();
+
+    if (stockRows.length !== requestedQuantityByInventory.size) {
+      return Response.json(
+        { success: false, message: "One or more selected inventory items were not found" },
+        { status: 404 }
+      );
+    }
+
+    for (const stockRow of stockRows) {
+      const inventoryId = String(stockRow._id);
+      const requestedQuantity = requestedQuantityByInventory.get(inventoryId) || 0;
+      if (
+        currentUser.role === "STAFF" &&
+        staffWarehouseId &&
+        String(stockRow.warehouseId) !== staffWarehouseId.toString()
+      ) {
+        return Response.json(
+          { success: false, message: "You can issue products only from your assigned warehouse" },
+          { status: 403 }
+        );
+      }
+      if (stockRow.quantity < requestedQuantity) {
+        return Response.json(
+          {
+            success: false,
+            message: `Insufficient stock. Available: ${stockRow.quantity}, Requested: ${requestedQuantity}`,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     const issueItems: IEmployeeIssueItem[] = [];
     let totalQuantity = 0;
     let totalValue = 0;
@@ -177,7 +235,7 @@ export async function POST(request: Request) {
       const inventoryId = item.inventoryId;
       const qtyNum = Number(item.quantity);
 
-      if (!inventoryId || !qtyNum || qtyNum <= 0) {
+      if (!inventoryId || !Number.isInteger(qtyNum) || qtyNum <= 0) {
         return Response.json(
           { success: false, message: "Invalid product or quantity" },
           { status: 400 }
@@ -245,12 +303,9 @@ export async function POST(request: Request) {
 
       const serviceIntervalMonths = Number(item.serviceIntervalMonths) || 0;
 
-      const isReusable =
-        product.productType === "REUSABLE" ||
-        item.productType === "REUSABLE" ||
-        Number(item.returnDueDays) > 0;
+      const isReusable = item.productType === "REUSABLE";
       const returnDueDays = isReusable
-        ? Math.max(1, Number(item.returnDueDays) || Number(product.returnDays) || 30)
+        ? Math.max(1, Number(item.returnDueDays) || 30)
         : 0;
       const returnDueDate = isReusable
         ? item.returnDueDate
@@ -301,6 +356,7 @@ export async function POST(request: Request) {
       employeePhone: employee.phone || "",
       employeeDepartment: employee.department || "",
       reason,
+      siteName,
       items: issueItems,
       totalItems: issueItems.length,
       totalQuantity,

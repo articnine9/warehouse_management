@@ -90,6 +90,7 @@ interface EmployeeHistoryData {
     issueNumber: string;
     date: string;
     reason: string;
+    siteName?: string;
     totalItems: number;
     totalQuantity: number;
     totalValue: number;
@@ -485,8 +486,15 @@ export default function EmployeeHistoryModal({
                               {slip.issueNumber}
                             </span>
                             <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700 uppercase">
-                              {slip.reason.replace("_", " ")}
+                              {slip.reason === "MAINTENANCE_AMC"
+                                ? "Maintenance / AMC"
+                                : slip.reason.replaceAll("_", " ")}
                             </span>
+                            {slip.siteName && (
+                              <span className="text-xs font-semibold text-blue-700">
+                                Site: {slip.siteName}
+                              </span>
+                            )}
                             <span className="text-xs text-slate-500">
                               {new Date(slip.date).toLocaleDateString("en-IN", {
                                 day: "2-digit",

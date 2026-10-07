@@ -40,8 +40,6 @@ interface ProductHistoryData {
     category?: string;
     price?: number;
     description?: string;
-    productType?: "REUSABLE" | "NON_REUSABLE";
-    returnDays?: number;
     warrantyMonths?: number;
     serviceIntervalMonths?: number;
     sellerName?: string;
@@ -449,15 +447,6 @@ export default function ProductDetailPage({
                       <span className="rounded-lg bg-slate-100 px-2.5 py-0.5 text-xs font-mono font-bold text-slate-700 border border-slate-200">
                         SKU: {data.product.sku}
                       </span>
-                      {data.product.productType === "REUSABLE" ? (
-                        <span className="rounded-full bg-indigo-100 text-indigo-800 px-2.5 py-0.5 text-[11px] font-bold border border-indigo-200">
-                          Returnable (Return Due: {data.product.returnDays || 30}d)
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-slate-100 text-slate-600 px-2.5 py-0.5 text-[11px] font-bold">
-                          Standard Product
-                        </span>
-                      )}
                     </div>
 
                     {/* Arrival Date & Inward Banner */}

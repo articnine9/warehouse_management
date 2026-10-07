@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, RotateCcw, Pencil, Eye, Trash2, Printer, X, Box, Plus } from "lucide-react";
+import { AlertTriangle, Pencil, Eye, Trash2, Printer, X, Box, Plus } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
@@ -16,8 +16,6 @@ type Product = {
   sku: string;
   category?: string;
   price?: number;
-  productType?: "REUSABLE" | "NON_REUSABLE";
-  returnDays?: number;
 };
 type Warehouse = { _id: string; name: string; code: string };
 type Rack = { _id: string; name: string; code: string; warehouseId: { _id: string; name: string; code: string } };
@@ -42,7 +40,6 @@ function InventoryContent() {
 
   // Filtering state
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusParam);
-  const [productTypeFilter, setProductTypeFilter] = useState<string>("ALL");
   const [selectedWarehouseFilter, setSelectedWarehouseFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -352,22 +349,14 @@ function InventoryContent() {
           rCode.includes(q);
       }
 
-      // Product Type Filter (Reusable vs Normal)
-      let matchesType = true;
-      if (productTypeFilter === "REUSABLE") {
-        matchesType = item.productId?.productType === "REUSABLE";
-      } else if (productTypeFilter === "NON_REUSABLE") {
-        matchesType = item.productId?.productType !== "REUSABLE";
-      }
-
-      return matchesStatus && matchesWarehouse && matchesSearch && matchesType;
+      return matchesStatus && matchesWarehouse && matchesSearch;
     });
-  }, [inventory, statusFilter, selectedWarehouseFilter, searchQuery, productTypeFilter]);
+  }, [inventory, statusFilter, selectedWarehouseFilter, searchQuery]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, selectedWarehouseFilter, searchQuery, productTypeFilter, pageSize]);
+  }, [statusFilter, selectedWarehouseFilter, searchQuery, pageSize]);
 
   // Paginated records
   const paginatedInventory = useMemo(() => {
@@ -508,43 +497,6 @@ function InventoryContent() {
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            {/* Product Type Filter Toggle */}
-            <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 shrink-0">
-              <button
-                type="button"
-                onClick={() => setProductTypeFilter("ALL")}
-                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
-                  productTypeFilter === "ALL"
-                    ? "bg-white text-slate-800 shadow-2xs"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                All ({inventory.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setProductTypeFilter("REUSABLE")}
-                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition flex items-center gap-1 ${
-                  productTypeFilter === "REUSABLE"
-                    ? "bg-indigo-600 text-white shadow-2xs"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                <RotateCcw className="h-3 w-3" /> Returnable ({inventory.filter((i) => i.productId?.productType === "REUSABLE").length})
-              </button>
-              <button
-                type="button"
-                onClick={() => setProductTypeFilter("NON_REUSABLE")}
-                className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
-                  productTypeFilter === "NON_REUSABLE"
-                    ? "bg-white text-slate-800 shadow-2xs"
-                    : "text-slate-500 hover:text-slate-700"
-                }`}
-              >
-                Non-Returnable ({inventory.filter((i) => i.productId?.productType !== "REUSABLE").length})
-              </button>
-            </div>
-
             {/* Search input in list */}
             <input
               type="text"
@@ -579,7 +531,6 @@ function InventoryContent() {
               <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500">
                 <tr>
                   <th className="px-5 py-3">Product</th>
-                  <th className="px-5 py-3">Type</th>
                   <th className="px-5 py-3">Warehouse</th>
                   <th className="px-5 py-3">Rack</th>
                   <th className="px-5 py-3">Quantity</th>
@@ -600,17 +551,6 @@ function InventoryContent() {
                         {item.productId?.name || "Unknown"}
                       </button>
                       <span className="text-xs text-slate-400">({item.productId?.sku || "-"})</span>
-                    </td>
-                    <td className="px-5 py-3">
-                      {item.productId?.productType === "REUSABLE" ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-xs font-bold text-indigo-700">
-                          <RotateCcw className="h-2.5 w-2.5" /> Returnable ({item.productId?.returnDays || 30}d)
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                          Non-Returnable
-                        </span>
-                      )}
                     </td>
                     <td className="px-5 py-3 text-slate-600">{item.warehouseId?.name || "-"}</td>
                     <td className="px-5 py-3 text-slate-600">
@@ -674,11 +614,6 @@ function InventoryContent() {
                       >
                         {item.productId?.name || "Unknown"}
                       </button>
-                      {item.productId?.productType === "REUSABLE" && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.2 text-[10px] font-bold text-indigo-700">
-                          <RotateCcw className="h-2.5 w-2.5" /> Returnable ({item.productId?.returnDays || 30}d)
-                        </span>
-                      )}
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">{item.productId?.sku || "-"}</p>
                   </div>
@@ -944,9 +879,6 @@ function InventoryContent() {
                   </p>
                   <p className="text-slate-600">
                     Category: <b className="text-slate-800">{viewingStockItem.productId?.category || "General"}</b>
-                  </p>
-                  <p className="text-slate-600">
-                    Type: <b className="text-slate-800">{viewingStockItem.productId?.productType === "REUSABLE" ? "Returnable Asset" : "Standard Inventory"}</b>
                   </p>
                 </div>
               </div>
