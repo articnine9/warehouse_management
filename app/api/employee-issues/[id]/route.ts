@@ -181,6 +181,21 @@ export async function PUT(
       changes.push(`status changed to ${requestedStatus}`);
 
       if (requestedStatus === "RETURNED") {
+        if (body.returnWarehouseId && body.returnRackId) {
+          const targetWarehouse = await Warehouse.findById(body.returnWarehouseId);
+          const targetRack = await Rack.findById(body.returnRackId);
+          if (targetWarehouse && targetRack) {
+            item.warehouseId = targetWarehouse._id;
+            item.warehouseName = targetWarehouse.name;
+            item.rackId = targetRack._id;
+            item.rackName = targetRack.name;
+            item.inventoryId = null as any;
+          }
+        }
+        if (body.returnCondition) {
+          item.returnCondition = body.returnCondition;
+        }
+
         await restoreStock(item);
         item.returnedAt = new Date();
 
@@ -203,7 +218,11 @@ export async function PUT(
             referenceNumber: `RETURN #${issue.issueNumber}`,
             entityName: `${issue.employeeName} (Returned)`,
             entityId: issue.employeeId?.toString(),
-            notes: trimmedNotes || "Product returned to warehouse stock",
+            notes:
+              trimmedNotes ||
+              (body.returnCondition
+                ? `Returned condition: ${body.returnCondition}`
+                : "Product returned to warehouse stock"),
             performedBy: currentUser._id,
             performedByName: currentUser.name,
           });

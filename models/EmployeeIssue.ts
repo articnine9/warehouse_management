@@ -44,6 +44,7 @@ export interface IEmployeeIssueItem {
   serviceHistory?: IServiceRecord[];
   holdingStatus?: "ACTIVE" | "INACTIVE" | "UNDER_SERVICE" | "RETURNED" | "DAMAGED";
   returnedAt?: Date;
+  returnCondition?: "GOOD" | "DAMAGED" | "NEEDS_SERVICE" | string;
   serviceNotes?: string;
 }
 
@@ -213,6 +214,10 @@ const employeeIssueItemSchema = new Schema<IEmployeeIssueItem>(
     },
     returnedAt: {
       type: Date,
+    },
+    returnCondition: {
+      type: String,
+      trim: true,
     },
     serviceNotes: {
       type: String,

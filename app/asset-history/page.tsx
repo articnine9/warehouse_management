@@ -1448,6 +1448,7 @@ export default function AssetHistoryPage() {
         <ProductHistoryModal
           productId={historyProductId}
           onClose={() => setHistoryProductId(null)}
+          backLabel="Back to Asset History"
           onSelectEmployee={(emp) => {
             setHistoryProductId(null);
             setHistoryEmployee(emp);

@@ -464,8 +464,16 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Tab Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+            {/* Tab Pills & Page Link */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none flex-wrap">
+              <Link
+                href="/returns-renewals"
+                className="flex items-center gap-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 text-xs font-bold transition border border-indigo-200/60 whitespace-nowrap shadow-2xs mr-1"
+                title="Go to dedicated Returns & Renewals Management page"
+              >
+                <RotateCcw className="h-3.5 w-3.5 text-indigo-600" />
+                <span>Returns & Renewals Hub &rarr;</span>
+              </Link>
               <button
                 type="button"
                 onClick={() => setAlertTab("ALL")}

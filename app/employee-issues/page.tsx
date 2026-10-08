@@ -2149,6 +2149,7 @@ export default function EmployeeIssuesPage() {
           <ProductHistoryModal
             productId={historyProductId}
             onClose={() => setHistoryProductId(null)}
+            backLabel="Back to User Assets"
             onSelectEmployee={(emp) => {
               setHistoryProductId(null);
               setHistoryEmployee(emp);

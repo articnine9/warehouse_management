@@ -9,6 +9,7 @@ import Link from "next/link";
 import WarningPopup from "@/app/components/WarningPopup";
 import AddProductModal from "@/app/components/AddProductModal";
 import AddCategoryModal from "@/app/components/AddCategoryModal";
+import ProductHistoryModal from "@/app/components/ProductHistoryModal";
 import {
   CUSTOM_INTERVAL_VALUE,
   normalizeIntervalMonths,
@@ -94,6 +95,7 @@ export default function ProductsPage() {
 
   const [warningOpen, setWarningOpen] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
+  const [historyProductId, setHistoryProductId] = useState<string | null>(null);
 
   async function fetchProducts() {
     try {
@@ -476,7 +478,14 @@ export default function ProductsPage() {
                       className="border-t border-slate-100 hover:bg-slate-50/50"
                     >
                       <td className="px-5 py-3 font-medium text-slate-800">
-                        {product.name}
+                        <button
+                          type="button"
+                          onClick={() => setHistoryProductId(product._id)}
+                          className="font-bold text-slate-800 hover:text-blue-600 hover:underline transition text-left block"
+                          title="Click to view full product details & loan status"
+                        >
+                          {product.name}
+                        </button>
                       </td>
                       <td className="px-5 py-3 font-mono text-xs text-slate-600">{product.sku}</td>
                       <td className="px-5 py-3">
@@ -596,9 +605,14 @@ export default function ProductsPage() {
                 >
                   <div className="flex items-start justify-between">
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setHistoryProductId(product._id)}
+                        className="font-bold text-slate-800 text-left hover:text-blue-600 hover:underline transition block"
+                        title="Click to view full product details & loan status"
+                      >
                         {product.name}
-                      </p>
+                      </button>
                       <p className="mt-0.5 text-xs font-mono text-slate-500">SKU: {product.sku}</p>
                     </div>
                     <span
@@ -871,6 +885,14 @@ export default function ProductsPage() {
         }}
         zIndex="z-[70]"
       />
+
+      {historyProductId && (
+        <ProductHistoryModal
+          productId={historyProductId}
+          onClose={() => setHistoryProductId(null)}
+          backLabel="Back to Products"
+        />
+      )}
     </ProtectedPage>
   );
 }

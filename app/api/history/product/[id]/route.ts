@@ -7,6 +7,7 @@ import StockMovement from "@/models/StockMovement";
 import ProductHistory from "@/models/ProductHistory";
 import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
+import Employee from "@/models/Employee";
 
 export async function GET(
   request: Request,
@@ -19,6 +20,7 @@ export async function GET(
     // Ensure models are registered for populate
     void Warehouse;
     void Rack;
+    void Employee;
 
     const { id: productId } = await params;
 
@@ -58,9 +60,9 @@ export async function GET(
 
     const effectiveProductId = product._id;
 
-    // Concurrently fetch current stock, issues, movements, and change logs
+    // Concurrently fetch current stock, issues, movements, change logs, warehouses, and racks
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [inventoryItems, issues, movements, changeLogs] = await Promise.all([
+    const [inventoryItems, issues, movements, changeLogs, allWarehouses, allRacks] = await Promise.all([
       Inventory.find({ productId: effectiveProductId })
         .populate("warehouseId", "name code address")
         .populate("rackId", "name code")
@@ -72,6 +74,7 @@ export async function GET(
           { "items.sku": product.sku },
         ],
       })
+        .populate("employeeId", "employeeCode name phone email department designation")
         .sort({ createdAt: -1 })
         .lean() as Promise<any[]>,
       StockMovement.find({
@@ -86,6 +89,8 @@ export async function GET(
         .sort({ createdAt: -1 })
         .limit(50)
         .lean() as Promise<any[]>,
+      Warehouse.find().select("name code").lean() as Promise<any[]>,
+      Rack.find().select("name code warehouseId").lean() as Promise<any[]>,
     ]);
 
     const totalInStock = inventoryItems.reduce(
@@ -96,24 +101,38 @@ export async function GET(
     const employeeHolders: Array<{
       issueId: string;
       issueNumber: string;
+      itemIndex: number;
       issueDate: string;
       employeeId?: string;
+      employeeCode?: string;
       employeeName: string;
       employeeDepartment?: string;
+      employeeDesignation?: string;
       employeePhone?: string;
       employeeEmail?: string;
       quantity: number;
       unitPrice: number;
       totalValue: number;
       serialNumber?: string;
+      productType?: string;
+      warehouseId?: string;
       warehouseName: string;
+      rackId?: string;
       rackName: string;
       holdingStatus: string;
+      returnDueDays?: number;
       returnDueDate?: string;
+      renewalCount?: number;
+      renewalHistory?: any[];
+      lastRenewedDate?: string;
       lastServiceDate?: string;
       serviceCount?: number;
       returnedAt?: string;
+      returnCondition?: string;
       serviceNotes?: string;
+      siteName?: string;
+      reason?: string;
+      issuedByName?: string;
     }> = [];
 
     let totalUnitsActiveIssued = 0;
@@ -121,7 +140,7 @@ export async function GET(
 
     for (const issue of issues) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      issue.items.forEach((item: any) => {
+      issue.items.forEach((item: any, itemIdx: number) => {
         if (item.productId?.toString() === productId.toString() || item.sku === product.sku) {
           const isReturned = item.holdingStatus === "RETURNED";
           if (isReturned) {
@@ -130,24 +149,38 @@ export async function GET(
             totalUnitsActiveIssued += item.quantity || 1;
           }
 
+          const emp = issue.employeeId && typeof issue.employeeId === "object" ? issue.employeeId : null;
+
           employeeHolders.push({
             issueId: issue._id.toString(),
             issueNumber: issue.issueNumber,
+            itemIndex: itemIdx,
             issueDate: new Date(issue.createdAt).toISOString(),
-            employeeId: issue.employeeId?.toString(),
-            employeeName: issue.employeeName,
-            employeeDepartment: issue.employeeDepartment,
-            employeePhone: issue.employeePhone,
-            employeeEmail: issue.employeeEmail,
+            employeeId: emp?._id?.toString() || issue.employeeId?.toString(),
+            employeeCode: emp?.employeeCode || "",
+            employeeName: emp?.name || issue.employeeName,
+            employeeDepartment: emp?.department || issue.employeeDepartment,
+            employeeDesignation: emp?.designation || "",
+            employeePhone: emp?.phone || issue.employeePhone,
+            employeeEmail: emp?.email || issue.employeeEmail,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             totalValue: item.totalValue,
             serialNumber: item.serialNumber,
+            productType: item.productType || "REUSABLE",
+            warehouseId: item.warehouseId?.toString(),
             warehouseName: item.warehouseName,
+            rackId: item.rackId?.toString(),
             rackName: item.rackName,
             holdingStatus: item.holdingStatus || "ACTIVE",
+            returnDueDays: item.returnDueDays,
             returnDueDate: item.returnDueDate
               ? new Date(item.returnDueDate).toISOString()
+              : undefined,
+            renewalCount: item.renewalCount || 0,
+            renewalHistory: item.renewalHistory || [],
+            lastRenewedDate: item.lastRenewedDate
+              ? new Date(item.lastRenewedDate).toISOString()
               : undefined,
             lastServiceDate: item.lastServiceDate
               ? new Date(item.lastServiceDate).toISOString()
@@ -156,7 +189,11 @@ export async function GET(
             returnedAt: item.returnedAt
               ? new Date(item.returnedAt).toISOString()
               : undefined,
+            returnCondition: item.returnCondition,
             serviceNotes: item.serviceNotes,
+            siteName: issue.siteName,
+            reason: issue.reason,
+            issuedByName: issue.issuedByName,
           });
         }
       });
@@ -458,6 +495,8 @@ export async function GET(
           createdAt: m.createdAt,
         })),
         changeLogs,
+        warehouses: allWarehouses,
+        racks: allRacks,
       },
     });
   } catch (error) {

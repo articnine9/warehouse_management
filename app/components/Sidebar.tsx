@@ -29,6 +29,7 @@ import {
   ArrowLeftRight,
   History,
   UserCheck,
+  RotateCcw,
 } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import NotificationBell from "./NotificationBell";
@@ -48,6 +49,7 @@ const iconMap: Record<string, React.ReactNode> = {
   Inventory: <ClipboardList className="h-4 w-4" />,
   "User Asset Management": <PackageCheck className="h-4 w-4" />,
   "Employee Asset Management": <PackageCheck className="h-4 w-4" />,
+  "Returns & Renewals": <RotateCcw className="h-4 w-4" />,
   "Asset Movement & History": <History className="h-4 w-4" />,
   "Assest Moment & History": <History className="h-4 w-4" />,
   "User Issue": <PackageCheck className="h-4 w-4" />,
@@ -89,6 +91,9 @@ export default function Sidebar() {
     if (itemPath === "/employee-issues") {
       return pathname === "/employee-issues";
     }
+    if (itemPath === "/returns-renewals") {
+      return pathname === "/returns-renewals";
+    }
     if (itemPath === "/asset-history") {
       return (
         pathname === "/asset-history" ||
@@ -118,6 +123,7 @@ export default function Sidebar() {
           },
           { name: "Inventory", path: "/inventory" },
           { name: "User Asset Management", path: "/employee-issues" },
+          { name: "Returns & Renewals", path: "/returns-renewals" },
           { name: "Asset Movement & History", path: "/asset-history" },
           { name: "Stock Movements", path: "/movements" },
           // { name: "Billing", path: "/billing" },
@@ -128,6 +134,7 @@ export default function Sidebar() {
           { name: "Dashboard", path: "/dashboard" },
           { name: "Inventory", path: "/inventory" },
           { name: "User Asset Management", path: "/employee-issues" },
+          { name: "Returns & Renewals", path: "/returns-renewals" },
           { name: "Asset Movement & History", path: "/asset-history" },
           { name: "Stock Movements", path: "/movements" },
           // { name: "Billing", path: "/billing" },
