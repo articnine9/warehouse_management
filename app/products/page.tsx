@@ -67,6 +67,7 @@ export default function ProductsPage() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("ALL");
+  const [selectedWarehouseFilter, setSelectedWarehouseFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   // Pagination state
@@ -172,6 +173,17 @@ export default function ProductsPage() {
     ];
   }, [categories]);
 
+  const filterWarehouseOptions: SelectOption[] = useMemo(() => {
+    return [
+      { value: "ALL", label: "All Warehouses" },
+      ...warehouses.map((w) => ({
+        value: w.name,
+        label: w.name,
+        subLabel: w.code,
+      })),
+    ];
+  }, [warehouses]);
+
 
   function openEdit(product: Product) {
     setEditId(product._id);
@@ -258,23 +270,39 @@ export default function ProductsPage() {
   }
 
   const filteredProducts = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim();
     return products.filter((p) => {
       const matchesCategory =
         selectedCategoryFilter === "ALL" || p.category === selectedCategoryFilter;
+
+      const matchesWarehouse =
+        selectedWarehouseFilter === "ALL" ||
+        (p.locations &&
+          p.locations.some(
+            (loc) =>
+              loc.warehouseName.toLowerCase() === selectedWarehouseFilter.toLowerCase()
+          ));
+
       const matchesSearch =
-        !searchQuery.trim() ||
-        p.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-        p.sku.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-        (p.sellerName &&
-          p.sellerName.toLowerCase().includes(searchQuery.toLowerCase().trim()));
-      return matchesCategory && matchesSearch;
+        !q ||
+        p.name.toLowerCase().includes(q) ||
+        p.sku.toLowerCase().includes(q) ||
+        (p.sellerName && p.sellerName.toLowerCase().includes(q)) ||
+        (p.locations &&
+          p.locations.some(
+            (loc) =>
+              loc.warehouseName.toLowerCase().includes(q) ||
+              loc.rackName.toLowerCase().includes(q)
+          ));
+
+      return matchesCategory && matchesWarehouse && matchesSearch;
     });
-  }, [products, selectedCategoryFilter, searchQuery]);
+  }, [products, selectedCategoryFilter, selectedWarehouseFilter, searchQuery]);
 
   // Reset page on filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCategoryFilter, searchQuery, pageSize]);
+  }, [selectedCategoryFilter, selectedWarehouseFilter, searchQuery, pageSize]);
 
   // Paginated records
   const paginatedProducts = useMemo(() => {
@@ -388,11 +416,22 @@ export default function ProductsPage() {
               {/* Search input in list */}
               <input
                 type="text"
-                placeholder="Filter by name, SKU, seller..."
+                placeholder="Search product, SKU, warehouse, rack..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-48"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-56"
               />
+
+              {/* Warehouse Filter */}
+              <div className="w-full sm:w-44">
+                <SearchableSelect
+                  options={filterWarehouseOptions}
+                  value={selectedWarehouseFilter}
+                  onChange={(val) => setSelectedWarehouseFilter(val || "ALL")}
+                  placeholder="All Warehouses"
+                  allowClear={false}
+                />
+              </div>
 
               {/* Category Filter */}
               <div className="w-full sm:w-44">
@@ -451,31 +490,44 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-5 py-3">
                         {product.locations && product.locations.length > 0 ? (
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200/60 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                                <WarehouseIcon className="h-3 w-3" />
-                                {product.locations[0].warehouseName}
-                              </span>
-                              <span className="inline-flex items-center rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono text-slate-700">
-                                Rack: {product.locations[0].rackName}
-                              </span>
+                          <div className="space-y-1.5 py-0.5">
+                            {/* All warehouse location entries */}
+                            <div className="space-y-1">
+                              {product.locations.map((loc, locIdx) => (
+                                <div
+                                  key={`${loc.warehouseId}-${loc.rackId}-${locIdx}`}
+                                  className="flex items-center gap-1.5 flex-wrap"
+                                >
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200/70 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                    <WarehouseIcon className="h-3 w-3 text-blue-600 shrink-0" />
+                                    {loc.warehouseName}
+                                  </span>
+                                  <span className="inline-flex items-center rounded-md bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 text-[11px] font-mono text-slate-700">
+                                    Rack: {loc.rackName}
+                                  </span>
+                                  <span className="inline-flex items-center font-bold text-xs text-slate-800">
+                                    • {loc.quantity} {loc.quantity === 1 ? "unit" : "units"}
+                                  </span>
+                                </div>
+                              ))}
                             </div>
-                            <div className="flex items-center gap-1.5">
+
+                            {/* Stock summary across all warehouses */}
+                            <div className="flex items-center gap-2 pt-1 border-t border-slate-100 flex-wrap">
                               <span
                                 className={`text-xs font-bold ${
                                   (product.totalStock ?? 0) === 0
                                     ? "text-red-600"
                                     : (product.totalStock ?? 0) <= 10
                                     ? "text-amber-600"
-                                    : "text-emerald-600"
+                                    : "text-emerald-700"
                                 }`}
                               >
-                                {product.totalStock ?? 0} in stock
+                                Total: {product.totalStock ?? 0} in stock
                               </span>
                               {product.locations.length > 1 && (
-                                <span className="text-[10px] text-slate-500 font-medium">
-                                  (+{product.locations.length - 1} more)
+                                <span className="rounded-full bg-purple-50 border border-purple-200 px-1.5 py-0.2 text-[10px] font-bold text-purple-700">
+                                  {product.locations.length} Warehouses
                                 </span>
                               )}
                             </div>
@@ -569,22 +621,54 @@ export default function ProductsPage() {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/50">
-                    <span className="text-slate-500">Storage Location:</span>
-                    {product.locations && product.locations.length > 0 ? (
-                      <span className="font-semibold text-slate-700 text-right">
-                        {product.locations[0].warehouseName} (Rack {product.locations[0].rackName})
-                        <span className={`ml-1.5 font-bold ${product.totalStock === 0 ? "text-red-600" : "text-emerald-600"}`}>
-                          • {product.totalStock ?? 0} units
-                        </span>
-                      </span>
-                    ) : (
-                      <Link
-                        href={`/inventory?productId=${product._id}`}
-                        className="text-blue-600 font-semibold hover:underline"
+                  <div className="text-xs pt-2 border-t border-slate-200/50 space-y-1.5">
+                    <div className="flex items-center justify-between text-slate-500 font-medium">
+                      <span>Storage Locations:</span>
+                      <span
+                        className={`font-bold ${
+                          (product.totalStock ?? 0) === 0
+                            ? "text-red-600"
+                            : (product.totalStock ?? 0) <= 10
+                            ? "text-amber-600"
+                            : "text-emerald-700"
+                        }`}
                       >
-                        + Assign Rack
-                      </Link>
+                        Total: {product.totalStock ?? 0} units
+                        {product.locations && product.locations.length > 1 && (
+                          <span className="ml-1 text-[10px] text-purple-700 font-semibold">
+                            ({product.locations.length} warehouses)
+                          </span>
+                        )}
+                      </span>
+                    </div>
+
+                    {product.locations && product.locations.length > 0 ? (
+                      <div className="space-y-1">
+                        {product.locations.map((loc, lIdx) => (
+                          <div
+                            key={lIdx}
+                            className="flex items-center justify-between bg-white rounded-md border border-slate-200/70 px-2 py-1"
+                          >
+                            <span className="font-semibold text-blue-700 flex items-center gap-1">
+                              <WarehouseIcon className="h-3 w-3 shrink-0" />
+                              {loc.warehouseName}
+                            </span>
+                            <span className="text-slate-600">
+                              Rack: <b className="font-mono text-slate-800">{loc.rackName}</b> •{" "}
+                              <b className="text-slate-800">{loc.quantity} units</b>
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex justify-end">
+                        <Link
+                          href={`/inventory?productId=${product._id}`}
+                          className="text-blue-600 font-semibold hover:underline"
+                        >
+                          + Assign Rack
+                        </Link>
+                      </div>
                     )}
                   </div>
 

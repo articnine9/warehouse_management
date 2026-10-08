@@ -59,11 +59,30 @@ export async function GET(request: Request) {
 
     if (query?.trim()) {
       const regex = { $regex: query.trim(), $options: "i" };
+      const [matchingWarehouses, matchingRacks] = await Promise.all([
+        Warehouse.find({ name: regex }).select("_id"),
+        Rack.find({ name: regex }).select("_id"),
+      ]);
+      const wIds = matchingWarehouses.map((w) => w._id);
+      const rIds = matchingRacks.map((r) => r._id);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let invProductIds: any[] = [];
+      if (wIds.length || rIds.length) {
+        const invs = await Inventory.find({
+          $or: [
+            ...(wIds.length ? [{ warehouseId: { $in: wIds } }] : []),
+            ...(rIds.length ? [{ rackId: { $in: rIds } }] : []),
+          ],
+        }).select("productId");
+        invProductIds = invs.map((i) => i.productId);
+      }
+
       filter.$or = [
         { name: regex },
         { sku: regex },
         { sellerName: regex },
         { category: regex },
+        ...(invProductIds.length ? [{ _id: { $in: invProductIds } }] : []),
       ];
     }
 
@@ -348,39 +367,32 @@ export async function POST(request: Request) {
       initialQuantity,
     } = body;
 
-    // If warehouse/rack allocation is requested or initialQuantity is specified
-    const hasLocationData = Boolean(warehouseId || rackId || (initialQuantity !== undefined && Number(initialQuantity) > 0));
-    let rackDoc = null;
-    let warehouseDoc = null;
-
-    if (hasLocationData) {
-      if (!warehouseId || !rackId) {
-        return Response.json(
-          {
-            success: false,
-            message: "Both warehouse and rack are required to allocate stock location",
-          },
-          { status: 400 }
-        );
-      }
-
-      rackDoc = await Rack.findOne({
-        _id: rackId,
-        warehouseId: warehouseId,
-      });
-
-      if (!rackDoc) {
-        return Response.json(
-          {
-            success: false,
-            message: "Selected rack does not belong to the selected warehouse",
-          },
-          { status: 400 }
-        );
-      }
-
-      warehouseDoc = await Warehouse.findById(warehouseId);
+    if (!warehouseId || !rackId) {
+      return Response.json(
+        {
+          success: false,
+          message: "Warehouse and rack are required to add a product",
+        },
+        { status: 400 }
+      );
     }
+
+    const rackDoc = await Rack.findOne({
+      _id: rackId,
+      warehouseId: warehouseId,
+    });
+
+    if (!rackDoc) {
+      return Response.json(
+        {
+          success: false,
+          message: "Selected rack does not belong to the selected warehouse",
+        },
+        { status: 400 }
+      );
+    }
+
+    const warehouseDoc = await Warehouse.findById(warehouseId);
 
     const product = await Product.create({
       name: trimmedName,

@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   Layers,
+  Info,
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
@@ -39,6 +40,52 @@ import {
   type InventoryItem,
   type SelectedLineItem,
 } from "./types";
+
+/** Helper to filter line items inside an issue based on active filters */
+function getMatchingItems(
+  issue: EmployeeIssue,
+  typeFilter: string,
+  stFilter: string,
+  search: string
+): SelectedLineItem[] {
+  const q = search.trim().toLowerCase();
+  const issueMatchesSearch =
+    !q ||
+    issue.issueNumber.toLowerCase().includes(q) ||
+    issue.employeeName.toLowerCase().includes(q) ||
+    issue.employeeEmail.toLowerCase().includes(q) ||
+    issue.employeePhone?.toLowerCase().includes(q) ||
+    issue.employeeDepartment?.toLowerCase().includes(q) ||
+    issue.siteName?.toLowerCase().includes(q) ||
+    (reasonLabels[issue.reason] || issue.reason).toLowerCase().includes(q) ||
+    issue.issuedByName?.toLowerCase().includes(q);
+
+  return issue.items.filter((item) => {
+    // 1. Status Filter
+    if (stFilter !== "ALL") {
+      const itemStatus = item.holdingStatus || "ACTIVE";
+      if (itemStatus !== stFilter) return false;
+    }
+
+    // 2. Product Type Filter (Returnable vs Non-Returnable)
+    const isReusable = item.productType === "REUSABLE" || Boolean(item.returnDueDate);
+    if (typeFilter === "REUSABLE" && !isReusable) return false;
+    if (typeFilter === "NON_REUSABLE" && isReusable) return false;
+
+    // 3. Search query: if search query didn't match issue globally, item must match
+    if (q && !issueMatchesSearch) {
+      const matchItem =
+        item.productName.toLowerCase().includes(q) ||
+        item.sku.toLowerCase().includes(q) ||
+        item.serialNumber?.toLowerCase().includes(q) ||
+        item.warehouseName?.toLowerCase().includes(q) ||
+        item.rackName?.toLowerCase().includes(q);
+      if (!matchItem) return false;
+    }
+
+    return true;
+  });
+}
 
 export default function EmployeeIssuesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -81,9 +128,22 @@ export default function EmployeeIssuesPage() {
   const [issuePage, setIssuePage] = useState(1);
   const [issuePageSize, setIssuePageSize] = useState(10);
   const [expandedIssueIds, setExpandedIssueIds] = useState<Set<string>>(new Set());
+  const [showAllInIssueIds, setShowAllInIssueIds] = useState<Set<string>>(new Set());
 
   function toggleExpandIssue(issueId: string) {
     setExpandedIssueIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(issueId)) {
+        next.delete(issueId);
+      } else {
+        next.add(issueId);
+      }
+      return next;
+    });
+  }
+
+  function toggleShowAllInIssue(issueId: string) {
+    setShowAllInIssueIds((prev) => {
       const next = new Set(prev);
       if (next.has(issueId)) {
         next.delete(issueId);
@@ -289,7 +349,7 @@ export default function EmployeeIssuesPage() {
     };
   }, [issues, selectedLookupEmployeeId, lookupEmployee]);
 
-  // Filter issues keeping multiple items grouped together under a single issue entry
+  // Filter issues: includes any issue that has at least 1 matching item under active filters
   const filteredIssues = useMemo(() => {
     return issues.filter((issue) => {
       // 1. Employee Lookup Filter
@@ -301,28 +361,7 @@ export default function EmployeeIssuesPage() {
         if (!matchId && !matchName) return false;
       }
 
-      // 2. Status Filter
-      if (statusFilter !== "ALL") {
-        const hasMatchingStatus = issue.items.some(
-          (item) => (item.holdingStatus || "ACTIVE") === statusFilter
-        );
-        if (!hasMatchingStatus) return false;
-      }
-
-      // 3. Product Type Filter
-      if (issueTypeFilter === "REUSABLE") {
-        const hasReusable = issue.items.some(
-          (item) => item.productType === "REUSABLE" || Boolean(item.returnDueDate)
-        );
-        if (!hasReusable) return false;
-      } else if (issueTypeFilter === "NON_REUSABLE") {
-        const hasNonReusable = issue.items.some(
-          (item) => item.productType !== "REUSABLE" && !item.returnDueDate
-        );
-        if (!hasNonReusable) return false;
-      }
-
-      // 4. Date Range Filter
+      // 2. Date Range Filter
       if (issueDateFrom) {
         const d = new Date(issue.createdAt);
         if (d < new Date(issueDateFrom)) return false;
@@ -334,32 +373,14 @@ export default function EmployeeIssuesPage() {
         if (d > end) return false;
       }
 
-      // 5. Search Query
-      if (issueSearchQuery.trim()) {
-        const query = issueSearchQuery.toLowerCase().trim();
-        const matchIssue =
-          issue.issueNumber.toLowerCase().includes(query) ||
-          issue.employeeName.toLowerCase().includes(query) ||
-          issue.employeeEmail.toLowerCase().includes(query) ||
-          issue.employeePhone?.toLowerCase().includes(query) ||
-          issue.employeeDepartment?.toLowerCase().includes(query) ||
-          issue.siteName?.toLowerCase().includes(query) ||
-          reasonLabels[issue.reason]?.toLowerCase().includes(query) ||
-          issue.issuedByName?.toLowerCase().includes(query);
-
-        const matchItem = issue.items.some(
-          (item) =>
-            item.productName.toLowerCase().includes(query) ||
-            item.sku.toLowerCase().includes(query) ||
-            item.serialNumber?.toLowerCase().includes(query) ||
-            item.warehouseName?.toLowerCase().includes(query) ||
-            item.rackName?.toLowerCase().includes(query)
-        );
-
-        return matchIssue || matchItem;
-      }
-
-      return true;
+      // 3. Matching Items check (Smart filtering by Returnable / Non-Returnable / Status / Search)
+      const matching = getMatchingItems(
+        issue,
+        issueTypeFilter,
+        statusFilter,
+        issueSearchQuery
+      );
+      return matching.length > 0;
     });
   }, [
     issues,
@@ -389,6 +410,14 @@ export default function EmployeeIssuesPage() {
     const start = (issuePage - 1) * issuePageSize;
     return filteredIssues.slice(start, start + issuePageSize);
   }, [filteredIssues, issuePage, issuePageSize]);
+
+  function expandAll() {
+    setExpandedIssueIds(new Set(filteredIssues.map((i) => i._id)));
+  }
+
+  function collapseAll() {
+    setExpandedIssueIds(new Set());
+  }
 
   // Resolved from the live list so the modal always shows the latest saved values.
   const activeModalData = useMemo(() => {
@@ -1023,7 +1052,7 @@ export default function EmployeeIssuesPage() {
 
         {/* Issued Products & Custody History Directory */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-          <div className="border-b border-slate-100 p-4 md:p-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="border-b border-slate-100 p-4 md:p-5 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-lg font-semibold text-slate-800">
                 Asset Movement & Custody History ({filteredIssues.length})
@@ -1032,127 +1061,166 @@ export default function EmployeeIssuesPage() {
                 Monitor products held by employees, returnable return/renewal periods, recurring service cycles, and custody status.
               </p>
             </div>
+          </div>
 
-            {/* Filter controls */}
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Employee Lookup Dropdown */}
-              <select
-                value={selectedLookupEmployeeId}
-                onChange={(e) => setSelectedLookupEmployeeId(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 font-semibold text-slate-700"
-              >
-                <option value="">All Users</option>
-                {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.employeeCode} - {emp.name} ({emp.department || "General"})
-                  </option>
-                ))}
-              </select>
-
-              {/* Product Type Filter Toggle */}
-              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-50">
-                <button
-                  type="button"
-                  onClick={() => setIssueTypeFilter("ALL")}
-                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
-                    issueTypeFilter === "ALL"
-                      ? "bg-white text-slate-800 shadow-2xs"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  All Types
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIssueTypeFilter("REUSABLE")}
-                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition flex items-center gap-1 ${
-                    issueTypeFilter === "REUSABLE"
-                      ? "bg-indigo-600 text-white shadow-2xs"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  <RotateCcw className="h-3 w-3" /> Returnable
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setIssueTypeFilter("NON_REUSABLE")}
-                  className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
-                    issueTypeFilter === "NON_REUSABLE"
-                      ? "bg-white text-slate-800 shadow-2xs"
-                      : "text-slate-500 hover:text-slate-700"
-                  }`}
-                >
-                  Non-Returnable
-                </button>
-              </div>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 font-medium text-slate-700"
-              >
-                <option value="ALL">All Statuses</option>
-                <option value="ACTIVE">ACTIVE (In Use)</option>
-                <option value="INACTIVE">INACTIVE (Idle / Faulty)</option>
-                <option value="UNDER_SERVICE">UNDER SERVICE</option>
-                <option value="RETURNED">RETURNED</option>
-                <option value="DAMAGED">DAMAGED</option>
-              </select>
-
-              {/* Date Range Filter */}
-              <div className="flex items-center gap-1 text-xs text-slate-600">
-                <input
-                  type="date"
-                  value={issueDateFrom}
-                  onChange={(e) => setIssueDateFrom(e.target.value)}
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-500"
-                  title="Filter from issue date"
-                />
-                <span className="text-slate-400">to</span>
-                <input
-                  type="date"
-                  value={issueDateTo}
-                  onChange={(e) => setIssueDateTo(e.target.value)}
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-500"
-                  title="Filter to issue date"
-                />
-              </div>
-
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+          {/* Filter Bar matching Asset History layout */}
+          <div className="border-b border-slate-100 p-4 md:p-5 space-y-3.5 print:hidden bg-slate-50/40">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              {/* Search Bar */}
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
                   type="text"
-                  placeholder="Search employee, product, SKU, serial..."
+                  placeholder="Search employee, product, SKU, serial no, issue #..."
                   value={issueSearchQuery}
                   onChange={(e) => setIssueSearchQuery(e.target.value)}
-                  className="rounded-lg border border-slate-200 pl-8 pr-7 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-52"
+                  className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 py-2 text-xs font-medium outline-none focus:border-blue-500 transition"
                 />
                 {issueSearchQuery && (
                   <button
                     onClick={() => setIssueSearchQuery("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   >
-                    <X className="h-3 w-3" />
+                    <X className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
 
-              {(selectedLookupEmployeeId || statusFilter !== "ALL" || issueTypeFilter !== "ALL" || issueSearchQuery || issueDateFrom || issueDateTo) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedLookupEmployeeId("");
-                    setStatusFilter("ALL");
-                    setIssueTypeFilter("ALL");
-                    setIssueSearchQuery("");
-                    setIssueDateFrom("");
-                    setIssueDateTo("");
-                  }}
-                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
-                  title="Clear all active filters"
+              {/* Filters */}
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Employee Filter */}
+                <select
+                  value={selectedLookupEmployeeId}
+                  onChange={(e) => setSelectedLookupEmployeeId(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500"
                 >
-                  Clear
-                </button>
+                  <option value="">All Users ({employees.length})</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.employeeCode} - {emp.name} ({emp.department || "General"})
+                    </option>
+                  ))}
+                </select>
+
+                {/* Product Type Toggle (Returnable / Non-Returnable / All) */}
+                <div className="inline-flex rounded-lg border border-slate-200 p-0.5 bg-slate-100/80">
+                  <button
+                    type="button"
+                    onClick={() => setIssueTypeFilter("ALL")}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition ${
+                      issueTypeFilter === "ALL"
+                        ? "bg-slate-800 text-white shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    All Types
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIssueTypeFilter("REUSABLE")}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition flex items-center gap-1 ${
+                      issueTypeFilter === "REUSABLE"
+                        ? "bg-indigo-600 text-white shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                    title="Filter only returnable assets"
+                  >
+                    <RotateCcw className="h-3 w-3" /> Returnable
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIssueTypeFilter("NON_REUSABLE")}
+                    className={`rounded-md px-2.5 py-1 text-xs font-semibold transition flex items-center gap-1 ${
+                      issueTypeFilter === "NON_REUSABLE"
+                        ? "bg-amber-600 text-white shadow-2xs font-bold"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                    title="Filter non-returnable materials"
+                  >
+                    <Box className="h-3 w-3" /> Non-Returnable
+                  </button>
+                </div>
+
+                {/* Status Filter */}
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500"
+                >
+                  <option value="ALL">All Statuses</option>
+                  <option value="ACTIVE">ACTIVE (In Use)</option>
+                  <option value="INACTIVE">INACTIVE (Idle / Faulty)</option>
+                  <option value="UNDER_SERVICE">UNDER SERVICE</option>
+                  <option value="RETURNED">RETURNED</option>
+                  <option value="DAMAGED">DAMAGED</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Date Range, Expand/Collapse & Reset Controls */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-semibold text-slate-500">Date Range:</span>
+                <input
+                  type="date"
+                  value={issueDateFrom}
+                  onChange={(e) => setIssueDateFrom(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 outline-none focus:border-blue-500"
+                  title="Filter from issue date"
+                />
+                <span className="text-slate-400 text-xs">to</span>
+                <input
+                  type="date"
+                  value={issueDateTo}
+                  onChange={(e) => setIssueDateTo(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 outline-none focus:border-blue-500"
+                  title="Filter to issue date"
+                />
+
+                {(selectedLookupEmployeeId ||
+                  statusFilter !== "ALL" ||
+                  issueTypeFilter !== "ALL" ||
+                  issueSearchQuery ||
+                  issueDateFrom ||
+                  issueDateTo) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedLookupEmployeeId("");
+                      setStatusFilter("ALL");
+                      setIssueTypeFilter("ALL");
+                      setIssueSearchQuery("");
+                      setIssueDateFrom("");
+                      setIssueDateTo("");
+                    }}
+                    className="rounded-lg bg-red-50 border border-red-200 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-100 transition"
+                    title="Clear all active filters"
+                  >
+                    Reset Filters
+                  </button>
+                )}
+              </div>
+
+              {/* Bulk Expand / Collapse Buttons */}
+              {filteredIssues.length > 0 && (
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <button
+                    type="button"
+                    onClick={expandAll}
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition shadow-2xs"
+                    title="Expand all product groups to view details"
+                  >
+                    Expand All Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={collapseAll}
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 hover:text-blue-600 transition shadow-2xs"
+                    title="Collapse all product groups"
+                  >
+                    Collapse All
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1230,15 +1298,42 @@ export default function EmployeeIssuesPage() {
                 <tbody className="divide-y divide-slate-100">
                   {paginatedIssues.map((issue) => {
                     const isExpanded = expandedIssueIds.has(issue._id);
-                    const totalUnits = issue.items.reduce((acc, it) => acc + (it.quantity || 1), 0);
+                    const showAllInThisIssue = showAllInIssueIds.has(issue._id);
+
+                    // Smart Item Filtering
+                    const matchingItems = getMatchingItems(
+                      issue,
+                      issueTypeFilter,
+                      statusFilter,
+                      issueSearchQuery
+                    );
+
+                    const isFilterActive =
+                      issueTypeFilter !== "ALL" ||
+                      statusFilter !== "ALL" ||
+                      issueSearchQuery.trim() !== "";
+                    const isSubFiltered =
+                      isFilterActive && matchingItems.length < issue.items.length;
+
+                    const summaryItems = isSubFiltered ? matchingItems : issue.items;
+
+                    const totalSummaryUnits = summaryItems.reduce(
+                      (acc, it) => acc + (it.quantity || 1),
+                      0
+                    );
+                    const totalVoucherUnits = issue.items.reduce(
+                      (acc, it) => acc + (it.quantity || 1),
+                      0
+                    );
+
                     const issuedDate = new Date(issue.createdAt).toLocaleDateString("en-IN", {
                       day: "2-digit",
                       month: "short",
                       year: "numeric",
                     });
 
-                    // Return due date calculation
-                    const activeReturnables = issue.items.filter(
+                    // Return due date calculation (on summaryItems)
+                    const activeReturnables = summaryItems.filter(
                       (it) =>
                         (it.productType === "REUSABLE" || Boolean(it.returnDueDate)) &&
                         it.holdingStatus !== "RETURNED" &&
@@ -1259,24 +1354,27 @@ export default function EmployeeIssuesPage() {
                       returnDaysLeft = Math.round((dueTime - nowTime) / 86400000);
                     }
 
-                    // Status counts
-                    const activeCount = issue.items.filter(
+                    // Status counts (on summaryItems)
+                    const activeCount = summaryItems.filter(
                       (it) => (it.holdingStatus || "ACTIVE") === "ACTIVE"
                     ).length;
-                    const returnedCount = issue.items.filter(
+                    const returnedCount = summaryItems.filter(
                       (it) => it.holdingStatus === "RETURNED"
                     ).length;
-                    const serviceCount = issue.items.filter(
+                    const serviceCount = summaryItems.filter(
                       (it) => it.holdingStatus === "UNDER_SERVICE"
                     ).length;
-                    const inactiveCount = issue.items.filter(
+                    const inactiveCount = summaryItems.filter(
                       (it) => it.holdingStatus === "INACTIVE"
                     ).length;
-                    const damagedCount = issue.items.filter(
+                    const damagedCount = summaryItems.filter(
                       (it) => it.holdingStatus === "DAMAGED"
                     ).length;
-                    const allReturned = returnedCount === issue.items.length && issue.items.length > 0;
-                    const allActive = activeCount === issue.items.length;
+                    const allReturned = returnedCount === summaryItems.length && summaryItems.length > 0;
+                    const allActive = activeCount === summaryItems.length;
+
+                    const isGroupIssue = issue.items.length > 1;
+                    const displayedItems = showAllInThisIssue ? issue.items : matchingItems;
 
                     return (
                       <Fragment key={issue._id}>
@@ -1326,20 +1424,67 @@ export default function EmployeeIssuesPage() {
                             </p>
                           </td>
                           <td className="px-5 py-3.5">
-                            <div className="flex items-center gap-1.5">
-                              <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 text-xs font-bold text-blue-700">
-                                <Layers className="h-3.5 w-3.5" />
-                                {issue.items.length}{" "}
-                                {issue.items.length === 1 ? "Product" : "Products"} ({totalUnits}{" "}
-                                units)
-                              </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {isSubFiltered ? (
+                                <>
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold ${
+                                      issueTypeFilter === "REUSABLE"
+                                        ? "bg-indigo-50 border border-indigo-200 text-indigo-700"
+                                        : "bg-blue-50 border border-blue-200 text-blue-700"
+                                    }`}
+                                  >
+                                    <Layers className="h-3.5 w-3.5" />
+                                    {matchingItems.length} of {issue.items.length} Products ({totalSummaryUnits} units)
+                                  </span>
+                                  <span
+                                    className={`inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-bold ${
+                                      issueTypeFilter === "REUSABLE"
+                                        ? "bg-indigo-100 text-indigo-800"
+                                        : issueTypeFilter === "NON_REUSABLE"
+                                        ? "bg-amber-100 text-amber-800"
+                                        : "bg-slate-200 text-slate-800"
+                                    }`}
+                                  >
+                                    {issueTypeFilter === "REUSABLE"
+                                      ? "Returnable Filtered"
+                                      : issueTypeFilter === "NON_REUSABLE"
+                                      ? "Non-Returnable Filtered"
+                                      : "Filtered"}
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <span
+                                    className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold ${
+                                      isGroupIssue
+                                        ? "bg-purple-50 border border-purple-200 text-purple-700"
+                                        : "bg-blue-50 border border-blue-200 text-blue-700"
+                                    }`}
+                                  >
+                                    <Layers className="h-3.5 w-3.5" />
+                                    {issue.items.length}{" "}
+                                    {issue.items.length === 1 ? "Product" : "Products"} ({totalVoucherUnits}{" "}
+                                    {totalVoucherUnits === 1 ? "unit" : "units"})
+                                  </span>
+                                  {isGroupIssue ? (
+                                    <span className="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
+                                      Group Batch
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center rounded px-1.5 py-0.2 text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                                      Single Issue
+                                    </span>
+                                  )}
+                                </>
+                              )}
                             </div>
                             <p
                               className="text-[11px] text-slate-500 mt-1 truncate max-w-xs"
-                              title={issue.items.map((it) => it.productName).join(", ")}
+                              title={summaryItems.map((it) => it.productName).join(", ")}
                             >
-                              {issue.items.map((it) => it.productName).slice(0, 2).join(", ")}
-                              {issue.items.length > 2 && ` +${issue.items.length - 2} more`}
+                              {summaryItems.map((it) => it.productName).slice(0, 2).join(", ")}
+                              {summaryItems.length > 2 && ` +${summaryItems.length - 2} more`}
                             </p>
                           </td>
                           <td className="px-5 py-3.5 text-center">
@@ -1477,7 +1622,7 @@ export default function EmployeeIssuesPage() {
                                     <Layers className="h-4 w-4 text-blue-600" />
                                     <span className="text-xs font-bold text-slate-800">
                                       Products in Voucher #{issue.issueNumber} ({issue.items.length}{" "}
-                                      items • {totalUnits} total units)
+                                      items • {totalVoucherUnits} total units)
                                     </span>
                                   </div>
                                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
@@ -1523,7 +1668,10 @@ export default function EmployeeIssuesPage() {
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100">
-                                      {issue.items.map((item, itemIdx) => {
+                                      {displayedItems.map((item, itemIdx) => {
+                                        const originalIndex = issue.items.indexOf(item);
+                                        const actualIndex =
+                                          originalIndex >= 0 ? originalIndex : itemIdx;
                                         const isReusable =
                                           item.productType === "REUSABLE" ||
                                           Boolean(item.returnDueDate);
@@ -1541,7 +1689,7 @@ export default function EmployeeIssuesPage() {
 
                                         return (
                                           <tr
-                                            key={`${issue._id}-item-${itemIdx}`}
+                                            key={`${issue._id}-item-${actualIndex}`}
                                             className="hover:bg-slate-50/60 transition"
                                           >
                                             <td className="px-3 py-2.5 text-center text-slate-400 font-bold text-[11px]">
@@ -1656,7 +1804,7 @@ export default function EmployeeIssuesPage() {
                                             <td className="px-3 py-2.5 text-center">
                                               <button
                                                 type="button"
-                                                onClick={() => openServiceModal(issue, itemIdx)}
+                                                onClick={() => openServiceModal(issue, actualIndex)}
                                                 className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition shadow-2xs active:scale-95"
                                                 title="Manage status, service cycle, or return item"
                                               >
@@ -1670,6 +1818,31 @@ export default function EmployeeIssuesPage() {
                                     </tbody>
                                   </table>
                                 </div>
+
+                                {/* Information Footer if some items are hidden */}
+                                {isSubFiltered && !showAllInThisIssue && (
+                                  <div className="bg-slate-50 border-t border-slate-100 px-4 py-2 flex items-center justify-between text-[11px] text-slate-500">
+                                    <div className="flex items-center gap-1.5">
+                                      <Info className="h-3.5 w-3.5 text-slate-400" />
+                                      <span>
+                                        {issue.items.length - matchingItems.length}{" "}
+                                        {issueTypeFilter === "REUSABLE"
+                                          ? "non-returnable"
+                                          : issueTypeFilter === "NON_REUSABLE"
+                                          ? "returnable"
+                                          : "non-matching"}{" "}
+                                        {issue.items.length - matchingItems.length === 1 ? "item" : "items"} hidden by active filter.
+                                      </span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={() => toggleShowAllInIssue(issue._id)}
+                                      className="font-bold text-blue-600 hover:underline"
+                                    >
+                                      Show all {issue.items.length} items
+                                    </button>
+                                  </div>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -1687,7 +1860,35 @@ export default function EmployeeIssuesPage() {
             <div className="space-y-3 p-4 md:hidden">
               {paginatedIssues.map((issue) => {
                 const isExpanded = expandedIssueIds.has(issue._id);
-                const totalUnits = issue.items.reduce((acc, it) => acc + (it.quantity || 1), 0);
+                const showAllInThisIssue = showAllInIssueIds.has(issue._id);
+                const matchingItems = getMatchingItems(
+                  issue,
+                  issueTypeFilter,
+                  statusFilter,
+                  issueSearchQuery
+                );
+
+                const isFilterActive =
+                  issueTypeFilter !== "ALL" ||
+                  statusFilter !== "ALL" ||
+                  issueSearchQuery.trim() !== "";
+                const isSubFiltered =
+                  isFilterActive && matchingItems.length < issue.items.length;
+
+                const summaryItems = isSubFiltered ? matchingItems : issue.items;
+
+                const totalSummaryUnits = summaryItems.reduce(
+                  (acc, it) => acc + (it.quantity || 1),
+                  0
+                );
+                const totalVoucherUnits = issue.items.reduce(
+                  (acc, it) => acc + (it.quantity || 1),
+                  0
+                );
+
+                const isGroupIssue = issue.items.length > 1;
+                const displayedItems = showAllInThisIssue ? issue.items : matchingItems;
+
                 const issuedDate = new Date(issue.createdAt).toLocaleDateString("en-IN", {
                   day: "2-digit",
                   month: "short",
@@ -1741,13 +1942,32 @@ export default function EmployeeIssuesPage() {
                       </div>
                     </div>
 
+                    {/* Mobile summary */}
                     <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-lg text-xs">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <Layers className="h-4 w-4 text-blue-600" />
                         <span className="font-bold text-slate-800">
-                          {issue.items.length}{" "}
-                          {issue.items.length === 1 ? "Product" : "Products"} ({totalUnits} units)
+                          {isSubFiltered ? (
+                            <span>
+                              {matchingItems.length} of {issue.items.length} Products ({totalSummaryUnits} units)
+                            </span>
+                          ) : (
+                            <span>
+                              {issue.items.length}{" "}
+                              {issue.items.length === 1 ? "Product" : "Products"} ({totalVoucherUnits} units)
+                            </span>
+                          )}
                         </span>
+                        {isGroupIssue && !isSubFiltered && (
+                          <span className="rounded bg-purple-100 text-purple-800 px-1.5 py-0.2 text-[9px] font-extrabold uppercase">
+                            Group
+                          </span>
+                        )}
+                        {isSubFiltered && (
+                          <span className="rounded bg-indigo-100 text-indigo-800 px-1.5 py-0.2 text-[9px] font-extrabold uppercase">
+                            {issueTypeFilter === "REUSABLE" ? "Returnable" : "Filtered"}
+                          </span>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -1765,12 +1985,15 @@ export default function EmployeeIssuesPage() {
 
                     {isExpanded && (
                       <div className="space-y-2 pt-1 border-t border-slate-100">
-                        {issue.items.map((item, itemIdx) => {
+                        {displayedItems.map((item, itemIdx) => {
+                          const originalIndex = issue.items.indexOf(item);
+                          const actualIndex = originalIndex >= 0 ? originalIndex : itemIdx;
                           const isReusable =
                             item.productType === "REUSABLE" || Boolean(item.returnDueDate);
+
                           return (
                             <div
-                              key={`${issue._id}-m-${itemIdx}`}
+                              key={`${issue._id}-m-${actualIndex}`}
                               className="rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs space-y-1.5"
                             >
                               <div className="flex items-start justify-between">
@@ -1794,7 +2017,9 @@ export default function EmployeeIssuesPage() {
                                       ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                       : item.holdingStatus === "RETURNED"
                                       ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                      : "bg-amber-50 text-amber-700 border border-amber-200"
+                                      : item.holdingStatus === "UNDER_SERVICE"
+                                      ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                      : "bg-red-50 text-red-700 border border-red-200"
                                   }`}
                                 >
                                   {item.holdingStatus || "ACTIVE"}
@@ -1819,7 +2044,7 @@ export default function EmployeeIssuesPage() {
                               <div className="pt-1 flex justify-end">
                                 <button
                                   type="button"
-                                  onClick={() => openServiceModal(issue, itemIdx)}
+                                  onClick={() => openServiceModal(issue, actualIndex)}
                                   className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600"
                                 >
                                   <Wrench className="h-3 w-3" /> Manage / Service
@@ -1828,6 +2053,21 @@ export default function EmployeeIssuesPage() {
                             </div>
                           );
                         })}
+
+                        {isSubFiltered && !showAllInThisIssue && (
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 bg-slate-100/70 p-2 rounded-lg mt-1">
+                            <span>
+                              {issue.items.length - matchingItems.length} hidden items
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => toggleShowAllInIssue(issue._id)}
+                              className="font-bold text-blue-600 hover:underline"
+                            >
+                              Show all {issue.items.length}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

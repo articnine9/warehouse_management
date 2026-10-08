@@ -262,14 +262,20 @@ export default function AddProductModal({
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (warehouseId && !rackId) {
-      setWarningMessage("Please select a rack for the selected warehouse.");
+    if (!warehouseId) {
+      setWarningMessage("Please select a warehouse for storage.");
       setWarningOpen(true);
       return;
     }
 
-    if (!warehouseId && initialQuantity && Number(initialQuantity) > 0) {
-      setWarningMessage("Please select a warehouse and rack to assign initial stock.");
+    if (!rackId) {
+      setWarningMessage("Please select a rack in the selected warehouse.");
+      setWarningOpen(true);
+      return;
+    }
+
+    if (!initialQuantity || initialQuantity.trim() === "" || Number(initialQuantity) <= 0) {
+      setWarningMessage("Please enter a valid initial stock quantity (at least 1).");
       setWarningOpen(true);
       return;
     }
@@ -294,9 +300,9 @@ export default function AddProductModal({
           sellerName: sellerName.trim(),
           price: Number(price),
           description: description.trim(),
-          warehouseId: warehouseId || undefined,
-          rackId: rackId || undefined,
-          initialQuantity: warehouseId && rackId ? Math.max(0, Number(initialQuantity) || 0) : undefined,
+          warehouseId,
+          rackId,
+          initialQuantity: Math.max(1, Number(initialQuantity) || 1),
         }),
       });
 
@@ -491,10 +497,10 @@ export default function AddProductModal({
                 <div>
                   <p className="text-xs font-bold text-blue-900 uppercase flex items-center gap-1.5">
                     <WarehouseIcon className="h-4 w-4 text-blue-600" />
-                    Storage Location & Initial Stock (Warehouse & Rack)
+                    Storage Location & Initial Stock (Warehouse & Rack) <span className="text-red-500">*</span>
                   </p>
                   <p className="text-[11px] text-blue-700/80">
-                    Directly assign this product to a warehouse & rack with starting inventory (Optional).
+                    Assign this product to a warehouse & rack with initial inventory (Required).
                   </p>
                 </div>
               </div>
@@ -502,7 +508,7 @@ export default function AddProductModal({
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Warehouse
+                    Warehouse <span className="text-red-500">*</span>
                   </label>
                   <SearchableSelect
                     options={warehouseOptions}
@@ -514,12 +520,13 @@ export default function AddProductModal({
                     placeholder="Select warehouse..."
                     onAddNew={() => setIsAddWarehouseOpen(true)}
                     addNewLabel="Add Warehouse"
+                    required
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Rack {warehouseId ? `(${filteredRacks.length})` : ""}
+                    Rack {warehouseId ? `(${filteredRacks.length})` : ""} <span className="text-red-500">*</span>
                   </label>
                   <SearchableSelect
                     options={rackOptions}
@@ -535,20 +542,22 @@ export default function AddProductModal({
                     disabled={!warehouseId}
                     onAddNew={warehouseId ? () => setIsAddRackOpen(true) : undefined}
                     addNewLabel="Add Rack"
+                    required
                   />
                 </div>
 
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Initial Stock (Qty)
+                    Initial Stock (Qty) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"
-                    min="0"
-                    placeholder="e.g. 10 (or 0)"
+                    min="1"
+                    placeholder="e.g. 10"
                     value={initialQuantity}
                     onChange={(e) => setInitialQuantity(e.target.value)}
                     disabled={!warehouseId || !rackId}
+                    required
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100 disabled:text-slate-400"
                   />
                 </div>
