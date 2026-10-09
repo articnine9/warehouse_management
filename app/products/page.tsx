@@ -351,22 +351,69 @@ export default function ProductsPage() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
           <div
             onClick={() => setSelectedCategoryFilter("ALL")}
-            className={`cursor-pointer rounded-xl border p-3.5 shadow-sm transition ${
+            className={`cursor-pointer rounded-2xl border p-4 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 ${
               selectedCategoryFilter === "ALL"
-                ? "border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20"
-                : "border-slate-200 bg-white hover:border-slate-300"
+                ? "bg-blue-50/95 border-2 border-blue-500 ring-4 ring-blue-500/20 shadow-xs scale-[1.01]"
+                : "bg-blue-50/35 border-blue-200/80 hover:bg-blue-50/70 hover:border-blue-300"
             }`}
           >
-            <p className="text-xs font-semibold text-slate-500">ALL</p>
-            <p className="mt-1 text-sm font-bold text-slate-800">All Categories</p>
-            <p className="mt-1 text-xl font-extrabold text-blue-600">
+            <p className="text-[11px] font-bold tracking-wider text-blue-900/80 uppercase">ALL</p>
+            <p className="mt-1 text-sm font-bold text-blue-950">All Categories</p>
+            <p className="mt-1 text-2xl font-black text-blue-700">
               {products.length}
             </p>
           </div>
 
-          {categories.map((cat) => {
+          {categories.map((cat, idx) => {
             const count = products.filter((p) => p.category === cat.name).length;
             const isSelected = selectedCategoryFilter === cat.name;
+
+            const palettes = [
+              {
+                base: "bg-indigo-50/35 border-indigo-200/80 hover:bg-indigo-50/70 hover:border-indigo-300",
+                active: "bg-indigo-50/95 border-2 border-indigo-500 ring-4 ring-indigo-500/20 shadow-xs scale-[1.01]",
+                code: "text-indigo-900/80",
+                name: "text-indigo-950",
+                count: "text-indigo-700",
+              },
+              {
+                base: "bg-emerald-50/35 border-emerald-200/80 hover:bg-emerald-50/70 hover:border-emerald-300",
+                active: "bg-emerald-50/95 border-2 border-emerald-500 ring-4 ring-emerald-500/20 shadow-xs scale-[1.01]",
+                code: "text-emerald-900/80",
+                name: "text-emerald-950",
+                count: "text-emerald-700",
+              },
+              {
+                base: "bg-purple-50/35 border-purple-200/80 hover:bg-purple-50/70 hover:border-purple-300",
+                active: "bg-purple-50/95 border-2 border-purple-500 ring-4 ring-purple-500/20 shadow-xs scale-[1.01]",
+                code: "text-purple-900/80",
+                name: "text-purple-950",
+                count: "text-purple-700",
+              },
+              {
+                base: "bg-amber-50/35 border-amber-200/80 hover:bg-amber-50/70 hover:border-amber-300",
+                active: "bg-amber-50/95 border-2 border-amber-500 ring-4 ring-amber-500/20 shadow-xs scale-[1.01]",
+                code: "text-amber-900/80",
+                name: "text-amber-950",
+                count: "text-amber-700",
+              },
+              {
+                base: "bg-cyan-50/35 border-cyan-200/80 hover:bg-cyan-50/70 hover:border-cyan-300",
+                active: "bg-cyan-50/95 border-2 border-cyan-500 ring-4 ring-cyan-500/20 shadow-xs scale-[1.01]",
+                code: "text-cyan-900/80",
+                name: "text-cyan-950",
+                count: "text-cyan-700",
+              },
+              {
+                base: "bg-rose-50/35 border-rose-200/80 hover:bg-rose-50/70 hover:border-rose-300",
+                active: "bg-rose-50/95 border-2 border-rose-500 ring-4 ring-rose-500/20 shadow-xs scale-[1.01]",
+                code: "text-rose-900/80",
+                name: "text-rose-950",
+                count: "text-rose-700",
+              },
+            ];
+
+            const theme = palettes[idx % palettes.length];
 
             return (
               <div
@@ -374,17 +421,17 @@ export default function ProductsPage() {
                 onClick={() =>
                   setSelectedCategoryFilter(isSelected ? "ALL" : cat.name)
                 }
-                className={`cursor-pointer rounded-xl border p-3.5 shadow-sm transition ${
-                  isSelected
-                    ? "border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20"
-                    : "border-slate-200 bg-white hover:border-slate-300"
+                className={`cursor-pointer rounded-2xl border p-4 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 ${
+                  isSelected ? theme.active : theme.base
                 }`}
               >
-                <p className="text-xs font-semibold text-slate-500">{cat.code}</p>
-                <p className="mt-1 text-sm font-bold text-slate-800 truncate">
+                <p className={`text-[11px] font-bold tracking-wider uppercase truncate ${theme.code}`}>
+                  {cat.code}
+                </p>
+                <p className={`mt-1 text-sm font-bold truncate ${theme.name}`}>
                   {cat.name}
                 </p>
-                <p className="mt-1 text-xl font-extrabold text-slate-800">
+                <p className={`mt-1 text-2xl font-black ${theme.count}`}>
                   {count}
                 </p>
               </div>

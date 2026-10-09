@@ -572,50 +572,50 @@ export default function ProductDetailPage({
 
             {/* ─── METRIC CARDS STRIP ─── */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
-                <span className="text-[10px] font-bold uppercase text-slate-400 block">
+              <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-4 shadow-2xs hover:bg-emerald-50/70 hover:border-emerald-300 transition-all duration-200">
+                <span className="text-[10px] font-bold uppercase text-emerald-900/80 tracking-wider block">
                   Warehouse Stock
                 </span>
-                <p className="text-xl font-black text-emerald-700 mt-0.5">
+                <p className="text-2xl font-black text-emerald-950 mt-0.5">
                   {data.summary.totalInStock}{" "}
-                  <span className="text-xs font-semibold text-slate-500">available</span>
+                  <span className="text-xs font-semibold text-emerald-700">available</span>
                 </p>
-                <span className="text-[11px] text-slate-400">Across warehouse racks</span>
+                <span className="text-[11px] text-emerald-700/80">Across warehouse racks</span>
               </div>
 
-              <div className="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 shadow-2xs">
-                <span className="text-[10px] font-bold uppercase text-blue-800 block">
+              <div className="rounded-2xl border border-blue-200/80 bg-blue-50/40 p-4 shadow-2xs hover:bg-blue-50/70 hover:border-blue-300 transition-all duration-200">
+                <span className="text-[10px] font-bold uppercase text-blue-900/80 tracking-wider block">
                   Currently With Employees
                 </span>
-                <p className="text-xl font-black text-blue-700 mt-0.5">
+                <p className="text-2xl font-black text-blue-950 mt-0.5">
                   {data.summary.totalUnitsActiveIssued}{" "}
-                  <span className="text-xs font-semibold text-blue-600">active units</span>
+                  <span className="text-xs font-semibold text-blue-700">active units</span>
                 </p>
-                <span className="text-[11px] text-blue-600 font-medium">
+                <span className="text-[11px] text-blue-700/80 font-medium">
                   Held by {data.summary.activeHoldersCount} staff members
                 </span>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
-                <span className="text-[10px] font-bold uppercase text-slate-400 block">
+              <div className="rounded-2xl border border-indigo-200/80 bg-indigo-50/40 p-4 shadow-2xs hover:bg-indigo-50/70 hover:border-indigo-300 transition-all duration-200">
+                <span className="text-[10px] font-bold uppercase text-indigo-900/80 tracking-wider block">
                   Total Ever Returned
                 </span>
-                <p className="text-xl font-black text-slate-700 mt-0.5">
+                <p className="text-2xl font-black text-indigo-950 mt-0.5">
                   {data.summary.totalUnitsReturned}{" "}
-                  <span className="text-xs font-semibold text-slate-500">units</span>
+                  <span className="text-xs font-semibold text-indigo-700">units</span>
                 </p>
-                <span className="text-[11px] text-slate-400">Restored back into inventory</span>
+                <span className="text-[11px] text-indigo-700/80">Restored back into inventory</span>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-2xs">
-                <span className="text-[10px] font-bold uppercase text-slate-400 block">
+              <div className="rounded-2xl border border-purple-200/80 bg-purple-50/40 p-4 shadow-2xs hover:bg-purple-50/70 hover:border-purple-300 transition-all duration-200">
+                <span className="text-[10px] font-bold uppercase text-purple-900/80 tracking-wider block">
                   Total Movement Entries
                 </span>
-                <p className="text-xl font-black text-slate-800 mt-0.5">
+                <p className="text-2xl font-black text-purple-950 mt-0.5">
                   {data.summary.totalMovementRecords}{" "}
-                  <span className="text-xs font-semibold text-slate-500">logs</span>
+                  <span className="text-xs font-semibold text-purple-700">logs</span>
                 </p>
-                <span className="text-[11px] text-slate-400">Inward / Issues / Returns / Sales</span>
+                <span className="text-[11px] text-purple-700/80">Inward / Issues / Returns / Sales</span>
               </div>
             </div>
 

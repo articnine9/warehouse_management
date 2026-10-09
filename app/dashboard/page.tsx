@@ -154,44 +154,144 @@ function getMetricLink(label: string, role?: string): string {
   }
 }
 
-function getMetricIcon(label: string) {
+function getMetricTheme(label: string) {
   switch (label) {
     case "Staff":
     case "Total Staff":
-      return <Users className="h-5 w-5 text-purple-600" />;
+      return {
+        cardBg: "bg-purple-50/40 border-purple-200/80 hover:bg-purple-50/70 hover:border-purple-400 hover:ring-2 hover:ring-purple-400/20",
+        badgeBg: "bg-purple-100 text-purple-700",
+        valueColor: "text-purple-950 group-hover:text-purple-700",
+        labelColor: "text-purple-900/80",
+        viewColor: "text-purple-600",
+      };
     case "Warehouses":
     case "Warehouse":
     case "Total Warehouses":
     case "Assigned Warehouse":
-      return <Warehouse className="h-5 w-5 text-blue-600" />;
+      return {
+        cardBg: "bg-blue-50/40 border-blue-200/80 hover:bg-blue-50/70 hover:border-blue-400 hover:ring-2 hover:ring-blue-400/20",
+        badgeBg: "bg-blue-100 text-blue-700",
+        valueColor: "text-blue-950 group-hover:text-blue-700",
+        labelColor: "text-blue-900/80",
+        viewColor: "text-blue-600",
+      };
     case "Racks":
     case "Assigned Racks":
-      return <Box className="h-5 w-5 text-indigo-600" />;
+      return {
+        cardBg: "bg-indigo-50/40 border-indigo-200/80 hover:bg-indigo-50/70 hover:border-indigo-400 hover:ring-2 hover:ring-indigo-400/20",
+        badgeBg: "bg-indigo-100 text-indigo-700",
+        valueColor: "text-indigo-950 group-hover:text-indigo-700",
+        labelColor: "text-indigo-900/80",
+        viewColor: "text-indigo-600",
+      };
     case "Categories":
     case "Total Categories":
-      return <FolderTree className="h-5 w-5 text-cyan-600" />;
+      return {
+        cardBg: "bg-cyan-50/40 border-cyan-200/80 hover:bg-cyan-50/70 hover:border-cyan-400 hover:ring-2 hover:ring-cyan-400/20",
+        badgeBg: "bg-cyan-100 text-cyan-700",
+        valueColor: "text-cyan-950 group-hover:text-cyan-700",
+        labelColor: "text-cyan-900/80",
+        viewColor: "text-cyan-600",
+      };
     case "Products":
     case "Total Products":
     case "Assigned Products":
     case "Products in Warehouse":
-      return <Tag className="h-5 w-5 text-emerald-600" />;
+      return {
+        cardBg: "bg-emerald-50/40 border-emerald-200/80 hover:bg-emerald-50/70 hover:border-emerald-400 hover:ring-2 hover:ring-emerald-400/20",
+        badgeBg: "bg-emerald-100 text-emerald-700",
+        valueColor: "text-emerald-950 group-hover:text-emerald-700",
+        labelColor: "text-emerald-900/80",
+        viewColor: "text-emerald-600",
+      };
     case "Total Stock":
     case "Inventory Stock":
     case "Total Units":
-      return <PackageCheck className="h-5 w-5 text-teal-600" />;
+      return {
+        cardBg: "bg-teal-50/40 border-teal-200/80 hover:bg-teal-50/70 hover:border-teal-400 hover:ring-2 hover:ring-teal-400/20",
+        badgeBg: "bg-teal-100 text-teal-700",
+        valueColor: "text-teal-950 group-hover:text-teal-700",
+        labelColor: "text-teal-900/80",
+        viewColor: "text-teal-600",
+      };
     case "Low":
     case "Low Stock":
-      return <AlertTriangle className="h-5 w-5 text-amber-500" />;
+      return {
+        cardBg: "bg-amber-50/40 border-amber-200/80 hover:bg-amber-50/70 hover:border-amber-400 hover:ring-2 hover:ring-amber-400/20",
+        badgeBg: "bg-amber-100 text-amber-700",
+        valueColor: "text-amber-950 group-hover:text-amber-700",
+        labelColor: "text-amber-900/80",
+        viewColor: "text-amber-600",
+      };
     case "Out":
     case "Out of Stock":
-      return <AlertOctagon className="h-5 w-5 text-rose-600" />;
-    case "Total Billing Orders":
-      return <ClipboardList className="h-5 w-5 text-teal-600" />;
     case "Low / Out":
     case "Attention Needed":
-      return <AlertTriangle className="h-5 w-5 text-rose-600" />;
+      return {
+        cardBg: "bg-rose-50/40 border-rose-200/80 hover:bg-rose-50/70 hover:border-rose-400 hover:ring-2 hover:ring-rose-400/20",
+        badgeBg: "bg-rose-100 text-rose-700",
+        valueColor: "text-rose-950 group-hover:text-rose-700",
+        labelColor: "text-rose-900/80",
+        viewColor: "text-rose-600",
+      };
+    case "Total Billing Orders":
+      return {
+        cardBg: "bg-teal-50/40 border-teal-200/80 hover:bg-teal-50/70 hover:border-teal-400 hover:ring-2 hover:ring-teal-400/20",
+        badgeBg: "bg-teal-100 text-teal-700",
+        valueColor: "text-teal-950 group-hover:text-teal-700",
+        labelColor: "text-teal-900/80",
+        viewColor: "text-teal-600",
+      };
     default:
-      return <Building2 className="h-5 w-5 text-slate-600" />;
+      return {
+        cardBg: "bg-slate-50/40 border-slate-200/80 hover:bg-slate-50/70 hover:border-blue-400 hover:ring-2 hover:ring-blue-400/20",
+        badgeBg: "bg-slate-100 text-slate-700",
+        valueColor: "text-slate-900 group-hover:text-blue-600",
+        labelColor: "text-slate-600",
+        viewColor: "text-blue-600",
+      };
+  }
+}
+
+function getMetricIcon(label: string) {
+  switch (label) {
+    case "Staff":
+    case "Total Staff":
+      return <Users className="h-5 w-5 text-purple-700" />;
+    case "Warehouses":
+    case "Warehouse":
+    case "Total Warehouses":
+    case "Assigned Warehouse":
+      return <Warehouse className="h-5 w-5 text-blue-700" />;
+    case "Racks":
+    case "Assigned Racks":
+      return <Box className="h-5 w-5 text-indigo-700" />;
+    case "Categories":
+    case "Total Categories":
+      return <FolderTree className="h-5 w-5 text-cyan-700" />;
+    case "Products":
+    case "Total Products":
+    case "Assigned Products":
+    case "Products in Warehouse":
+      return <Tag className="h-5 w-5 text-emerald-700" />;
+    case "Total Stock":
+    case "Inventory Stock":
+    case "Total Units":
+      return <PackageCheck className="h-5 w-5 text-teal-700" />;
+    case "Low":
+    case "Low Stock":
+      return <AlertTriangle className="h-5 w-5 text-amber-700" />;
+    case "Out":
+    case "Out of Stock":
+      return <AlertOctagon className="h-5 w-5 text-rose-700" />;
+    case "Total Billing Orders":
+      return <ClipboardList className="h-5 w-5 text-teal-700" />;
+    case "Low / Out":
+    case "Attention Needed":
+      return <AlertTriangle className="h-5 w-5 text-rose-700" />;
+    default:
+      return <Building2 className="h-5 w-5 text-slate-700" />;
   }
 }
 
@@ -401,26 +501,29 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 gap-3 md:gap-4 lg:grid-cols-4">
             {summary.data.metrics.map((metric) => {
               const targetLink = getMetricLink(metric.label, summary.role);
+              const theme = getMetricTheme(metric.label);
               const icon = getMetricIcon(metric.label);
 
               return (
                 <Link
                   key={metric.label}
                   href={targetLink}
-                  className="group relative rounded-xl border border-slate-200 bg-white p-4 md:p-5 shadow-sm transition hover:border-blue-400 hover:shadow-md active:scale-[0.99] flex flex-col justify-between"
+                  className={`group relative rounded-2xl border p-4 md:p-5 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99] flex flex-col justify-between ${theme.cardBg}`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-slate-500 md:text-sm">
+                    <span className={`text-xs font-bold md:text-sm ${theme.labelColor}`}>
                       {metric.label}
                     </span>
-                    {icon}
+                    <div className={`flex h-9 w-9 items-center justify-center rounded-xl shadow-2xs transition-transform group-hover:scale-105 ${theme.badgeBg}`}>
+                      {icon}
+                    </div>
                   </div>
 
                   <div className="mt-3 flex items-baseline justify-between">
-                    <h2 className="text-2xl font-bold text-slate-800 md:text-3xl group-hover:text-blue-600 transition">
+                    <h2 className={`text-2xl font-black md:text-3xl transition ${theme.valueColor}`}>
                       {metric.value}
                     </h2>
-                    <span className="text-xs font-semibold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                    <span className={`text-xs font-bold opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5 ${theme.viewColor}`}>
                       View <ArrowRight className="h-3 w-3" />
                     </span>
                   </div>

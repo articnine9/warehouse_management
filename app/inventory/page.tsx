@@ -390,71 +390,71 @@ function InventoryContent() {
         <button
           type="button"
           onClick={() => setStatusFilter("ALL")}
-          className={`text-left rounded-xl border p-3.5 shadow-sm transition ${
+          className={`text-left rounded-2xl border p-4 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
             statusFilter === "ALL"
-              ? "border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20"
-              : "border-slate-200 bg-white hover:border-slate-300"
+              ? "bg-blue-50/95 border-2 border-blue-500 ring-4 ring-blue-500/20 shadow-xs scale-[1.01]"
+              : "bg-blue-50/35 border-blue-200/80 hover:bg-blue-50/70 hover:border-blue-300"
           }`}
         >
-          <p className="text-xs font-semibold text-slate-500">ALL</p>
-          <p className="mt-1 text-sm font-bold text-slate-800">All Stock</p>
-          <p className="mt-1 text-xl font-extrabold text-blue-600">{inventory.length}</p>
+          <p className="text-[11px] font-bold tracking-wider text-blue-900/80 uppercase">ALL</p>
+          <p className="mt-1 text-sm font-bold text-blue-950">All Stock</p>
+          <p className="mt-1 text-2xl font-black text-blue-700">{inventory.length}</p>
         </button>
 
         <button
           type="button"
           onClick={() => setStatusFilter("AVAILABLE")}
-          className={`text-left rounded-xl border p-3.5 shadow-sm transition ${
+          className={`text-left rounded-2xl border p-4 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
             statusFilter === "AVAILABLE"
-              ? "border-emerald-500 bg-emerald-50/50 ring-2 ring-emerald-500/20"
-              : "border-slate-200 bg-white hover:border-slate-300"
+              ? "bg-emerald-50/95 border-2 border-emerald-500 ring-4 ring-emerald-500/20 shadow-xs scale-[1.01]"
+              : "bg-emerald-50/35 border-emerald-200/80 hover:bg-emerald-50/70 hover:border-emerald-300"
           }`}
         >
-          <p className="text-xs font-semibold text-emerald-600">IN STOCK</p>
-          <p className="mt-1 text-sm font-bold text-slate-800">Available</p>
-          <p className="mt-1 text-xl font-extrabold text-emerald-600">{availableCount}</p>
+          <p className="text-[11px] font-bold tracking-wider text-emerald-900/80 uppercase">IN STOCK</p>
+          <p className="mt-1 text-sm font-bold text-emerald-950">Available</p>
+          <p className="mt-1 text-2xl font-black text-emerald-700">{availableCount}</p>
         </button>
 
         <button
           type="button"
           onClick={() => setStatusFilter("LOW_STOCK")}
-          className={`text-left rounded-xl border p-3.5 shadow-sm transition ${
+          className={`text-left rounded-2xl border p-4 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
             statusFilter === "LOW_STOCK"
-              ? "border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20"
-              : "border-slate-200 bg-white hover:border-slate-300"
+              ? "bg-amber-50/95 border-2 border-amber-500 ring-4 ring-amber-500/20 shadow-xs scale-[1.01]"
+              : "bg-amber-50/35 border-amber-200/80 hover:bg-amber-50/70 hover:border-amber-300"
           }`}
         >
-          <p className="text-xs font-semibold text-amber-600">LOW STOCK</p>
-          <p className="mt-1 text-sm font-bold text-slate-800">Low (&le;10)</p>
-          <p className="mt-1 text-xl font-extrabold text-amber-600">{lowStockCount}</p>
+          <p className="text-[11px] font-bold tracking-wider text-amber-900/80 uppercase">LOW STOCK</p>
+          <p className="mt-1 text-sm font-bold text-amber-950">Low (&le;10)</p>
+          <p className="mt-1 text-2xl font-black text-amber-700">{lowStockCount}</p>
         </button>
 
         <button
           type="button"
           onClick={() => setStatusFilter("OUT_OF_STOCK")}
-          className={`text-left rounded-xl border p-3.5 shadow-sm transition ${
+          className={`text-left rounded-2xl border p-4 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
             statusFilter === "OUT_OF_STOCK"
-              ? "border-red-500 bg-red-50/50 ring-2 ring-red-500/20"
-              : "border-slate-200 bg-white hover:border-slate-300"
+              ? "bg-red-50/95 border-2 border-red-500 ring-4 ring-red-500/20 shadow-xs scale-[1.01]"
+              : "bg-red-50/35 border-red-200/80 hover:bg-red-50/70 hover:border-red-300"
           }`}
         >
-          <p className="text-xs font-semibold text-red-600">EMPTY</p>
-          <p className="mt-1 text-sm font-bold text-slate-800">Out of Stock</p>
-          <p className="mt-1 text-xl font-extrabold text-red-600">{outOfStockCount}</p>
+          <p className="text-[11px] font-bold tracking-wider text-red-900/80 uppercase">EMPTY</p>
+          <p className="mt-1 text-sm font-bold text-red-950">Out of Stock</p>
+          <p className="mt-1 text-2xl font-black text-red-700">{outOfStockCount}</p>
         </button>
 
         <button
           type="button"
           onClick={() => setStatusFilter("LOW_OUT")}
-          className={`text-left rounded-xl border p-3.5 shadow-sm transition col-span-2 sm:col-span-1 ${
+          className={`text-left rounded-2xl border p-4 shadow-2xs transition-all duration-200 hover:-translate-y-0.5 cursor-pointer col-span-2 sm:col-span-1 ${
             statusFilter === "LOW_OUT"
-              ? "border-amber-600 bg-amber-50 ring-2 ring-amber-600/20"
-              : "border-slate-200 bg-white hover:border-slate-300"
+              ? "bg-rose-50/95 border-2 border-rose-500 ring-4 ring-rose-500/20 shadow-xs scale-[1.01]"
+              : "bg-rose-50/35 border-rose-200/80 hover:bg-rose-50/70 hover:border-rose-300"
           }`}
         >
-          <p className="text-xs font-semibold text-amber-700">ATTENTION</p>
-          <p className="mt-1 text-sm font-bold text-slate-800">Low & Out</p>
-          <p className="mt-1 text-xl font-extrabold text-amber-700">{lowOutCount}</p>
+          <p className="text-[11px] font-bold tracking-wider text-rose-900/80 uppercase">ATTENTION</p>
+          <p className="mt-1 text-sm font-bold text-rose-950">Low & Out</p>
+          <p className="mt-1 text-2xl font-black text-rose-700">{lowOutCount}</p>
         </button>
       </div>
 

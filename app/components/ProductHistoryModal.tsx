@@ -29,6 +29,7 @@ import {
   Info,
   Check,
   Package,
+  Wrench,
 } from "lucide-react";
 
 interface ProductHistoryData {
@@ -702,12 +703,12 @@ export default function ProductHistoryModal({
                         {/* 4 KPI Stat Boxes */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
                           {/* Box 1: Taken Date */}
-                          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 mb-1">
-                              <Calendar className="h-3.5 w-3.5 text-blue-500" />
+                          <div className="rounded-xl border border-blue-200/80 bg-blue-50/40 p-3 shadow-2xs">
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-900/80 mb-1">
+                              <Calendar className="h-3.5 w-3.5 text-blue-600" />
                               <span>Taken Date</span>
                             </div>
-                            <p className="text-xs sm:text-sm font-bold text-slate-800">
+                            <p className="text-xs sm:text-sm font-black text-blue-950">
                               {takenDateObj
                                 ? takenDateObj.toLocaleDateString("en-IN", {
                                     day: "2-digit",
@@ -716,16 +717,20 @@ export default function ProductHistoryModal({
                                   })
                                 : "02 Oct 2026"}
                             </p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">{takenDaysAgo} days ago</p>
+                            <p className="text-[10px] text-blue-700/80 mt-0.5">{takenDaysAgo} days ago</p>
                           </div>
 
                           {/* Box 2: Due Date */}
-                          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 mb-1">
-                              <Calendar className="h-3.5 w-3.5 text-amber-500" />
-                              <span>Due Date</span>
+                          <div className={`rounded-xl border p-3 shadow-2xs ${
+                            isOverdue
+                              ? "border-red-200/80 bg-red-50/40"
+                              : "border-amber-200/80 bg-amber-50/40"
+                          }`}>
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold mb-1">
+                              <Calendar className={`h-3.5 w-3.5 ${isOverdue ? "text-red-600" : "text-amber-600"}`} />
+                              <span className={isOverdue ? "text-red-900/80" : "text-amber-900/80"}>Due Date</span>
                             </div>
-                            <p className="text-xs sm:text-sm font-bold text-slate-800">
+                            <p className={`text-xs sm:text-sm font-black ${isOverdue ? "text-red-950" : "text-amber-950"}`}>
                               {dueDateObj
                                 ? dueDateObj.toLocaleDateString("en-IN", {
                                     day: "2-digit",
@@ -735,47 +740,65 @@ export default function ProductHistoryModal({
                                 : "09 Oct 2026"}
                             </p>
                             <p className={`text-[10px] font-semibold mt-0.5 ${
-                              isOverdue ? "text-red-600" : isDueToday ? "text-amber-600" : "text-amber-600"
+                              isOverdue ? "text-red-700/90" : isDueToday ? "text-amber-800" : "text-amber-700/80"
                             }`}>
                               {isOverdue ? `${Math.abs(dueDaysRemaining)}d late` : isDueToday ? "Today" : `In ${dueDaysRemaining} day${dueDaysRemaining > 1 ? "s" : ""}`}
                             </p>
                           </div>
 
                           {/* Box 3: Total Loan Period */}
-                          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 mb-1">
-                              <Clock className="h-3.5 w-3.5 text-indigo-500" />
+                          <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 p-3 shadow-2xs">
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold text-indigo-900/80 mb-1">
+                              <Clock className="h-3.5 w-3.5 text-indigo-600" />
                               <span>Total Loan Period</span>
                             </div>
-                            <p className="text-xs sm:text-sm font-bold text-slate-800">
+                            <p className="text-xs sm:text-sm font-black text-indigo-950">
                               {currentHolder.returnDueDays || 7} Days
                             </p>
-                            <p className="text-[10px] text-slate-400 mt-0.5">
+                            <p className="text-[10px] text-indigo-700/80 mt-0.5">
                               {currentHolder.renewalCount ? `${currentHolder.renewalCount}x Renewed` : "Original period"}
                             </p>
                           </div>
 
                           {/* Box 4: Status */}
-                          <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 mb-1">
-                              <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
-                              <span>Status</span>
+                          <div className={`rounded-xl border p-3 shadow-2xs ${
+                            isOverdue
+                              ? "border-red-200/80 bg-red-50/40"
+                              : isDueToday || isDueSoon
+                              ? "border-amber-200/80 bg-amber-50/40"
+                              : "border-emerald-200/80 bg-emerald-50/40"
+                          }`}>
+                            <div className="flex items-center gap-1.5 text-[11px] font-bold mb-1">
+                              <AlertTriangle className={`h-3.5 w-3.5 ${
+                                isOverdue
+                                  ? "text-red-600"
+                                  : isDueToday || isDueSoon
+                                  ? "text-amber-600"
+                                  : "text-emerald-600"
+                              }`} />
+                              <span className={
+                                isOverdue
+                                  ? "text-red-900/80"
+                                  : isDueToday || isDueSoon
+                                  ? "text-amber-900/80"
+                                  : "text-emerald-900/80"
+                              }>Status</span>
                             </div>
                             <div className="mt-0.5">
                               {isOverdue ? (
-                                <span className="inline-block rounded-lg bg-red-100 px-2 py-0.5 text-xs font-black text-red-700">
+                                <span className="inline-block rounded-lg bg-red-600 text-white px-2 py-0.5 text-xs font-black shadow-2xs">
                                   Overdue
                                 </span>
                               ) : isDueToday ? (
-                                <span className="inline-block rounded-lg bg-amber-500 text-white px-2 py-0.5 text-xs font-black">
+                                <span className="inline-block rounded-lg bg-amber-500 text-white px-2 py-0.5 text-xs font-black shadow-2xs">
                                   Due Today
                                 </span>
                               ) : isDueSoon ? (
-                                <span className="inline-block rounded-lg bg-amber-100 px-2 py-0.5 text-xs font-bold text-amber-800">
+                                <span className="inline-block rounded-lg bg-amber-100 text-amber-800 border border-amber-200 px-2 py-0.5 text-xs font-bold shadow-2xs">
                                   Due Soon
                                 </span>
                               ) : (
-                                <span className="inline-block rounded-lg bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-800">
+                                <span className="inline-block rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 text-xs font-bold shadow-2xs">
                                   On Loan
                                 </span>
                               )}
@@ -785,10 +808,10 @@ export default function ProductHistoryModal({
                       </>
                     ) : (
                       /* Fallback when not on loan: show warehouse stock status */
-                      <div className="rounded-xl bg-slate-50 p-4 border border-slate-100 space-y-2">
+                      <div className="rounded-xl bg-emerald-50/40 p-4 border border-emerald-200/80 space-y-2 shadow-2xs">
                         <div className="flex items-center justify-between">
-                          <span className="font-bold text-slate-800 text-xs">Currently in Warehouse Storage</span>
-                          <span className="rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-[11px] font-bold">
+                          <span className="font-bold text-emerald-950 text-xs">Currently in Warehouse Storage</span>
+                          <span className="rounded-full bg-emerald-100 border border-emerald-200 text-emerald-800 px-2.5 py-0.5 text-[11px] font-bold">
                             {data.summary.totalInStock} units Available
                           </span>
                         </div>
@@ -1071,42 +1094,71 @@ export default function ProductHistoryModal({
                               <label className="block text-xs font-bold text-slate-700 mb-1.5">
                                 Physical Condition Check
                               </label>
-                              <div className="grid grid-cols-3 gap-2">
+                              <div className="grid grid-cols-3 gap-2.5">
                                 <button
                                   type="button"
                                   onClick={() => setReturnCondition("GOOD")}
-                                  className={`p-2.5 rounded-xl border text-center transition ${
+                                  className={`p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer ${
                                     returnCondition === "GOOD"
-                                      ? "bg-emerald-50 border-emerald-400 text-emerald-800 font-bold ring-2 ring-emerald-500/20"
-                                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                                      ? "bg-emerald-50/90 border-2 border-emerald-500 shadow-sm ring-4 ring-emerald-500/20 scale-[1.02]"
+                                      : "bg-emerald-50/35 border border-emerald-200/80 hover:bg-emerald-50/70 hover:border-emerald-300"
                                   }`}
                                 >
-                                  <CheckCircle2 className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
-                                  <span className="text-xs block">Good Condition</span>
+                                  <div
+                                    className={`w-9 h-9 rounded-full mx-auto mb-2 flex items-center justify-center transition-all ${
+                                      returnCondition === "GOOD"
+                                        ? "bg-emerald-500 text-white shadow-xs"
+                                        : "bg-emerald-100 text-emerald-700"
+                                    }`}
+                                  >
+                                    <Check className="h-5 w-5 stroke-[2.5]" />
+                                  </div>
+                                  <span className="text-xs font-bold text-emerald-950 block">Good Condition</span>
+                                  <span className="text-[11px] text-emerald-700/80 font-medium block mt-0.5">Ready to reissue</span>
                                 </button>
+
                                 <button
                                   type="button"
                                   onClick={() => setReturnCondition("NEEDS_SERVICE")}
-                                  className={`p-2.5 rounded-xl border text-center transition ${
+                                  className={`p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer ${
                                     returnCondition === "NEEDS_SERVICE"
-                                      ? "bg-amber-50 border-amber-400 text-amber-800 font-bold ring-2 ring-amber-500/20"
-                                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                                      ? "bg-amber-50/90 border-2 border-amber-500 shadow-sm ring-4 ring-amber-500/20 scale-[1.02]"
+                                      : "bg-amber-50/35 border border-amber-200/80 hover:bg-amber-50/70 hover:border-amber-300"
                                   }`}
                                 >
-                                  <Clock className="h-4 w-4 mx-auto mb-1 text-amber-600" />
-                                  <span className="text-xs block">Needs Service</span>
+                                  <div
+                                    className={`w-9 h-9 rounded-full mx-auto mb-2 flex items-center justify-center transition-all ${
+                                      returnCondition === "NEEDS_SERVICE"
+                                        ? "bg-amber-500 text-white shadow-xs"
+                                        : "bg-amber-100 text-amber-700"
+                                    }`}
+                                  >
+                                    <Wrench className="h-4 w-4" />
+                                  </div>
+                                  <span className="text-xs font-bold text-amber-950 block">Needs Service</span>
+                                  <span className="text-[11px] text-amber-800/80 font-medium block mt-0.5">Requires inspection</span>
                                 </button>
+
                                 <button
                                   type="button"
                                   onClick={() => setReturnCondition("DAMAGED")}
-                                  className={`p-2.5 rounded-xl border text-center transition ${
+                                  className={`p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer ${
                                     returnCondition === "DAMAGED"
-                                      ? "bg-red-50 border-red-400 text-red-800 font-bold ring-2 ring-red-500/20"
-                                      : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                                      ? "bg-rose-50/90 border-2 border-rose-500 shadow-sm ring-4 ring-rose-500/20 scale-[1.02]"
+                                      : "bg-rose-50/35 border border-rose-200/80 hover:bg-rose-50/70 hover:border-rose-300"
                                   }`}
                                 >
-                                  <AlertTriangle className="h-4 w-4 mx-auto mb-1 text-red-600" />
-                                  <span className="text-xs block">Damaged</span>
+                                  <div
+                                    className={`w-9 h-9 rounded-full mx-auto mb-2 flex items-center justify-center transition-all ${
+                                      returnCondition === "DAMAGED"
+                                        ? "bg-rose-500 text-white shadow-xs"
+                                        : "bg-rose-100 text-rose-700"
+                                    }`}
+                                  >
+                                    <AlertTriangle className="h-4 w-4" />
+                                  </div>
+                                  <span className="text-xs font-bold text-rose-950 block">Damaged</span>
+                                  <span className="text-[11px] text-rose-800/80 font-medium block mt-0.5">Field damage</span>
                                 </button>
                               </div>
                             </div>

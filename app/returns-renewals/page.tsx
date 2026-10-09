@@ -28,6 +28,7 @@ import {
   SlidersHorizontal,
   ChevronDown,
   Info,
+  Wrench,
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import IssueBillModal, { IssueBillData } from "@/app/components/IssueBillModal";
@@ -470,20 +471,20 @@ export default function ReturnsRenewalsPage() {
               setActiveTab("ACTIVE");
               setCurrentPage(1);
             }}
-            className={`flex flex-col text-left p-4 rounded-2xl border transition hover:-translate-y-0.5 shadow-xs ${
+            className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
               activeTab === "ACTIVE"
-                ? "bg-blue-50/80 border-blue-400 ring-2 ring-blue-500/20"
-                : "bg-white border-slate-200/80 hover:border-blue-200"
+                ? "bg-blue-50/95 border-2 border-blue-500 ring-4 ring-blue-500/20 shadow-xs scale-[1.01]"
+                : "bg-blue-50/35 border-blue-200/80 hover:bg-blue-50/70 hover:border-blue-300"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500">Active on Loan</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+              <span className="text-xs font-bold text-blue-900/80">Active on Loan</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-100 text-blue-700 shadow-2xs">
                 <Clock className="h-4 w-4" />
               </div>
             </div>
-            <p className="mt-2 text-2xl font-black text-slate-800">{counts.active}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Currently with staff</p>
+            <p className="mt-2 text-2xl font-black text-blue-950">{counts.active}</p>
+            <p className="text-[11px] text-blue-700/80 mt-0.5 font-medium">Currently with staff</p>
           </button>
 
           {/* Card 2: Overdue Items */}
@@ -493,16 +494,16 @@ export default function ReturnsRenewalsPage() {
               setActiveTab("OVERDUE");
               setCurrentPage(1);
             }}
-            className={`flex flex-col text-left p-4 rounded-2xl border transition hover:-translate-y-0.5 shadow-xs ${
+            className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
               activeTab === "OVERDUE"
-                ? "bg-red-50/80 border-red-400 ring-2 ring-red-500/20"
-                : "bg-white border-slate-200/80 hover:border-red-200"
+                ? "bg-red-50/95 border-2 border-red-500 ring-4 ring-red-500/20 shadow-xs scale-[1.01]"
+                : "bg-red-50/35 border-red-200/80 hover:bg-red-50/70 hover:border-red-300"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-red-600">Overdue Items</span>
+              <span className="text-xs font-bold text-red-900/80">Overdue Items</span>
               <div
-                className={`flex h-8 w-8 items-center justify-center rounded-xl bg-red-100 text-red-700 ${
+                className={`flex h-8 w-8 items-center justify-center rounded-xl bg-red-100 text-red-700 shadow-2xs ${
                   counts.overdue > 0 ? "animate-pulse" : ""
                 }`}
               >
@@ -510,14 +511,14 @@ export default function ReturnsRenewalsPage() {
               </div>
             </div>
             <div className="mt-2 flex items-baseline gap-2">
-              <p className="text-2xl font-black text-red-600">{counts.overdue}</p>
+              <p className="text-2xl font-black text-red-950">{counts.overdue}</p>
               {counts.overdue > 0 && (
                 <span className="rounded-full bg-red-600 text-white px-2 py-0.2 text-[10px] font-extrabold">
                   Action Required
                 </span>
               )}
             </div>
-            <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Past return deadline</p>
+            <p className="text-[11px] text-red-700/80 mt-0.5 font-medium">Past return deadline</p>
           </button>
 
           {/* Card 3: Due Soon (<= 7 days) */}
@@ -527,20 +528,20 @@ export default function ReturnsRenewalsPage() {
               setActiveTab("DUE_SOON");
               setCurrentPage(1);
             }}
-            className={`flex flex-col text-left p-4 rounded-2xl border transition hover:-translate-y-0.5 shadow-xs ${
+            className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
               activeTab === "DUE_SOON"
-                ? "bg-amber-50/80 border-amber-400 ring-2 ring-amber-500/20"
-                : "bg-white border-slate-200/80 hover:border-amber-200"
+                ? "bg-amber-50/95 border-2 border-amber-500 ring-4 ring-amber-500/20 shadow-xs scale-[1.01]"
+                : "bg-amber-50/35 border-amber-200/80 hover:bg-amber-50/70 hover:border-amber-300"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-amber-700">Due Soon (≤ 7d)</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+              <span className="text-xs font-bold text-amber-900/80">Due Soon (≤ 7d)</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-100 text-amber-700 shadow-2xs">
                 <Calendar className="h-4 w-4" />
               </div>
             </div>
-            <p className="mt-2 text-2xl font-black text-amber-700">{counts.dueSoon}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Expiring this week</p>
+            <p className="mt-2 text-2xl font-black text-amber-950">{counts.dueSoon}</p>
+            <p className="text-[11px] text-amber-800/80 mt-0.5 font-medium">Expiring this week</p>
           </button>
 
           {/* Card 4: Renewed Assets */}
@@ -550,20 +551,20 @@ export default function ReturnsRenewalsPage() {
               setActiveTab("RENEWED");
               setCurrentPage(1);
             }}
-            className={`flex flex-col text-left p-4 rounded-2xl border transition hover:-translate-y-0.5 shadow-xs ${
+            className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
               activeTab === "RENEWED"
-                ? "bg-indigo-50/80 border-indigo-400 ring-2 ring-indigo-500/20"
-                : "bg-white border-slate-200/80 hover:border-indigo-200"
+                ? "bg-indigo-50/95 border-2 border-indigo-500 ring-4 ring-indigo-500/20 shadow-xs scale-[1.01]"
+                : "bg-indigo-50/35 border-indigo-200/80 hover:bg-indigo-50/70 hover:border-indigo-300"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-indigo-700">Renewed Loans</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700">
+              <span className="text-xs font-bold text-indigo-900/80">Renewed Loans</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 shadow-2xs">
                 <RefreshCw className="h-4 w-4" />
               </div>
             </div>
-            <p className="mt-2 text-2xl font-black text-indigo-700">{counts.renewed}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Period extended</p>
+            <p className="mt-2 text-2xl font-black text-indigo-950">{counts.renewed}</p>
+            <p className="text-[11px] text-indigo-700/80 mt-0.5 font-medium">Period extended</p>
           </button>
 
           {/* Card 5: Returned Assets */}
@@ -573,20 +574,20 @@ export default function ReturnsRenewalsPage() {
               setActiveTab("RETURNED");
               setCurrentPage(1);
             }}
-            className={`col-span-2 sm:col-span-1 flex flex-col text-left p-4 rounded-2xl border transition hover:-translate-y-0.5 shadow-xs ${
+            className={`col-span-2 sm:col-span-1 flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
               activeTab === "RETURNED"
-                ? "bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-500/20"
-                : "bg-white border-slate-200/80 hover:border-emerald-200"
+                ? "bg-emerald-50/95 border-2 border-emerald-500 ring-4 ring-emerald-500/20 shadow-xs scale-[1.01]"
+                : "bg-emerald-50/35 border-emerald-200/80 hover:bg-emerald-50/70 hover:border-emerald-300"
             }`}
           >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-emerald-700">Returned History</span>
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700">
+              <span className="text-xs font-bold text-emerald-900/80">Returned History</span>
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 shadow-2xs">
                 <CheckCircle2 className="h-4 w-4" />
               </div>
             </div>
-            <p className="mt-2 text-2xl font-black text-emerald-700">{counts.returned}</p>
-            <p className="text-[11px] text-slate-400 mt-0.5 font-medium">Restored to warehouse</p>
+            <p className="mt-2 text-2xl font-black text-emerald-950">{counts.returned}</p>
+            <p className="text-[11px] text-emerald-700/80 mt-0.5 font-medium">Restored to warehouse</p>
           </button>
         </div>
 
@@ -1306,47 +1307,71 @@ function ReturnAssetModal({ item, warehouses, racks, onClose, onSuccess }: Retur
             <label className="block text-xs font-bold text-slate-700">
               Physical Condition Check
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2.5">
               <button
                 type="button"
                 onClick={() => setCondition("GOOD")}
-                className={`p-2.5 rounded-xl border text-center transition ${
+                className={`p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer ${
                   condition === "GOOD"
-                    ? "bg-emerald-50 border-emerald-400 text-emerald-800 font-bold ring-2 ring-emerald-500/20"
-                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "bg-emerald-50/90 border-2 border-emerald-500 shadow-sm ring-4 ring-emerald-500/20 scale-[1.02]"
+                    : "bg-emerald-50/35 border border-emerald-200/80 hover:bg-emerald-50/70 hover:border-emerald-300"
                 }`}
               >
-                <CheckCircle2 className="h-4 w-4 mx-auto mb-1 text-emerald-600" />
-                <span className="text-xs block">Good Condition</span>
-                <span className="text-[10px] text-slate-400 font-normal">Ready to reissue</span>
+                <div
+                  className={`w-9 h-9 rounded-full mx-auto mb-2 flex items-center justify-center transition-all ${
+                    condition === "GOOD"
+                      ? "bg-emerald-500 text-white shadow-xs"
+                      : "bg-emerald-100 text-emerald-700"
+                  }`}
+                >
+                  <Check className="h-5 w-5 stroke-[2.5]" />
+                </div>
+                <span className="text-xs font-bold text-emerald-950 block">Good Condition</span>
+                <span className="text-[11px] text-emerald-700/80 font-medium block mt-0.5">Ready to reissue</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setCondition("NEEDS_SERVICE")}
-                className={`p-2.5 rounded-xl border text-center transition ${
+                className={`p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer ${
                   condition === "NEEDS_SERVICE"
-                    ? "bg-amber-50 border-amber-400 text-amber-800 font-bold ring-2 ring-amber-500/20"
-                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "bg-amber-50/90 border-2 border-amber-500 shadow-sm ring-4 ring-amber-500/20 scale-[1.02]"
+                    : "bg-amber-50/35 border border-amber-200/80 hover:bg-amber-50/70 hover:border-amber-300"
                 }`}
               >
-                <Clock className="h-4 w-4 mx-auto mb-1 text-amber-600" />
-                <span className="text-xs block">Needs Service</span>
-                <span className="text-[10px] text-slate-400 font-normal">Requires inspection</span>
+                <div
+                  className={`w-9 h-9 rounded-full mx-auto mb-2 flex items-center justify-center transition-all ${
+                    condition === "NEEDS_SERVICE"
+                      ? "bg-amber-500 text-white shadow-xs"
+                      : "bg-amber-100 text-amber-700"
+                  }`}
+                >
+                  <Wrench className="h-4 w-4" />
+                </div>
+                <span className="text-xs font-bold text-amber-950 block">Needs Service</span>
+                <span className="text-[11px] text-amber-800/80 font-medium block mt-0.5">Requires inspection</span>
               </button>
 
               <button
                 type="button"
                 onClick={() => setCondition("DAMAGED")}
-                className={`p-2.5 rounded-xl border text-center transition ${
+                className={`p-3 rounded-2xl border text-center transition-all duration-200 cursor-pointer ${
                   condition === "DAMAGED"
-                    ? "bg-red-50 border-red-400 text-red-800 font-bold ring-2 ring-red-500/20"
-                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "bg-rose-50/90 border-2 border-rose-500 shadow-sm ring-4 ring-rose-500/20 scale-[1.02]"
+                    : "bg-rose-50/35 border border-rose-200/80 hover:bg-rose-50/70 hover:border-rose-300"
                 }`}
               >
-                <AlertTriangle className="h-4 w-4 mx-auto mb-1 text-red-600" />
-                <span className="text-xs block">Damaged</span>
-                <span className="text-[10px] text-slate-400 font-normal">Field damage</span>
+                <div
+                  className={`w-9 h-9 rounded-full mx-auto mb-2 flex items-center justify-center transition-all ${
+                    condition === "DAMAGED"
+                      ? "bg-rose-500 text-white shadow-xs"
+                      : "bg-rose-100 text-rose-700"
+                  }`}
+                >
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <span className="text-xs font-bold text-rose-950 block">Damaged</span>
+                <span className="text-[11px] text-rose-800/80 font-medium block mt-0.5">Field damage</span>
               </button>
             </div>
           </div>
