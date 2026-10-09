@@ -25,6 +25,7 @@ import {
   Sparkles,
   RefreshCw,
   PackageCheck,
+  Plus,
 } from "lucide-react";
 import ProductSearch from "@/app/components/ProductSearch";
 import ProtectedPage from "@/app/components/ProtectedPage";
@@ -475,15 +476,36 @@ export default function DashboardPage() {
   return (
     <ProtectedPage>
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">
-            Dashboard
-          </h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {user?.role === "ADMIN"
-              ? "Monitor warehouses, inventory stock, recurring maintenance alerts, returnable validities, and staff operations."
-              : "Track your assigned warehouse inventory, returnable returns, and equipment maintenance."}
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">
+              Dashboard
+            </h1>
+            <p className="mt-1 text-sm text-slate-500">
+              {user?.role === "ADMIN"
+                ? "Monitor warehouses, inventory stock, recurring maintenance alerts, returnable validities, and staff operations."
+                : "Track your assigned warehouse inventory, returnable returns, and equipment maintenance."}
+            </p>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <Link
+              href="/products?action=add"
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-300 hover:text-emerald-700 transition-all duration-200 cursor-pointer"
+            >
+              <Plus className="h-4 w-4 text-emerald-600" />
+              <span>Add Product</span>
+            </Link>
+
+            <Link
+              href="/employee-issues"
+              className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 active:scale-95 transition-all duration-200 cursor-pointer"
+            >
+              <PackageCheck className="h-4 w-4" />
+              <span>Issue Product</span>
+            </Link>
+          </div>
         </div>
 
         {/* ─── 1. METRIC COUNT CARDS (1st ORDER) ─── */}

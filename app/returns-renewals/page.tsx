@@ -468,7 +468,7 @@ export default function ReturnsRenewalsPage() {
           <button
             type="button"
             onClick={() => {
-              setActiveTab("ACTIVE");
+              setActiveTab(activeTab === "ACTIVE" ? "ALL" : "ACTIVE");
               setCurrentPage(1);
             }}
             className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
@@ -491,7 +491,7 @@ export default function ReturnsRenewalsPage() {
           <button
             type="button"
             onClick={() => {
-              setActiveTab("OVERDUE");
+              setActiveTab(activeTab === "OVERDUE" ? "ALL" : "OVERDUE");
               setCurrentPage(1);
             }}
             className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
@@ -525,7 +525,7 @@ export default function ReturnsRenewalsPage() {
           <button
             type="button"
             onClick={() => {
-              setActiveTab("DUE_SOON");
+              setActiveTab(activeTab === "DUE_SOON" ? "ALL" : "DUE_SOON");
               setCurrentPage(1);
             }}
             className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
@@ -548,7 +548,7 @@ export default function ReturnsRenewalsPage() {
           <button
             type="button"
             onClick={() => {
-              setActiveTab("RENEWED");
+              setActiveTab(activeTab === "RENEWED" ? "ALL" : "RENEWED");
               setCurrentPage(1);
             }}
             className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
@@ -571,7 +571,7 @@ export default function ReturnsRenewalsPage() {
           <button
             type="button"
             onClick={() => {
-              setActiveTab("RETURNED");
+              setActiveTab(activeTab === "RETURNED" ? "ALL" : "RETURNED");
               setCurrentPage(1);
             }}
             className={`col-span-2 sm:col-span-1 flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
@@ -591,105 +591,33 @@ export default function ReturnsRenewalsPage() {
           </button>
         </div>
 
-        {/* ─── CONTROLS: TABS, SEARCH & FILTERS ─── */}
+        {/* ─── CONTROLS: SEARCH & FILTERS ─── */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-          {/* Filter Tabs */}
-          <div className="flex items-center gap-1.5 p-3 border-b border-slate-100 overflow-x-auto scrollbar-none bg-slate-50/50">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("ACTIVE");
-                setCurrentPage(1);
-              }}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition whitespace-nowrap ${
-                activeTab === "ACTIVE"
-                  ? "bg-blue-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/60"
-              }`}
-            >
-              <Clock className="h-3.5 w-3.5" />
-              <span>Active on Loan ({counts.active})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("OVERDUE");
-                setCurrentPage(1);
-              }}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition whitespace-nowrap ${
-                activeTab === "OVERDUE"
-                  ? "bg-red-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 hover:bg-red-50 border border-slate-200/60"
-              }`}
-            >
-              <AlertTriangle className="h-3.5 w-3.5" />
-              <span>Overdue ({counts.overdue})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("DUE_SOON");
-                setCurrentPage(1);
-              }}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition whitespace-nowrap ${
-                activeTab === "DUE_SOON"
-                  ? "bg-amber-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 hover:bg-amber-50 border border-slate-200/60"
-              }`}
-            >
-              <Calendar className="h-3.5 w-3.5" />
-              <span>Due Soon ({counts.dueSoon})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("RENEWED");
-                setCurrentPage(1);
-              }}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition whitespace-nowrap ${
-                activeTab === "RENEWED"
-                  ? "bg-indigo-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 hover:bg-indigo-50 border border-slate-200/60"
-              }`}
-            >
-              <RefreshCw className="h-3.5 w-3.5" />
-              <span>Renewed ({counts.renewed})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("RETURNED");
-                setCurrentPage(1);
-              }}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition whitespace-nowrap ${
-                activeTab === "RETURNED"
-                  ? "bg-emerald-600 text-white shadow-xs"
-                  : "bg-white text-slate-600 hover:bg-emerald-50 border border-slate-200/60"
-              }`}
-            >
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              <span>Returned History ({counts.returned})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveTab("ALL");
-                setCurrentPage(1);
-              }}
-              className={`flex items-center gap-2 rounded-xl px-3.5 py-2 text-xs font-bold transition whitespace-nowrap ${
-                activeTab === "ALL"
-                  ? "bg-slate-800 text-white shadow-xs"
-                  : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200/60"
-              }`}
-            >
-              <span>All Records ({counts.total})</span>
-            </button>
-          </div>
+          {activeTab !== "ALL" && (
+            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500 font-medium">Filtered by:</span>
+                <span className="font-bold text-slate-800 bg-white border border-slate-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                  {activeTab === "ACTIVE" && `Active on Loan (${counts.active})`}
+                  {activeTab === "OVERDUE" && `Overdue Items (${counts.overdue})`}
+                  {activeTab === "DUE_SOON" && `Due Soon (${counts.dueSoon})`}
+                  {activeTab === "RENEWED" && `Renewed Loans (${counts.renewed})`}
+                  {activeTab === "RETURNED" && `Returned History (${counts.returned})`}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("ALL");
+                  setCurrentPage(1);
+                }}
+                className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition flex items-center gap-1 cursor-pointer"
+              >
+                <span>View All Records ({counts.total})</span>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
 
           {/* Filter and Search Bar Inputs */}
           <div className="p-3.5 sm:p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 bg-white">

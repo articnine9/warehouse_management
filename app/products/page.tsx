@@ -153,6 +153,13 @@ export default function ProductsPage() {
     void fetchCategories();
     void fetchWarehouses();
     void fetchRacks();
+
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("action") === "add") {
+        setIsAddModalOpen(true);
+      }
+    }
   }, []);
 
   // Category select options
