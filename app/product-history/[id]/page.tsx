@@ -855,8 +855,9 @@ export default function ProductDetailPage({
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <h4 className="font-extrabold text-slate-800 text-sm">{ev.title}</h4>
                                     {isInitialStock ? (
-                                      <span className="rounded-full bg-emerald-600 text-white px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide">
-                                        🌟 1ST STOCK INWARD (ORIGIN)
+                                      <span className="rounded-full bg-emerald-600 text-white px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide inline-flex items-center gap-1">
+                                        <Sparkles className="h-2.5 w-2.5" />
+                                        <span>1ST STOCK INWARD (ORIGIN)</span>
                                       </span>
                                     ) : (
                                       <span

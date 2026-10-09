@@ -2,6 +2,10 @@ import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
 import Product from "@/models/Product";
 import ProductHistory from "@/models/ProductHistory";
+import Inventory from "@/models/Inventory";
+import Warehouse from "@/models/Warehouse";
+import Rack from "@/models/Rack";
+import StockMovement from "@/models/StockMovement";
 
 export async function PUT(
   request: Request,
@@ -70,6 +74,106 @@ export async function PUT(
         oldValues: oldValues as Record<string, unknown>,
         newValues: body as Record<string, unknown>,
       });
+    }
+
+    // Handle inventory locations update if passed
+    if (Array.isArray(body.locations)) {
+      for (const loc of body.locations) {
+        const qty = Math.max(0, Number(loc.quantity) || 0);
+        let status: "AVAILABLE" | "LOW_STOCK" | "OUT_OF_STOCK" = "AVAILABLE";
+        if (qty === 0) status = "OUT_OF_STOCK";
+        else if (qty <= 10) status = "LOW_STOCK";
+
+        if (loc.inventoryId) {
+          // Existing inventory record
+          const oldInv = await Inventory.findById(loc.inventoryId);
+          if (oldInv) {
+            const oldQty = oldInv.quantity || 0;
+            const diff = qty - oldQty;
+
+            if (loc.rackId && loc.rackId !== oldInv.rackId?.toString()) {
+              oldInv.rackId = loc.rackId;
+            }
+            if (loc.warehouseId && loc.warehouseId !== oldInv.warehouseId?.toString()) {
+              oldInv.warehouseId = loc.warehouseId;
+            }
+
+            oldInv.quantity = qty;
+            oldInv.status = status;
+            await oldInv.save();
+
+            if (diff !== 0) {
+              const wh = await Warehouse.findById(oldInv.warehouseId);
+              const rk = await Rack.findById(oldInv.rackId);
+              await StockMovement.create({
+                productId: product._id,
+                productName: product.name,
+                sku: product.sku,
+                category: product.category,
+                warehouseId: oldInv.warehouseId,
+                warehouseName: wh?.name || "Warehouse",
+                rackId: oldInv.rackId,
+                rackName: rk?.name || "Rack",
+                movementType: diff > 0 ? "INWARD" : "OUTWARD",
+                reason: diff > 0 ? "RESTOCK" : "ADJUSTMENT",
+                quantity: Math.abs(diff),
+                unitPrice: product.price || 0,
+                totalValue: (product.price || 0) * Math.abs(diff),
+                referenceNumber: "PRODUCT-EDIT-STOCK",
+                entityName: `${wh?.name || "Warehouse"} / ${rk?.name || "Rack"}`,
+                notes: `Stock changed from ${oldQty} to ${qty} in Product Edit`,
+                performedBy: user.id,
+                performedByName: user.name,
+              });
+            }
+          }
+        } else if (loc.warehouseId && loc.rackId && qty > 0) {
+          // New warehouse location added
+          let inv = await Inventory.findOne({
+            productId: product._id,
+            warehouseId: loc.warehouseId,
+            rackId: loc.rackId,
+          });
+
+          if (inv) {
+            const oldQty = inv.quantity || 0;
+            inv.quantity = oldQty + qty;
+            inv.status = inv.quantity === 0 ? "OUT_OF_STOCK" : inv.quantity <= 10 ? "LOW_STOCK" : "AVAILABLE";
+            await inv.save();
+          } else {
+            inv = await Inventory.create({
+              productId: product._id,
+              warehouseId: loc.warehouseId,
+              rackId: loc.rackId,
+              quantity: qty,
+              status,
+            });
+          }
+
+          const wh = await Warehouse.findById(loc.warehouseId);
+          const rk = await Rack.findById(loc.rackId);
+          await StockMovement.create({
+            productId: product._id,
+            productName: product.name,
+            sku: product.sku,
+            category: product.category,
+            warehouseId: loc.warehouseId,
+            warehouseName: wh?.name || "Warehouse",
+            rackId: loc.rackId,
+            rackName: rk?.name || "Rack",
+            movementType: "INWARD",
+            reason: "RESTOCK",
+            quantity: qty,
+            unitPrice: product.price || 0,
+            totalValue: (product.price || 0) * qty,
+            referenceNumber: "PRODUCT-EDIT-ADD-LOCATION",
+            entityName: `${wh?.name || "Warehouse"} / ${rk?.name || "Rack"}`,
+            notes: `Added ${qty} units to ${wh?.name || "Warehouse"} in Product Edit`,
+            performedBy: user.id,
+            performedByName: user.name,
+          });
+        }
+      }
     }
 
     return Response.json({ success: true, data: product });

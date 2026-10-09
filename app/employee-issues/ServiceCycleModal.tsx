@@ -279,9 +279,10 @@ export default function ServiceCycleModal({
                   type="button"
                   disabled={renewing}
                   onClick={handleRenewItem}
-                  className="ml-auto rounded-lg bg-indigo-600 px-3 py-1 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50"
+                  className="ml-auto rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center gap-1.5"
                 >
-                  {renewing ? "Renewing..." : "✓ Renew Period"}
+                  <RotateCcw className={`h-3 w-3 ${renewing ? "animate-spin" : ""}`} />
+                  <span>{renewing ? "Renewing..." : "Renew Period"}</span>
                 </button>
               </div>
             )}

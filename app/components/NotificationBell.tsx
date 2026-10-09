@@ -14,6 +14,7 @@ import {
   Package,
   Calendar,
   Layers,
+  Check,
 } from "lucide-react";
 import Link from "next/link";
 import WarningPopup from "./WarningPopup";
@@ -626,8 +627,8 @@ export default function NotificationBell() {
                 onClick={handleRenewItem}
                 className="flex-1 rounded-xl bg-indigo-600 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
-                <RotateCcw className="h-3.5 w-3.5" />
-                {renewing ? "Renewing..." : `✓ Renew Period for +${renewDays} Days`}
+                <RotateCcw className={`h-3.5 w-3.5 ${renewing ? "animate-spin" : ""}`} />
+                <span>{renewing ? "Renewing..." : `Renew Period for +${renewDays} Days`}</span>
               </button>
               <button
                 type="button"
@@ -715,9 +716,10 @@ export default function NotificationBell() {
                 type="button"
                 disabled={markingService}
                 onClick={handleMarkServiceDone}
-                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50"
+                className="flex-1 rounded-xl bg-emerald-600 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
-                {markingService ? "Saving..." : "✓ Complete Service & Schedule Next Cycle"}
+                <Check className="h-3.5 w-3.5" />
+                <span>{markingService ? "Saving..." : "Complete Service & Schedule Next Cycle"}</span>
               </button>
               <button
                 type="button"

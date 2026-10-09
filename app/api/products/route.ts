@@ -97,7 +97,7 @@ export async function GET(request: Request) {
 
       const invMap = new Map<
         string,
-        Array<{ warehouseId: string; warehouseName: string; rackId: string; rackName: string; quantity: number }>
+        Array<{ inventoryId?: string; warehouseId: string; warehouseName: string; rackId: string; rackName: string; quantity: number }>
       >();
       const stockMap = new Map<string, number>();
 
@@ -110,6 +110,7 @@ export async function GET(request: Request) {
         const r = inv.rackId as any;
         const list = invMap.get(pid) || [];
         list.push({
+          inventoryId: inv._id.toString(),
           warehouseId: w?._id?.toString() || "",
           warehouseName: w?.name || "Warehouse",
           rackId: r?._id?.toString() || "",

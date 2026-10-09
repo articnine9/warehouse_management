@@ -29,38 +29,43 @@ type RestorableItem = {
 
 /** Puts the held quantity back into warehouse stock when an item is returned. */
 async function restoreStock(item: RestorableItem) {
+  const qty = item.quantity || 1;
+
+  if (item.productId && item.warehouseId && item.rackId) {
+    const targetInventory = await Inventory.findOne({
+      productId: item.productId,
+      warehouseId: item.warehouseId,
+      rackId: item.rackId,
+    });
+
+    if (targetInventory) {
+      targetInventory.quantity = (targetInventory.quantity || 0) + qty;
+      targetInventory.status = getNextStatus(targetInventory.quantity);
+      await targetInventory.save();
+      return targetInventory;
+    }
+
+    const createdInventory = await Inventory.create({
+      productId: item.productId,
+      warehouseId: item.warehouseId,
+      rackId: item.rackId,
+      quantity: qty,
+      status: getNextStatus(qty),
+    });
+    return createdInventory;
+  }
+
   if (item.inventoryId) {
     const inventory = await Inventory.findById(item.inventoryId);
     if (inventory) {
-      inventory.quantity = (inventory.quantity || 0) + item.quantity;
+      inventory.quantity = (inventory.quantity || 0) + qty;
       inventory.status = getNextStatus(inventory.quantity);
       await inventory.save();
-      return;
+      return inventory;
     }
   }
 
-  if (!item.productId || !item.warehouseId || !item.rackId) return;
-
-  const fallbackInventory = await Inventory.findOne({
-    productId: item.productId,
-    warehouseId: item.warehouseId,
-    rackId: item.rackId,
-  });
-
-  if (fallbackInventory) {
-    fallbackInventory.quantity = (fallbackInventory.quantity || 0) + item.quantity;
-    fallbackInventory.status = getNextStatus(fallbackInventory.quantity);
-    await fallbackInventory.save();
-    return;
-  }
-
-  await Inventory.create({
-    productId: item.productId,
-    warehouseId: item.warehouseId,
-    rackId: item.rackId,
-    quantity: item.quantity,
-    status: getNextStatus(item.quantity),
-  });
+  return null;
 }
 
 function isHoldingStatus(value: unknown): value is HoldingStatus {
@@ -189,14 +194,16 @@ export async function PUT(
             item.warehouseName = targetWarehouse.name;
             item.rackId = targetRack._id;
             item.rackName = targetRack.name;
-            item.inventoryId = null as any;
           }
         }
         if (body.returnCondition) {
           item.returnCondition = body.returnCondition;
         }
 
-        await restoreStock(item);
+        const restoredInventory = await restoreStock(item);
+        if (restoredInventory) {
+          item.inventoryId = restoredInventory._id;
+        }
         item.returnedAt = new Date();
 
         try {

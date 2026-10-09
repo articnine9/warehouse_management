@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { FolderTree, History, Warehouse as WarehouseIcon, Plus } from "lucide-react";
+import { FolderTree, History, Warehouse as WarehouseIcon, Plus, Layers, Box, Trash2, X } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
@@ -16,6 +16,7 @@ import {
 } from "@/lib/serviceCycle";
 
 type ProductLocation = {
+  inventoryId?: string;
   warehouseId: string;
   warehouseName: string;
   rackId: string;
@@ -87,8 +88,13 @@ export default function ProductsPage() {
   const [editSellerName, setEditSellerName] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
+  const [editLocations, setEditLocations] = useState<ProductLocation[]>([]);
+  const [newLocWarehouseId, setNewLocWarehouseId] = useState("");
+  const [newLocRackId, setNewLocRackId] = useState("");
+  const [newLocQuantity, setNewLocQuantity] = useState("1");
   const [editLoading, setEditLoading] = useState(false);
   const [isEditCategoryModalOpen, setIsEditCategoryModalOpen] = useState(false);
+  const [activeEditTab, setActiveEditTab] = useState<"DETAILS" | "STOCK">("DETAILS");
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -194,6 +200,84 @@ export default function ProductsPage() {
   }, [warehouses]);
 
 
+  const availableRacksForNewLoc = useMemo(() => {
+    if (!newLocWarehouseId) return [];
+    return racks.filter((r) => {
+      const whId = typeof r.warehouseId === "object" ? (r.warehouseId as any)?._id : r.warehouseId;
+      return whId === newLocWarehouseId;
+    });
+  }, [racks, newLocWarehouseId]);
+
+  const totalEditStock = useMemo(() => {
+    return editLocations.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0);
+  }, [editLocations]);
+
+  function handleLocationQuantityChange(index: number, newQty: number) {
+    const val = Math.max(0, newQty);
+    setEditLocations((prev) => {
+      const next = [...prev];
+      next[index] = { ...next[index], quantity: val };
+      return next;
+    });
+  }
+
+  function handleAddNewLocation() {
+    if (!newLocWarehouseId) {
+      setWarningMessage("Please select a warehouse");
+      setWarningOpen(true);
+      return;
+    }
+    if (!newLocRackId) {
+      setWarningMessage("Please select a rack in the selected warehouse");
+      setWarningOpen(true);
+      return;
+    }
+    const qty = Math.max(1, parseInt(newLocQuantity, 10) || 1);
+    const wh = warehouses.find((w) => w._id === newLocWarehouseId);
+    const rk = racks.find((r) => r._id === newLocRackId);
+
+    const existingIndex = editLocations.findIndex(
+      (l) => l.warehouseId === newLocWarehouseId && l.rackId === newLocRackId
+    );
+    if (existingIndex >= 0) {
+      setEditLocations((prev) => {
+        const next = [...prev];
+        next[existingIndex] = {
+          ...next[existingIndex],
+          quantity: (Number(next[existingIndex].quantity) || 0) + qty,
+        };
+        return next;
+      });
+    } else {
+      setEditLocations((prev) => [
+        ...prev,
+        {
+          warehouseId: newLocWarehouseId,
+          warehouseName: wh?.name || "Warehouse",
+          rackId: newLocRackId,
+          rackName: rk?.name || "Rack",
+          quantity: qty,
+        },
+      ]);
+    }
+
+    setNewLocWarehouseId("");
+    setNewLocRackId("");
+    setNewLocQuantity("1");
+  }
+
+  function handleRemoveLocation(index: number) {
+    setEditLocations((prev) => {
+      const next = [...prev];
+      if (next[index].inventoryId) {
+        next[index] = { ...next[index], quantity: 0 };
+      } else {
+        next.splice(index, 1);
+      }
+      return next;
+    });
+  }
+
   function openEdit(product: Product) {
     setEditId(product._id);
     setEditName(product.name);
@@ -209,6 +293,11 @@ export default function ProductsPage() {
     setEditSellerName(product.sellerName || "");
     setEditPrice(product.price?.toString() || "");
     setEditStatus(product.status);
+    setEditLocations(product.locations ? product.locations.map((l) => ({ ...l })) : []);
+    setNewLocWarehouseId("");
+    setNewLocRackId("");
+    setNewLocQuantity("1");
+    setActiveEditTab("DETAILS");
   }
 
   async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
@@ -235,6 +324,7 @@ export default function ProductsPage() {
           price: Number(editPrice),
           description: editDescription,
           status: editStatus,
+          locations: editLocations,
         }),
       });
       const result = await response.json();
@@ -781,112 +871,413 @@ export default function ProductsPage() {
 
         {/* Edit modal */}
         {editId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-xl">
-              <h3 className="text-lg font-semibold text-slate-800">Edit Product</h3>
-              <form onSubmit={handleEditSubmit} className="mt-5 space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Product Name</label>
-                  <input
-                    type="text"
-                    placeholder="Product name"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    required
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                  />
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4 backdrop-blur-xs animate-in fade-in duration-150">
+            <div className="relative w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in zoom-in-95 duration-150">
+              
+              {/* Header */}
+              <div className="p-4 sm:p-5 pb-3.5 border-b border-slate-100 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100/80 shadow-2xs">
+                    <Box className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 leading-tight">Edit Product & Inventory</h3>
+                    <p className="text-xs text-slate-500">Update specifications and warehouse storage quantities</p>
+                  </div>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setEditId(null)}
+                  className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition cursor-pointer"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">SKU</label>
-                  <input
-                    type="text"
-                    placeholder="SKU"
-                    value={editSku}
-                    onChange={(e) => setEditSku(e.target.value)}
-                    required
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Category</label>
-                  <SearchableSelect
-                    options={categoryOptions}
-                    value={editCategory}
-                    onChange={setEditCategory}
-                    placeholder="Search category..."
-                    onAddNew={() => setIsEditCategoryModalOpen(true)}
-                    addNewLabel="Add Category"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Seller Name</label>
-                  <input
-                    type="text"
-                    placeholder="Seller name"
-                    value={editSellerName}
-                    onChange={(e) => setEditSellerName(e.target.value)}
-                    required
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Price (₹)</label>
-                  <input
-                    type="number"
-                    placeholder="Price"
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(e.target.value)}
-                    min="0"
-                    step="0.01"
-                    required
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Description</label>
-                  <input
-                    type="text"
-                    placeholder="Description"
-                    value={editDescription}
-                    onChange={(e) => setEditDescription(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Status</label>
-                  <select
-                    value={editStatus}
-                    onChange={(e) =>
-                      setEditStatus(e.target.value as "ACTIVE" | "INACTIVE")
-                    }
-                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                  >
-                    <option value="ACTIVE">ACTIVE</option>
-                    <option value="INACTIVE">INACTIVE</option>
-                  </select>
-                </div>
-
-                <div className="flex gap-3 pt-2">
-                  <button
-                    type="submit"
-                    disabled={editLoading}
-                    className="flex-1 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {editLoading ? "Saving..." : "Save Changes"}
-                  </button>
+              {/* Modern Segmented Tabs Navigation */}
+              <div className="px-4 sm:px-5 pt-3 pb-2.5 shrink-0 border-b border-slate-100 bg-slate-50/50">
+                <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-200/60 rounded-xl">
                   <button
                     type="button"
-                    onClick={() => setEditId(null)}
-                    className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                    onClick={() => setActiveEditTab("DETAILS")}
+                    className={`flex items-center justify-center gap-2 py-2 px-3 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
+                      activeEditTab === "DETAILS"
+                        ? "bg-white text-blue-700 shadow-xs"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                    }`}
                   >
-                    Cancel
+                    <Layers className="h-4 w-4" />
+                    <span>Product Details</span>
                   </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveEditTab("STOCK")}
+                    className={`flex items-center justify-center gap-2 py-2 px-3 text-xs sm:text-sm font-bold rounded-lg transition-all cursor-pointer ${
+                      activeEditTab === "STOCK"
+                        ? "bg-white text-blue-700 shadow-xs"
+                        : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+                    }`}
+                  >
+                    <WarehouseIcon className="h-4 w-4" />
+                    <span>Warehouse Stock</span>
+                    <span
+                      className={`ml-1 px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                        totalEditStock > 0
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
+                          : "bg-rose-100 text-rose-800 border border-rose-200"
+                      }`}
+                    >
+                      {totalEditStock} units
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Form Body with Controlled Scrolling */}
+              <form onSubmit={handleEditSubmit} className="flex-1 overflow-y-auto flex flex-col justify-between">
+                <div className="p-4 sm:p-5 space-y-4">
+                  {/* ─── TAB 1: PRODUCT DETAILS ─── */}
+                  {activeEditTab === "DETAILS" && (
+                    <div className="space-y-3.5 animate-in fade-in duration-150">
+                      {/* Product Name */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                          Product Name <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Dell Latitude 5420"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                          required
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-medium text-slate-800"
+                        />
+                      </div>
+
+                      {/* SKU & Category */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                            SKU Code <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. LAP-001"
+                            value={editSku}
+                            onChange={(e) => setEditSku(e.target.value)}
+                            required
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm uppercase outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-mono font-bold text-slate-800"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                            Category
+                          </label>
+                          <SearchableSelect
+                            options={categoryOptions}
+                            value={editCategory}
+                            onChange={setEditCategory}
+                            placeholder="Select category..."
+                            onAddNew={() => setIsEditCategoryModalOpen(true)}
+                            addNewLabel="Add Category"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Seller & Price */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                            Seller / Vendor <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. Dell India, Tech Corp"
+                            value={editSellerName}
+                            onChange={(e) => setEditSellerName(e.target.value)}
+                            required
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-medium text-slate-800"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                            Unit Price (₹) <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="number"
+                            placeholder="Price in ₹"
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(e.target.value)}
+                            min="0"
+                            step="0.01"
+                            required
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-bold text-slate-900"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Status & Serial Number */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                            Product Status
+                          </label>
+                          <select
+                            value={editStatus}
+                            onChange={(e) => setEditStatus(e.target.value as "ACTIVE" | "INACTIVE")}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-semibold text-slate-800"
+                          >
+                            <option value="ACTIVE">ACTIVE (Available for issuing)</option>
+                            <option value="INACTIVE">INACTIVE (Hidden / Archived)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                            Serial Number (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. SN-883921"
+                            value={editSerialNumber}
+                            onChange={(e) => setEditSerialNumber(e.target.value)}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-mono text-slate-800"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Description */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                          Description (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="Short description or specifications..."
+                          value={editDescription}
+                          onChange={(e) => setEditDescription(e.target.value)}
+                          className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-slate-700"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ─── TAB 2: WAREHOUSE STOCK ─── */}
+                  {activeEditTab === "STOCK" && (
+                    <div className="space-y-4 animate-in fade-in duration-150">
+                      {/* Summary Banner */}
+                      <div className="rounded-xl border border-blue-200/70 bg-gradient-to-r from-blue-50/80 to-indigo-50/80 p-3.5 flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 uppercase tracking-wide flex items-center gap-1.5">
+                            <WarehouseIcon className="h-4 w-4 text-blue-600" />
+                            Storage Allocations
+                          </p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            Manage inventory stock quantities across warehouse racks
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-white border border-blue-200 text-blue-900 px-3 py-1 text-xs font-extrabold shadow-2xs">
+                            Total Stock: <b className="text-emerald-600">{totalEditStock}</b> units
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Existing Locations List */}
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase text-slate-600 tracking-wider">
+                            Assigned Locations ({editLocations.length})
+                          </span>
+                        </div>
+
+                        {editLocations.length > 0 ? (
+                          <div className="max-h-52 overflow-y-auto space-y-2 pr-1">
+                            {editLocations.map((loc, idx) => (
+                              <div
+                                key={idx}
+                                className={`flex items-center justify-between gap-3 rounded-xl border p-3 transition shadow-2xs ${
+                                  loc.quantity === 0
+                                    ? "bg-rose-50/60 border-rose-200"
+                                    : "bg-white border-slate-200/90 hover:border-slate-300"
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                                    <span className="text-sm font-bold text-slate-900 truncate">
+                                      {loc.warehouseName}
+                                    </span>
+                                    <span className="text-slate-300">•</span>
+                                    <span className="text-xs font-mono text-blue-700 bg-blue-50 border border-blue-200/70 px-2 py-0.5 rounded-md font-semibold">
+                                      Rack: {loc.rackName}
+                                    </span>
+                                    {loc.quantity === 0 && (
+                                      <span className="text-[10px] font-bold text-rose-600 bg-rose-100/90 border border-rose-200 px-2 py-0.5 rounded-md">
+                                        Out of Stock
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Stepper Controls */}
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                  <span className="text-xs text-slate-500 font-semibold mr-1 hidden sm:inline">
+                                    Stock:
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleLocationQuantityChange(idx, Math.max(0, loc.quantity - 1))}
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-sm transition cursor-pointer"
+                                    title="Decrease quantity"
+                                  >
+                                    -
+                                  </button>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={loc.quantity}
+                                    onChange={(e) => handleLocationQuantityChange(idx, parseInt(e.target.value, 10) || 0)}
+                                    className="w-16 h-8 text-center text-sm font-bold rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-900"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleLocationQuantityChange(idx, loc.quantity + 1)}
+                                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-bold text-sm transition cursor-pointer"
+                                    title="Increase quantity"
+                                  >
+                                    +
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveLocation(idx)}
+                                    className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition ml-1 cursor-pointer"
+                                    title="Clear stock for this rack"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-dashed border-amber-300 bg-amber-50/70 p-4 text-center">
+                            <p className="text-xs font-semibold text-amber-900">
+                              No warehouse locations assigned yet. Use the form below to allocate stock.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Add New Warehouse Rack Allocation */}
+                      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3.5 space-y-2.5">
+                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                          <Plus className="h-3.5 w-3.5 text-indigo-600" />
+                          Assign Additional Warehouse Rack
+                        </span>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                          <div className="sm:col-span-5">
+                            <select
+                              value={newLocWarehouseId}
+                              onChange={(e) => {
+                                setNewLocWarehouseId(e.target.value);
+                                setNewLocRackId("");
+                              }}
+                              className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 font-medium"
+                            >
+                              <option value="">Select Warehouse...</option>
+                              {warehouses.map((w) => (
+                                <option key={w._id} value={w._id}>
+                                  {w.name} ({w.code})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="sm:col-span-4">
+                            <select
+                              value={newLocRackId}
+                              onChange={(e) => setNewLocRackId(e.target.value)}
+                              disabled={!newLocWarehouseId}
+                              className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 font-medium disabled:opacity-50"
+                            >
+                              <option value="">
+                                {newLocWarehouseId ? "Select Rack..." : "Choose Warehouse First"}
+                              </option>
+                              {availableRacksForNewLoc.map((r) => (
+                                <option key={r._id} value={r._id}>
+                                  {r.name} ({r.code})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="sm:col-span-3 flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min="1"
+                              placeholder="Qty"
+                              value={newLocQuantity}
+                              onChange={(e) => setNewLocQuantity(e.target.value)}
+                              className="w-16 px-2 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-900 font-bold text-center"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleAddNewLocation}
+                              disabled={!newLocWarehouseId || !newLocRackId}
+                              className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold text-xs py-2 px-3 transition shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              <span>Add</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Buttons */}
+                <div className="px-4 sm:px-5 py-3.5 bg-slate-50/80 border-t border-slate-100 flex items-center justify-between shrink-0">
+                  <div>
+                    {activeEditTab === "DETAILS" ? (
+                      <button
+                        type="button"
+                        onClick={() => setActiveEditTab("STOCK")}
+                        className="text-xs font-bold text-blue-600 hover:text-blue-800 transition cursor-pointer flex items-center gap-1"
+                      >
+                        Manage Warehouse Stock ({totalEditStock} units) →
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setActiveEditTab("DETAILS")}
+                        className="text-xs font-bold text-slate-500 hover:text-slate-800 transition cursor-pointer flex items-center gap-1"
+                      >
+                        ← Back to Product Details
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => setEditId(null)}
+                      className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={editLoading}
+                      className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white transition hover:bg-blue-700 disabled:opacity-50 shadow-xs cursor-pointer"
+                    >
+                      {editLoading ? "Saving..." : "Save Changes"}
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>

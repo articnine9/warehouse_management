@@ -103,7 +103,7 @@ const employeeIssueItemSchema = new Schema<IEmployeeIssueItem>(
     inventoryId: {
       type: Schema.Types.ObjectId,
       ref: "Inventory",
-      required: true,
+      required: false,
     },
     productId: {
       type: Schema.Types.ObjectId,

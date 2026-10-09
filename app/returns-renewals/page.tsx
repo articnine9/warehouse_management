@@ -29,6 +29,10 @@ import {
   ChevronDown,
   Info,
   Wrench,
+  CalendarDays,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import IssueBillModal, { IssueBillData } from "@/app/components/IssueBillModal";
@@ -106,6 +110,25 @@ type EmployeeOption = {
   department: string;
 };
 
+function isSameDate(dateStr?: string, targetDateYMD?: string): boolean {
+  if (!dateStr || !targetDateYMD) return false;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return false;
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}` === targetDateYMD;
+}
+
+function getTodayYMD(offsetDays = 0): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offsetDays);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function ReturnsRenewalsPage() {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ReturnableItemRow[]>([]);
@@ -118,7 +141,11 @@ export default function ReturnsRenewalsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("ALL");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("ALL");
-  const [sortBy, setSortBy] = useState<"URGENT" | "DUE_ASC" | "DUE_DESC" | "NEWEST" | "EMPLOYEE">("URGENT");
+  const [selectedDate, setSelectedDate] = useState(""); // YYYY-MM-DD
+  const [dateFieldFilter, setDateFieldFilter] = useState<"DUE" | "ISSUED" | "RETURNED" | "ANY">("DUE");
+  const [sortBy, setSortBy] = useState<
+    "URGENT" | "DUE_ASC" | "DUE_DESC" | "NEWEST" | "OLDEST" | "RETURNED_RECENT" | "EMPLOYEE"
+  >("URGENT");
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -333,6 +360,22 @@ export default function ReturnsRenewalsPage() {
           if (!match) return false;
         }
 
+        // Particular Date filtering
+        if (selectedDate) {
+          if (dateFieldFilter === "DUE") {
+            if (!isSameDate(item.returnDueDate, selectedDate)) return false;
+          } else if (dateFieldFilter === "ISSUED") {
+            if (!isSameDate(item.createdAt, selectedDate)) return false;
+          } else if (dateFieldFilter === "RETURNED") {
+            if (!isSameDate(item.returnedAt, selectedDate)) return false;
+          } else {
+            const matchDue = isSameDate(item.returnDueDate, selectedDate);
+            const matchIssued = isSameDate(item.createdAt, selectedDate);
+            const matchReturned = isSameDate(item.returnedAt, selectedDate);
+            if (!matchDue && !matchIssued && !matchReturned) return false;
+          }
+        }
+
         return true;
       })
       .sort((a, b) => {
@@ -356,12 +399,20 @@ export default function ReturnsRenewalsPage() {
         if (sortBy === "NEWEST") {
           return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
         }
+        if (sortBy === "OLDEST") {
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        }
+        if (sortBy === "RETURNED_RECENT") {
+          const timeA = a.returnedAt ? new Date(a.returnedAt).getTime() : 0;
+          const timeB = b.returnedAt ? new Date(b.returnedAt).getTime() : 0;
+          return timeB - timeA;
+        }
         if (sortBy === "EMPLOYEE") {
           return a.employeeName.localeCompare(b.employeeName);
         }
         return 0;
       });
-  }, [items, activeTab, selectedWarehouseId, selectedEmployeeId, searchQuery, sortBy]);
+  }, [items, activeTab, selectedWarehouseId, selectedEmployeeId, searchQuery, selectedDate, dateFieldFilter, sortBy]);
 
   // Paginated items
   const paginatedItems = useMemo(() => {
@@ -381,6 +432,22 @@ export default function ReturnsRenewalsPage() {
     showToast(`Loan for "${renewedRow.productName}" successfully extended!`, "success");
     setRenewTarget(null);
     fetchData();
+  };
+
+  // Switch tab and auto-sync date target with clicked card
+  const handleSelectTab = (tab: "ACTIVE" | "OVERDUE" | "DUE_SOON" | "RENEWED" | "RETURNED" | "ALL") => {
+    if (activeTab === tab) {
+      setActiveTab("ALL");
+      setDateFieldFilter("DUE");
+    } else {
+      setActiveTab(tab);
+      if (tab === "RETURNED") {
+        setDateFieldFilter("RETURNED");
+      } else {
+        setDateFieldFilter("DUE");
+      }
+    }
+    setCurrentPage(1);
   };
 
   return (
@@ -467,10 +534,7 @@ export default function ReturnsRenewalsPage() {
           {/* Card 1: Active on Loan */}
           <button
             type="button"
-            onClick={() => {
-              setActiveTab(activeTab === "ACTIVE" ? "ALL" : "ACTIVE");
-              setCurrentPage(1);
-            }}
+            onClick={() => handleSelectTab("ACTIVE")}
             className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
               activeTab === "ACTIVE"
                 ? "bg-blue-50/95 border-2 border-blue-500 ring-4 ring-blue-500/20 shadow-xs scale-[1.01]"
@@ -490,10 +554,7 @@ export default function ReturnsRenewalsPage() {
           {/* Card 2: Overdue Items */}
           <button
             type="button"
-            onClick={() => {
-              setActiveTab(activeTab === "OVERDUE" ? "ALL" : "OVERDUE");
-              setCurrentPage(1);
-            }}
+            onClick={() => handleSelectTab("OVERDUE")}
             className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
               activeTab === "OVERDUE"
                 ? "bg-red-50/95 border-2 border-red-500 ring-4 ring-red-500/20 shadow-xs scale-[1.01]"
@@ -524,10 +585,7 @@ export default function ReturnsRenewalsPage() {
           {/* Card 3: Due Soon (<= 7 days) */}
           <button
             type="button"
-            onClick={() => {
-              setActiveTab(activeTab === "DUE_SOON" ? "ALL" : "DUE_SOON");
-              setCurrentPage(1);
-            }}
+            onClick={() => handleSelectTab("DUE_SOON")}
             className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
               activeTab === "DUE_SOON"
                 ? "bg-amber-50/95 border-2 border-amber-500 ring-4 ring-amber-500/20 shadow-xs scale-[1.01]"
@@ -547,10 +605,7 @@ export default function ReturnsRenewalsPage() {
           {/* Card 4: Renewed Assets */}
           <button
             type="button"
-            onClick={() => {
-              setActiveTab(activeTab === "RENEWED" ? "ALL" : "RENEWED");
-              setCurrentPage(1);
-            }}
+            onClick={() => handleSelectTab("RENEWED")}
             className={`flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
               activeTab === "RENEWED"
                 ? "bg-indigo-50/95 border-2 border-indigo-500 ring-4 ring-indigo-500/20 shadow-xs scale-[1.01]"
@@ -570,10 +625,7 @@ export default function ReturnsRenewalsPage() {
           {/* Card 5: Returned Assets */}
           <button
             type="button"
-            onClick={() => {
-              setActiveTab(activeTab === "RETURNED" ? "ALL" : "RETURNED");
-              setCurrentPage(1);
-            }}
+            onClick={() => handleSelectTab("RETURNED")}
             className={`col-span-2 sm:col-span-1 flex flex-col text-left p-4 rounded-2xl border transition-all duration-200 hover:-translate-y-0.5 shadow-2xs cursor-pointer ${
               activeTab === "RETURNED"
                 ? "bg-emerald-50/95 border-2 border-emerald-500 ring-4 ring-emerald-500/20 shadow-xs scale-[1.01]"
@@ -593,27 +645,116 @@ export default function ReturnsRenewalsPage() {
 
         {/* ─── CONTROLS: SEARCH & FILTERS ─── */}
         <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-          {activeTab !== "ALL" && (
-            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="text-slate-500 font-medium">Filtered by:</span>
-                <span className="font-bold text-slate-800 bg-white border border-slate-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
-                  {activeTab === "ACTIVE" && `Active on Loan (${counts.active})`}
-                  {activeTab === "OVERDUE" && `Overdue Items (${counts.overdue})`}
-                  {activeTab === "DUE_SOON" && `Due Soon (${counts.dueSoon})`}
-                  {activeTab === "RENEWED" && `Renewed Loans (${counts.renewed})`}
-                  {activeTab === "RETURNED" && `Returned History (${counts.returned})`}
-                </span>
+          {(activeTab !== "ALL" || selectedDate || searchQuery || selectedWarehouseId !== "ALL" || selectedEmployeeId !== "ALL") && (
+            <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/80 border-b border-slate-100 text-xs flex-wrap gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-slate-500 font-medium">Active Filters:</span>
+                {activeTab !== "ALL" && (
+                  <span className="inline-flex items-center gap-1 font-bold text-slate-800 bg-white border border-slate-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                    <span>
+                      {activeTab === "ACTIVE" && `Active on Loan (${counts.active})`}
+                      {activeTab === "OVERDUE" && `Overdue Items (${counts.overdue})`}
+                      {activeTab === "DUE_SOON" && `Due Soon (${counts.dueSoon})`}
+                      {activeTab === "RENEWED" && `Renewed Loans (${counts.renewed})`}
+                      {activeTab === "RETURNED" && `Returned History (${counts.returned})`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTab("ALL")}
+                      className="hover:text-rose-600 transition cursor-pointer"
+                      title="Clear status filter"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {selectedDate && (
+                  <span className="inline-flex items-center gap-1 font-bold text-indigo-800 bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                    <CalendarDays className="h-3 w-3 text-indigo-600" />
+                    <span>
+                      {dateFieldFilter === "DUE"
+                        ? "Due Date:"
+                        : dateFieldFilter === "ISSUED"
+                        ? "Issue Date:"
+                        : dateFieldFilter === "RETURNED"
+                        ? "Return Date:"
+                        : "Date:"}{" "}
+                      {selectedDate}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedDate("");
+                        setCurrentPage(1);
+                      }}
+                      className="hover:text-rose-600 transition"
+                      title="Clear date filter"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {selectedWarehouseId !== "ALL" && (
+                  <span className="inline-flex items-center gap-1 font-bold text-slate-700 bg-white border border-slate-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                    <span>Warehouse filter</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedWarehouseId("ALL");
+                        setCurrentPage(1);
+                      }}
+                      className="hover:text-rose-600 transition"
+                      title="Clear warehouse filter"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {selectedEmployeeId !== "ALL" && (
+                  <span className="inline-flex items-center gap-1 font-bold text-slate-700 bg-white border border-slate-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                    <span>Staff filter</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEmployeeId("ALL");
+                        setCurrentPage(1);
+                      }}
+                      className="hover:text-rose-600 transition"
+                      title="Clear staff filter"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
+                {searchQuery && (
+                  <span className="inline-flex items-center gap-1 font-bold text-slate-700 bg-white border border-slate-200 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                    <span>"{searchQuery}"</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSearchQuery("");
+                        setCurrentPage(1);
+                      }}
+                      className="hover:text-rose-600 transition"
+                      title="Clear search"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                )}
               </div>
               <button
                 type="button"
                 onClick={() => {
-                  setActiveTab("ALL");
-                  setCurrentPage(1);
+                  handleSelectTab("ALL");
+                  setSelectedDate("");
+                  setSelectedWarehouseId("ALL");
+                  setSelectedEmployeeId("ALL");
+                  setSearchQuery("");
                 }}
                 className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition flex items-center gap-1 cursor-pointer"
               >
-                <span>View All Records ({counts.total})</span>
+                <span>Clear All Filters</span>
                 <X className="h-3.5 w-3.5" />
               </button>
             </div>
@@ -646,57 +787,188 @@ export default function ReturnsRenewalsPage() {
             </div>
 
             {/* Warehouse Filter */}
-            <div>
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               <select
                 value={selectedWarehouseId}
                 onChange={(e) => {
                   setSelectedWarehouseId(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-medium text-slate-700"
+                className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-medium text-slate-700 appearance-none cursor-pointer"
               >
-                <option value="ALL">🏢 All Warehouses</option>
+                <option value="ALL">All Warehouses</option>
                 {warehouses.map((wh) => (
                   <option key={wh._id} value={wh._id}>
                     {wh.name} ({wh.code})
                   </option>
                 ))}
               </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
             </div>
 
             {/* Custodian / Employee Filter */}
-            <div>
+            <div className="relative">
+              <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               <select
                 value={selectedEmployeeId}
                 onChange={(e) => {
                   setSelectedEmployeeId(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-medium text-slate-700"
+                className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-medium text-slate-700 appearance-none cursor-pointer"
               >
-                <option value="ALL">👤 All Custodians / Staff</option>
+                <option value="ALL">All Custodians / Staff</option>
                 {employees.map((emp) => (
                   <option key={emp.id} value={emp.id}>
                     {emp.name} ({emp.employeeCode} - {emp.department})
                   </option>
                 ))}
               </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
             </div>
 
             {/* Sort Options */}
-            <div>
+            <div className="relative">
+              <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" />
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as any)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-medium text-slate-700"
+                className="w-full pl-9 pr-8 py-2 text-xs rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition font-medium text-slate-700 appearance-none cursor-pointer"
               >
-                <option value="URGENT">⚡ Sort: Urgent First (Overdue → Due Soon)</option>
-                <option value="DUE_ASC">📅 Sort: Due Date (Earliest first)</option>
-                <option value="DUE_DESC">📅 Sort: Due Date (Latest first)</option>
-                <option value="NEWEST">🕒 Sort: Issue Date (Newest first)</option>
-                <option value="EMPLOYEE">🔤 Sort: Staff Name (A-Z)</option>
+                <option value="URGENT">Sort: Urgent (Overdue → Due Soon)</option>
+                <option value="DUE_ASC">Sort: Due Date (Earliest first)</option>
+                <option value="DUE_DESC">Sort: Due Date (Latest first)</option>
+                <option value="NEWEST">Sort: Issue Date (Newest first)</option>
+                <option value="OLDEST">Sort: Issue Date (Oldest first)</option>
+                <option value="RETURNED_RECENT">Sort: Return Date (Recently returned)</option>
+                <option value="EMPLOYEE">Sort: Staff Name (A-Z)</option>
               </select>
+              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
             </div>
+          </div>
+
+          {/* Date-wise Filter & Quick Presets Strip */}
+          <div className="px-3.5 sm:px-4 py-2.5 bg-slate-50/80 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 mr-1">
+                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700">
+                  <CalendarDays className="h-3.5 w-3.5" />
+                </div>
+                <span>Particular Date:</span>
+              </div>
+
+              {/* Date Field Target (Auto-synced with Top Cards + Manual override) */}
+              <div className="relative">
+                <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-indigo-500 pointer-events-none" />
+                <select
+                  value={dateFieldFilter}
+                  onChange={(e) => {
+                    setDateFieldFilter(e.target.value as any);
+                    setCurrentPage(1);
+                  }}
+                  className="pl-7 pr-7 py-1.5 text-xs rounded-xl border border-indigo-200/90 bg-indigo-50/60 font-bold text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition shadow-2xs appearance-none cursor-pointer"
+                  title="Auto-synced with top cards (Due Date / Return Date) or select manually"
+                >
+                  <option value="DUE">Due Date</option>
+                  <option value="RETURNED">Return Date</option>
+                  <option value="ISSUED">Issue Date</option>
+                  <option value="ANY">Any Date Field</option>
+                </select>
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-indigo-500 pointer-events-none" />
+              </div>
+
+              {/* Calendar Date Input */}
+              <div className="relative flex items-center">
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => {
+                    setSelectedDate(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3 py-1.5 text-xs rounded-xl border font-medium transition shadow-2xs focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer ${
+                    selectedDate
+                      ? "border-indigo-400 bg-indigo-50/70 text-indigo-950 font-bold"
+                      : "border-slate-200 bg-white text-slate-700"
+                  }`}
+                />
+                {selectedDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate("");
+                      setCurrentPage(1);
+                    }}
+                    className="ml-1.5 p-1 text-slate-400 hover:text-slate-600 transition cursor-pointer"
+                    title="Clear date"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Presets */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(getTodayYMD(0));
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition cursor-pointer ${
+                    selectedDate === getTodayYMD(0)
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                      : "bg-white hover:bg-slate-100 text-slate-600 border-slate-200 shadow-2xs"
+                  }`}
+                >
+                  Today
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(getTodayYMD(1));
+                    setCurrentPage(1);
+                  }}
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded-lg border transition cursor-pointer ${
+                    selectedDate === getTodayYMD(1)
+                      ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                      : "bg-white hover:bg-slate-100 text-slate-600 border-slate-200 shadow-2xs"
+                  }`}
+                >
+                  Tomorrow
+                </button>
+                {selectedDate && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedDate("");
+                      setCurrentPage(1);
+                    }}
+                    className="px-2 py-1 text-[11px] font-bold rounded-lg text-rose-600 hover:bg-rose-50 border border-rose-200 transition cursor-pointer"
+                  >
+                    Clear Date
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Active Date Counter */}
+            {selectedDate && (
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/80 px-2.5 py-1 rounded-lg">
+                <span>Matching:</span>
+                <span className="font-bold">
+                  {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-IN", {
+                    day: "2-digit",
+                    month: "short",
+                    year: "numeric",
+                  })}
+                </span>
+                <span className="text-slate-500 font-normal">
+                  ({filteredItems.length} {filteredItems.length === 1 ? "record" : "records"})
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -715,7 +987,17 @@ export default function ReturnsRenewalsPage() {
               </div>
               <h3 className="text-base font-bold text-slate-800">No matching assets found</h3>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                {searchQuery || selectedWarehouseId !== "ALL" || selectedEmployeeId !== "ALL"
+                {selectedDate
+                  ? `No records found matching ${
+                      dateFieldFilter === "DUE"
+                        ? "due date"
+                        : dateFieldFilter === "ISSUED"
+                        ? "issue date"
+                        : dateFieldFilter === "RETURNED"
+                        ? "return date"
+                        : "date"
+                    } "${selectedDate}".`
+                  : searchQuery || selectedWarehouseId !== "ALL" || selectedEmployeeId !== "ALL"
                   ? "Try clearing filters or search keywords to see other returnable items."
                   : activeTab === "OVERDUE"
                   ? "Great news! There are currently no overdue assets."
@@ -723,15 +1005,15 @@ export default function ReturnsRenewalsPage() {
                   ? "No loans are due within the next 7 days."
                   : "No returnable items found."}
               </p>
-              {(searchQuery || selectedWarehouseId !== "ALL" || selectedEmployeeId !== "ALL" || activeTab !== "ALL") && (
+              {(searchQuery || selectedWarehouseId !== "ALL" || selectedEmployeeId !== "ALL" || activeTab !== "ALL" || selectedDate) && (
                 <button
                   type="button"
                   onClick={() => {
                     setSearchQuery("");
                     setSelectedWarehouseId("ALL");
                     setSelectedEmployeeId("ALL");
-                    setActiveTab("ALL");
-                    setCurrentPage(1);
+                    setSelectedDate("");
+                    handleSelectTab("ALL");
                   }}
                   className="rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold px-3.5 py-2 transition"
                 >
@@ -747,9 +1029,45 @@ export default function ReturnsRenewalsPage() {
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50/80 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
                       <th className="py-3.5 px-4">Asset / Product Details</th>
-                      <th className="py-3.5 px-4">Custodian / Issue Info</th>
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => setSortBy(sortBy === "EMPLOYEE" ? "NEWEST" : "EMPLOYEE")}
+                          className="flex items-center gap-1 uppercase font-bold hover:text-indigo-600 transition cursor-pointer"
+                          title="Click to sort by Staff Name"
+                        >
+                          <span>Custodian / Issue Info</span>
+                          {sortBy === "EMPLOYEE" ? (
+                            <ArrowUp className="h-3.5 w-3.5 text-indigo-600" />
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                          )}
+                        </button>
+                      </th>
                       <th className="py-3.5 px-4">Warehouse & Rack</th>
-                      <th className="py-3.5 px-4">Due Date & Timeline</th>
+                      <th className="py-3.5 px-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (sortBy === "DUE_ASC") {
+                              setSortBy("DUE_DESC");
+                            } else {
+                              setSortBy("DUE_ASC");
+                            }
+                          }}
+                          className="flex items-center gap-1 uppercase font-bold hover:text-indigo-600 transition cursor-pointer"
+                          title="Click to toggle Due Date order (Earliest / Latest)"
+                        >
+                          <span>Due Date & Timeline</span>
+                          {sortBy === "DUE_ASC" ? (
+                            <ArrowUp className="h-3.5 w-3.5 text-indigo-600" />
+                          ) : sortBy === "DUE_DESC" ? (
+                            <ArrowDown className="h-3.5 w-3.5 text-indigo-600" />
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3 text-slate-400 opacity-60" />
+                          )}
+                        </button>
+                      </th>
                       <th className="py-3.5 px-4 text-right">Actions</th>
                     </tr>
                   </thead>
@@ -1113,7 +1431,7 @@ function ReturnAssetModal({ item, warehouses, racks, onClose, onSuccess }: Retur
 
       const data = await res.json();
       if (!res.ok || !data.success) {
-        throw new Error(data.message || "Failed to process return");
+        throw new Error(data.error || data.message || "Failed to process return");
       }
 
       onSuccess(data);

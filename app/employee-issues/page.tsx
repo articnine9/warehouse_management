@@ -17,6 +17,7 @@ import {
   ChevronUp,
   Layers,
   Info,
+  AlertTriangle,
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
@@ -217,11 +218,46 @@ export default function EmployeeIssuesPage() {
 
   async function fetchInventory() {
     try {
-      const response = await fetch("/api/inventory", { cache: "no-store" });
-      const result = await response.json();
-      if (result.success) {
-        setInventoryList(result.data || []);
+      const [invRes, prodRes] = await Promise.all([
+        fetch("/api/inventory", { cache: "no-store" }),
+        fetch("/api/products", { cache: "no-store" }),
+      ]);
+      const invResult = await invRes.json();
+      const prodResult = await prodRes.json();
+
+      let list: InventoryItem[] = invResult.success ? (invResult.data || []) : [];
+
+      // If there are products in catalog that don't have any inventory record at all, include them with 0 stock
+      if (prodResult.success && Array.isArray(prodResult.data)) {
+        const inventoryProductIds = new Set(
+          list.map((inv) => (inv.productId?._id ? inv.productId._id.toString() : String(inv.productId || "")))
+        );
+        for (const prod of prodResult.data) {
+          const pid = prod._id?.toString();
+          if (pid && !inventoryProductIds.has(pid)) {
+            list.push({
+              _id: `no-inv-${pid}`,
+              productId: {
+                _id: pid,
+                name: prod.name,
+                sku: prod.sku,
+                category: prod.category,
+                price: prod.price,
+                sellerName: prod.sellerName,
+                serviceIntervalMonths: prod.serviceIntervalMonths,
+                warrantyMonths: prod.warrantyMonths,
+                serialNumber: prod.serialNumber,
+              },
+              warehouseId: { _id: "", name: "Unassigned", code: "N/A" },
+              rackId: { _id: "", name: "No Rack", code: "N/A" },
+              quantity: 0,
+              status: "OUT_OF_STOCK",
+            });
+          }
+        }
       }
+
+      setInventoryList(list);
     } catch (error) {
       console.error(error);
     }
@@ -265,7 +301,17 @@ export default function EmployeeIssuesPage() {
 
   const selectedEmployee = employees.find((employee) => employee.id === selectedEmployeeId);
   const currentSelectedInventory = inventoryList.find((inventory) => inventory._id === selectedInventoryId);
-  const availableInventories = inventoryList.filter((inventory) => inventory.quantity > 0);
+
+  // Keep all inventories: sort in-stock items first, and 0-stock items after
+  const sortedInventories = useMemo(() => {
+    return [...inventoryList].sort((a, b) => {
+      const aQty = a.quantity || 0;
+      const bQty = b.quantity || 0;
+      if (aQty > 0 && bQty <= 0) return -1;
+      if (aQty <= 0 && bQty > 0) return 1;
+      return (a.productId?.name || "").localeCompare(b.productId?.name || "");
+    });
+  }, [inventoryList]);
 
   const matchingEmployees = useMemo(() => {
     if (!employeeSearchQuery.trim()) return employees;
@@ -284,22 +330,23 @@ export default function EmployeeIssuesPage() {
   }, [employees, employeeSearchQuery]);
 
   const matchingInventories = useMemo(() => {
-    if (!productSearchQuery.trim()) return availableInventories;
+    if (!productSearchQuery.trim()) return sortedInventories;
     const query = productSearchQuery.toLowerCase().trim();
-    return availableInventories.filter((inventory) => {
+    return sortedInventories.filter((inventory) => {
       const product = inventory.productId;
+      if (!product) return false;
       return (
         product.name.toLowerCase().includes(query) ||
         product.sku.toLowerCase().includes(query) ||
         product.category?.toLowerCase().includes(query) ||
         product.sellerName?.toLowerCase().includes(query) ||
-        inventory.warehouseId.name.toLowerCase().includes(query) ||
-        inventory.warehouseId.code.toLowerCase().includes(query) ||
-        inventory.rackId.name.toLowerCase().includes(query) ||
-        inventory.rackId.code.toLowerCase().includes(query)
+        inventory.warehouseId?.name?.toLowerCase().includes(query) ||
+        inventory.warehouseId?.code?.toLowerCase().includes(query) ||
+        inventory.rackId?.name?.toLowerCase().includes(query) ||
+        inventory.rackId?.code?.toLowerCase().includes(query)
       );
     });
-  }, [availableInventories, productSearchQuery]);
+  }, [sortedInventories, productSearchQuery]);
 
   const lookupEmployee = useMemo(() => {
     return employees.find((e) => e.id === selectedLookupEmployeeId) || null;
@@ -443,7 +490,7 @@ export default function EmployeeIssuesPage() {
     setSelectedInventoryId(inventory._id);
     setProductSearchQuery(`${inventory.productId.name} (${inventory.productId.sku})`);
     setProductDropdownOpen(false);
-    setItemQuantity("1");
+    setItemQuantity(inventory.quantity > 0 ? "1" : "0");
     const isReusable = inventory.productId.productType === "REUSABLE";
     setItemProductType(isReusable ? "REUSABLE" : "NON_REUSABLE");
     setItemReturnDueDays(inventory.productId.returnDays?.toString() || "30");
@@ -457,10 +504,12 @@ export default function EmployeeIssuesPage() {
     setItemWarrantyMonths(inventory.productId.warrantyMonths !== undefined ? String(inventory.productId.warrantyMonths) : "12");
     setItemSerial(inventory.productId.serialNumber || "");
 
-    setTimeout(() => {
-      quantityInputRef.current?.focus();
-      quantityInputRef.current?.select();
-    }, 50);
+    if (inventory.quantity > 0) {
+      setTimeout(() => {
+        quantityInputRef.current?.focus();
+        quantityInputRef.current?.select();
+      }, 50);
+    }
   }
 
   function handleClearProduct() {
@@ -480,6 +529,12 @@ export default function EmployeeIssuesPage() {
   function handleAddLineItem() {
     if (!currentSelectedInventory) {
       setWarningMessage("Please select a product from inventory");
+      setWarningOpen(true);
+      return;
+    }
+
+    if (currentSelectedInventory.quantity <= 0) {
+      setWarningMessage(`Cannot add "${currentSelectedInventory.productId.name}": Product currently has No Stock (0 units available). Please restock first.`);
       setWarningOpen(true);
       return;
     }
@@ -809,25 +864,70 @@ export default function EmployeeIssuesPage() {
                   </div>
 
                   {productDropdownOpen && (
-                    <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-52 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-                      {matchingInventories.map((inv) => (
-                        <div
-                          key={inv._id}
-                          onClick={() => handleSelectInventory(inv)}
-                          className="cursor-pointer rounded-lg p-2 transition hover:bg-blue-50 text-xs"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-800">{inv.productId.name}</span>
-                            <span className="font-bold text-blue-600">{inv.quantity} in stock</span>
+                    <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                      {matchingInventories.map((inv) => {
+                        const isOutOfStock = (inv.quantity || 0) <= 0;
+                        return (
+                          <div
+                            key={inv._id}
+                            onClick={() => handleSelectInventory(inv)}
+                            className={`cursor-pointer rounded-lg p-2.5 transition text-xs border border-transparent mb-1 last:mb-0 ${
+                              isOutOfStock
+                                ? "bg-slate-50/70 hover:bg-rose-50/70 hover:border-rose-200"
+                                : "hover:bg-blue-50/70 hover:border-blue-200"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className={`font-bold truncate ${isOutOfStock ? "text-slate-700" : "text-slate-900"}`}>
+                                  {inv.productId.name}
+                                </span>
+                                {isOutOfStock ? (
+                                  <span className="shrink-0 rounded-full bg-rose-100 border border-rose-200 text-rose-700 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide">
+                                    No Stock
+                                  </span>
+                                ) : (
+                                  <span className="shrink-0 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 px-1.5 py-0.2 text-[10px] font-bold">
+                                    In Stock
+                                  </span>
+                                )}
+                              </div>
+                              <span
+                                className={`shrink-0 font-extrabold ${
+                                  isOutOfStock ? "text-rose-600 font-mono text-[11px]" : "text-blue-600"
+                                }`}
+                              >
+                                {isOutOfStock ? "0 in stock" : `${inv.quantity} in stock`}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              SKU: <span className="font-mono text-slate-600 font-semibold">{inv.productId.sku}</span>
+                              {inv.warehouseId?.code && inv.warehouseId.code !== "N/A" && (
+                                <>
+                                  {" "}• Rack: <span className="font-mono text-slate-600">{inv.rackId.name}</span> • WH:{" "}
+                                  <span className="font-medium text-slate-600">{inv.warehouseId.code}</span>
+                                </>
+                              )}
+                            </p>
                           </div>
-                          <p className="text-[11px] text-slate-400">
-                            SKU: {inv.productId.sku} • Rack: {inv.rackId.name} • WH: {inv.warehouseId.code}
-                          </p>
-                        </div>
-                      ))}
+                        );
+                      })}
                       {matchingInventories.length === 0 && (
-                        <p className="p-3 text-center text-xs text-slate-400">No stock products found.</p>
+                        <p className="p-3 text-center text-xs text-slate-400">No products found matching search.</p>
                       )}
+                    </div>
+                  )}
+
+                  {/* Warning banner when selected product is out of stock */}
+                  {currentSelectedInventory && currentSelectedInventory.quantity <= 0 && (
+                    <div className="mt-2 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50/80 p-2.5 text-xs text-rose-800 animate-in fade-in duration-150">
+                      <AlertTriangle className="h-4 w-4 text-rose-600 shrink-0" />
+                      <div>
+                        <p className="font-bold">No Stock Available</p>
+                        <p className="text-[11px] text-rose-700">
+                          This product currently has <strong>0 units</strong> in stock and cannot be issued to users.
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -960,9 +1060,16 @@ export default function EmployeeIssuesPage() {
                 <button
                   type="button"
                   onClick={handleAddLineItem}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs transition hover:bg-blue-700 active:scale-[0.98]"
+                  disabled={Boolean(currentSelectedInventory && currentSelectedInventory.quantity <= 0)}
+                  className={`rounded-lg px-4 py-2 text-xs font-semibold shadow-xs transition ${
+                    currentSelectedInventory && currentSelectedInventory.quantity <= 0
+                      ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                      : "bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] cursor-pointer"
+                  }`}
                 >
-                  + Add Item to Issue List
+                  {currentSelectedInventory && currentSelectedInventory.quantity <= 0
+                    ? "Cannot Add (Out of Stock)"
+                    : "+ Add Item to Issue List"}
                 </button>
               </div>
             </div>

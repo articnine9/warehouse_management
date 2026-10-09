@@ -854,8 +854,9 @@ export default function DashboardPage() {
                 )}
 
                 {combinedAlerts.length > 6 && visibleAlertsCount >= combinedAlerts.length && (
-                  <div className="py-2.5 text-center text-xs font-semibold text-slate-500 bg-slate-50/60 border-t border-slate-100">
-                    ✓ All {combinedAlerts.length} live alerts loaded
+                  <div className="py-2.5 text-center text-xs font-semibold text-slate-500 bg-slate-50/60 border-t border-slate-100 flex items-center justify-center gap-1.5">
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                    <span>All {combinedAlerts.length} live alerts loaded</span>
                   </div>
                 )}
               </div>
