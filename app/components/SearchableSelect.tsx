@@ -258,7 +258,7 @@ export default function SearchableSelect({
             inputRef.current?.focus();
           }
         }}
-        className={`flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-3.5 py-2 text-sm transition ${
+        className={`relative flex w-full items-center justify-between gap-2 rounded-lg border bg-white px-3.5 py-2 text-sm transition ${
           disabled
             ? "cursor-not-allowed border-slate-200 bg-slate-50 text-slate-400"
             : isOpen
@@ -266,6 +266,25 @@ export default function SearchableSelect({
             : "border-slate-200 text-slate-800 hover:border-slate-300 shadow-sm"
         }`}
       >
+        {required && (
+          <input
+            tabIndex={-1}
+            type="text"
+            value={value}
+            required={required}
+            onChange={() => {}}
+            style={{
+              position: "absolute",
+              opacity: 0,
+              width: "1px",
+              height: "1px",
+              pointerEvents: "none",
+              clip: "rect(0 0 0 0)",
+              clipPath: "inset(50%)",
+              margin: "-1px",
+            }}
+          />
+        )}
         <div className="flex-1 min-w-0 flex items-center gap-1.5">
           <input
             ref={inputRef}

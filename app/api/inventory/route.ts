@@ -135,11 +135,11 @@ export async function POST(request: Request) {
         await connectDB();
         const user = await requireSessionUser();
 
-        if (user.role !== "ADMIN") {
+        if (user.role !== "ADMIN" && user.role !== "STAFF") {
             return Response.json(
                 {
                     success: false,
-                    message: "Only admin can add inventory",
+                    message: "Unauthorized to add inventory",
                 },
                 { status: 403 }
             );

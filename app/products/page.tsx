@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState, useMemo } from "react";
 import { FolderTree, History, Warehouse as WarehouseIcon, Plus, Layers, Box, Trash2, X } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import { useAuth } from "@/app/components/AuthProvider";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
 import Link from "next/link";
@@ -62,6 +63,8 @@ type Rack = {
 };
 
 export default function ProductsPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
@@ -167,6 +170,13 @@ export default function ProductsPage() {
       }
     }
   }, []);
+
+  // Auto-select the only warehouse when adding a new location
+  useEffect(() => {
+    if (warehouses.length === 1 && !newLocWarehouseId) {
+      setNewLocWarehouseId(warehouses[0]._id);
+    }
+  }, [warehouses, newLocWarehouseId]);
 
   // Category select options
   const categoryOptions: SelectOption[] = useMemo(() => {
@@ -305,9 +315,18 @@ export default function ProductsPage() {
     if (!editId) return;
     setEditLoading(true);
 
+    if (!editCategory || editCategory.trim() === "") {
+      setWarningMessage("Please select or enter a product category.");
+      setWarningOpen(true);
+      return;
+    }
+
     const intervalVal = normalizeIntervalMonths(
       editServiceInterval === CUSTOM_INTERVAL_VALUE ? editCustomServiceInterval : editServiceInterval
     );
+
+    const selectedCat = categories.find((c) => c.name.toLowerCase() === editCategory.trim().toLowerCase());
+    const editCategoryId = selectedCat?._id;
 
     try {
       const response = await fetch(`/api/products/${editId}`, {
@@ -316,7 +335,8 @@ export default function ProductsPage() {
         body: JSON.stringify({
           name: editName,
           sku: editSku,
-          category: editCategory,
+          category: editCategory.trim(),
+          categoryId: editCategoryId,
           serviceIntervalMonths: intervalVal,
           warrantyMonths: Math.max(0, Number(editWarrantyMonths) || 0),
           serialNumber: editSerialNumber.trim() || undefined,
@@ -410,7 +430,7 @@ export default function ProductsPage() {
   }, [filteredProducts, currentPage, pageSize]);
 
   return (
-    <ProtectedPage allowedRoles={["ADMIN"]}>
+    <ProtectedPage>
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -724,12 +744,14 @@ export default function ProductsPage() {
                           >
                             Edit
                           </button>
-                          <button
-                            onClick={() => setDeleteId(product._id)}
-                            className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
-                          >
-                            Delete
-                          </button>
+                          {isAdmin && (
+                            <button
+                              onClick={() => setDeleteId(product._id)}
+                              className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -837,12 +859,14 @@ export default function ProductsPage() {
                     >
                       Edit
                     </button>
-                    <button
-                      onClick={() => setDeleteId(product._id)}
-                      className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => setDeleteId(product._id)}
+                        className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -973,13 +997,14 @@ export default function ProductsPage() {
 
                         <div>
                           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
-                            Category
+                            Category <span className="text-red-500">*</span>
                           </label>
                           <SearchableSelect
                             options={categoryOptions}
                             value={editCategory}
                             onChange={setEditCategory}
                             placeholder="Select category..."
+                            required
                             onAddNew={() => setIsEditCategoryModalOpen(true)}
                             addNewLabel="Add Category"
                           />

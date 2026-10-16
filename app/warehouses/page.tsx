@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState, useMemo } from "react";
 import { Tag, Box, Eye, Warehouse as WarehouseIcon, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import { useAuth } from "@/app/components/AuthProvider";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 import WarehouseDetailsModal from "@/app/components/WarehouseDetailsModal";
@@ -23,6 +24,8 @@ type Warehouse = {
 
 export default function WarehousesPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -165,7 +168,7 @@ export default function WarehousesPage() {
   }, [filteredWarehouses, currentPage, pageSize]);
 
   return (
-    <ProtectedPage allowedRoles={["ADMIN"]}>
+    <ProtectedPage>
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -304,16 +307,18 @@ export default function WarehousesPage() {
                           >
                             Edit
                           </button>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setDeleteId(warehouse._id);
-                            }}
-                            className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 cursor-pointer"
-                          >
-                            Delete
-                          </button>
+                          {isAdmin && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteId(warehouse._id);
+                              }}
+                              className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 cursor-pointer"
+                            >
+                              Delete
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -379,16 +384,18 @@ export default function WarehousesPage() {
                     >
                       Edit
                     </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteId(warehouse._id);
-                      }}
-                      className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteId(warehouse._id);
+                        }}
+                        className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

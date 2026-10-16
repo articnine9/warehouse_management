@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, Pencil, Eye, Trash2, Printer, X, Box, Plus } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import { useAuth } from "@/app/components/AuthProvider";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
@@ -29,6 +30,8 @@ type Inventory = {
 };
 
 function InventoryContent() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const searchParams = useSearchParams();
   const initialStatusParam = searchParams.get("status") || "ALL";
 
@@ -129,6 +132,13 @@ function InventoryContent() {
     void fetchRacks();
     void fetchInventory();
   }, []);
+
+  // Auto-select the only warehouse when there's just one
+  useEffect(() => {
+    if (warehouses.length === 1 && !warehouseId) {
+      setWarehouseId(warehouses[0]._id);
+    }
+  }, [warehouses, warehouseId]);
 
   const filteredRacks = useMemo(() => {
     if (!warehouseId) return [];
@@ -581,14 +591,16 @@ function InventoryContent() {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteId(item._id)}
-                          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-2xs active:scale-95"
-                          title="Delete Stock Entry"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteId(item._id)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-2xs active:scale-95"
+                            title="Delete Stock Entry"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -643,14 +655,16 @@ function InventoryContent() {
                   >
                     <Eye className="h-3.5 w-3.5" /> View Slip
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteId(item._id)}
-                    className="rounded-lg border border-slate-200 bg-white p-2 text-xs font-medium text-red-600 hover:bg-red-50 shadow-2xs active:scale-95"
-                    title="Delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteId(item._id)}
+                      className="rounded-lg border border-slate-200 bg-white p-2 text-xs font-medium text-red-600 hover:bg-red-50 shadow-2xs active:scale-95"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -950,7 +964,7 @@ function InventoryContent() {
 
 export default function InventoryPage() {
   return (
-    <ProtectedPage allowedRoles={["ADMIN"]}>
+    <ProtectedPage>
       <Suspense fallback={<div className="min-h-screen bg-slate-50 p-8 text-center text-slate-500">Loading Inventory...</div>}>
         <InventoryContent />
       </Suspense>

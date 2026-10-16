@@ -20,6 +20,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import { useAuth } from "@/app/components/AuthProvider";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 import IssueBillModal, { IssueBillData } from "@/app/components/IssueBillModal";
@@ -89,6 +90,8 @@ function getMatchingItems(
 }
 
 export default function EmployeeIssuesPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [inventoryList, setInventoryList] = useState<InventoryItem[]>([]);
   const [issues, setIssues] = useState<EmployeeIssue[]>([]);
@@ -225,7 +228,9 @@ export default function EmployeeIssuesPage() {
       const invResult = await invRes.json();
       const prodResult = await prodRes.json();
 
-      let list: InventoryItem[] = invResult.success ? (invResult.data || []) : [];
+      let list: InventoryItem[] = invResult.success
+        ? (invResult.data || []).filter((inv: InventoryItem) => Boolean(inv?.productId))
+        : [];
 
       // If there are products in catalog that don't have any inventory record at all, include them with 0 stock
       if (prodResult.success && Array.isArray(prodResult.data)) {
@@ -488,21 +493,21 @@ export default function EmployeeIssuesPage() {
 
   function handleSelectInventory(inventory: InventoryItem) {
     setSelectedInventoryId(inventory._id);
-    setProductSearchQuery(`${inventory.productId.name} (${inventory.productId.sku})`);
+    setProductSearchQuery(`${inventory.productId?.name || "Product"} (${inventory.productId?.sku || "N/A"})`);
     setProductDropdownOpen(false);
     setItemQuantity(inventory.quantity > 0 ? "1" : "0");
-    const isReusable = inventory.productId.productType === "REUSABLE";
+    const isReusable = inventory.productId?.productType === "REUSABLE";
     setItemProductType(isReusable ? "REUSABLE" : "NON_REUSABLE");
-    setItemReturnDueDays(inventory.productId.returnDays?.toString() || "30");
+    setItemReturnDueDays(inventory.productId?.returnDays?.toString() || "30");
 
     // Auto-populate service interval, warranty, and serial from Product definition
-    const productInterval = inventory.productId.serviceIntervalMonths ?? 3;
+    const productInterval = inventory.productId?.serviceIntervalMonths ?? 3;
     const isPreset = [1, 3, 6, 12, 0].includes(productInterval);
     setItemServiceInterval(isPreset ? String(productInterval) : CUSTOM_INTERVAL_VALUE);
     setCustomInterval(isPreset ? "" : String(productInterval));
 
-    setItemWarrantyMonths(inventory.productId.warrantyMonths !== undefined ? String(inventory.productId.warrantyMonths) : "12");
-    setItemSerial(inventory.productId.serialNumber || "");
+    setItemWarrantyMonths(inventory.productId?.warrantyMonths !== undefined ? String(inventory.productId.warrantyMonths) : "12");
+    setItemSerial(inventory.productId?.serialNumber || "");
 
     if (inventory.quantity > 0) {
       setTimeout(() => {
@@ -579,15 +584,15 @@ export default function EmployeeIssuesPage() {
 
     const newItem: SelectedLineItem = {
       inventoryId: currentSelectedInventory._id,
-      productName: currentSelectedInventory.productId.name,
-      sku: currentSelectedInventory.productId.sku,
+      productName: currentSelectedInventory.productId?.name || "Unnamed Product",
+      sku: currentSelectedInventory.productId?.sku || "N/A",
       productType: isReusable ? "REUSABLE" : "NON_REUSABLE",
       returnDueDays,
       returnDueDate,
       renewalCount: 0,
       renewalHistory: [],
-      warehouseName: currentSelectedInventory.warehouseId.name,
-      rackName: currentSelectedInventory.rackId.name,
+      warehouseName: currentSelectedInventory.warehouseId?.name || "Unassigned",
+      rackName: currentSelectedInventory.rackId?.name || "No Rack",
       unitPrice,
       maxStock: currentSelectedInventory.quantity,
       quantity,
@@ -880,7 +885,7 @@ export default function EmployeeIssuesPage() {
                             <div className="flex items-center justify-between gap-2">
                               <div className="flex items-center gap-1.5 min-w-0">
                                 <span className={`font-bold truncate ${isOutOfStock ? "text-slate-700" : "text-slate-900"}`}>
-                                  {inv.productId.name}
+                                  {inv.productId?.name || "Unnamed Product"}
                                 </span>
                                 {isOutOfStock ? (
                                   <span className="shrink-0 rounded-full bg-rose-100 border border-rose-200 text-rose-700 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide">
@@ -901,10 +906,10 @@ export default function EmployeeIssuesPage() {
                               </span>
                             </div>
                             <p className="text-[11px] text-slate-400 mt-0.5">
-                              SKU: <span className="font-mono text-slate-600 font-semibold">{inv.productId.sku}</span>
+                              SKU: <span className="font-mono text-slate-600 font-semibold">{inv.productId?.sku || "N/A"}</span>
                               {inv.warehouseId?.code && inv.warehouseId.code !== "N/A" && (
                                 <>
-                                  {" "}• Rack: <span className="font-mono text-slate-600">{inv.rackId.name}</span> • WH:{" "}
+                                  {" "}• Rack: <span className="font-mono text-slate-600">{inv.rackId?.name || "No Rack"}</span> • WH:{" "}
                                   <span className="font-medium text-slate-600">{inv.warehouseId.code}</span>
                                 </>
                               )}
@@ -1707,14 +1712,16 @@ export default function EmployeeIssuesPage() {
                               >
                                 <Eye className="h-4 w-4" />
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeleteIssueId(issue._id)}
-                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-2xs active:scale-95"
-                                title="Delete this issue record"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteIssueId(issue._id)}
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-2xs active:scale-95"
+                                  title="Delete this issue record"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -2038,14 +2045,16 @@ export default function EmployeeIssuesPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteIssueId(issue._id)}
-                          className="p-1.5 rounded-lg border border-slate-200 text-red-500 hover:bg-red-50"
-                          title="Delete issue"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteIssueId(issue._id)}
+                            className="p-1.5 rounded-lg border border-slate-200 text-red-500 hover:bg-red-50"
+                            title="Delete issue"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
 

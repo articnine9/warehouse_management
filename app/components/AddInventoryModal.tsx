@@ -80,6 +80,13 @@ export default function AddInventoryModal({
     if (defaultRackId) setRackId(defaultRackId);
   }, [defaultProductId, defaultWarehouseId, defaultRackId]);
 
+  // Auto-select the only warehouse when there's just one
+  useEffect(() => {
+    if (warehouses.length === 1 && !warehouseId && !defaultWarehouseId) {
+      setWarehouseId(warehouses[0]._id);
+    }
+  }, [warehouses, warehouseId, defaultWarehouseId]);
+
   const productOptions: SelectOption[] = useMemo(() => {
     return products.map((p) => ({
       value: p._id,

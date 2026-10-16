@@ -27,16 +27,16 @@ export type InventoryItem = {
     warrantyMonths?: number;
     serialNumber?: string;
   };
-  warehouseId: {
+  warehouseId?: {
     _id: string;
     name: string;
     code: string;
-  };
-  rackId: {
+  } | null;
+  rackId?: {
     _id: string;
     name: string;
     code: string;
-  };
+  } | null;
   quantity: number;
   status: "AVAILABLE" | "LOW_STOCK" | "OUT_OF_STOCK";
 };

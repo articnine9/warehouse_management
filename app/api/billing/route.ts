@@ -212,12 +212,12 @@ export async function POST(request: NextRequest) {
 
       invoiceItems.push({
         inventoryId: inv._id,
-        productId: inv.productId._id,
+        productId: inv.productId?._id || inv.productId,
         productName: update.productName,
         sku: update.sku,
-        warehouseId: inv.warehouseId._id,
+        warehouseId: inv.warehouseId?._id || inv.warehouseId || null,
         warehouseName: update.warehouseName,
-        rackId: inv.rackId._id,
+        rackId: inv.rackId?._id || inv.rackId || null,
         rackName: update.rackName,
         quantity: update.dispatchQty,
         unitPrice: update.unitPrice,

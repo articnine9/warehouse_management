@@ -43,6 +43,7 @@ const iconMap: Record<string, React.ReactNode> = {
   Warehouses: <Warehouse className="h-4 w-4" />,
   Racks: <Box className="h-4 w-4" />,
   Categories: <FolderTree className="h-4 w-4" />,
+  Departments: <Building2 className="h-4 w-4" />,
   Products: <Tag className="h-4 w-4" />,
   Users: <UserCheck className="h-4 w-4" />,
   Employees: <UserCheck className="h-4 w-4" />,
@@ -80,6 +81,7 @@ export default function Sidebar() {
     "/warehouses",
     "/racks",
     "/categories",
+    "/departments",
     "/products",
     "/users",
     "/employees",
@@ -117,6 +119,7 @@ export default function Sidebar() {
               { name: "Warehouses", path: "/warehouses" },
               { name: "Racks", path: "/racks" },
               { name: "Categories", path: "/categories" },
+              { name: "Departments", path: "/departments" },
               { name: "Products", path: "/products" },
               { name: "Users", path: "/users" },
             ],
@@ -132,14 +135,22 @@ export default function Sidebar() {
         ]
       : [
           { name: "Dashboard", path: "/dashboard" },
+          {
+            name: "Add & Modify",
+            children: [
+              { name: "Warehouses", path: "/warehouses" },
+              { name: "Racks", path: "/racks" },
+              { name: "Categories", path: "/categories" },
+              { name: "Departments", path: "/departments" },
+              { name: "Products", path: "/products" },
+              { name: "Users", path: "/users" },
+            ],
+          },
           { name: "Inventory", path: "/inventory" },
           { name: "User Asset Management", path: "/employee-issues" },
           { name: "Returns & Renewals", path: "/returns-renewals" },
           { name: "Asset Movement & History", path: "/asset-history" },
           { name: "Stock Movements", path: "/movements" },
-          // { name: "Billing", path: "/billing" },
-          // { name: "Search", path: "/search" },
-          { name: "My Warehouse", path: "/staff" },
         ];
 
   return (

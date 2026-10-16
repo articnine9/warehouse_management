@@ -6,6 +6,7 @@ import Inventory from "@/models/Inventory";
 import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
 import StockMovement from "@/models/StockMovement";
+import Category from "@/models/Category";
 
 export async function GET(request: Request) {
   try {
@@ -17,31 +18,61 @@ export async function GET(request: Request) {
     void Rack;
     void Product;
     void Inventory;
+    void Category;
 
     const { searchParams } = new URL(request.url);
     const checkNameParam = searchParams.get("checkName");
     if (checkNameParam?.trim()) {
-      const escaped = checkNameParam.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      const existing = await Product.findOne({
-        name: { $regex: new RegExp(`^${escaped}$`, "i") },
-      });
-      if (existing) {
-        const inventories = await Inventory.find({ productId: existing._id });
-        const totalStock = inventories.reduce((sum, inv) => sum + (inv.quantity || 0), 0);
+      const trimmed = checkNameParam.trim();
+      const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      // Partial match: find products whose name contains the search term
+      const existingProducts = await Product.find({
+        name: { $regex: new RegExp(escaped, "i") },
+      })
+        .limit(5)
+        .sort({ name: 1 });
+
+      if (existingProducts.length > 0) {
+        const productIds = existingProducts.map((p) => p._id);
+        const inventories = await Inventory.find({ productId: { $in: productIds } })
+          .populate("warehouseId", "name code")
+          .populate("rackId", "name code");
+
+        const enriched = existingProducts.map((p) => {
+          const pid = p._id.toString();
+          const prodInvs = inventories.filter(
+            (inv) => inv.productId.toString() === pid
+          );
+          const totalStock = prodInvs.reduce((sum, inv) => sum + (inv.quantity || 0), 0);
+          const locations = prodInvs.map((inv) => {
+            const w = inv.warehouseId as any;
+            const r = inv.rackId as any;
+            return {
+              warehouseId: w?._id?.toString() || "",
+              warehouseName: w?.name || "Warehouse",
+              rackId: r?._id?.toString() || "",
+              rackName: r?.name || "Rack",
+              quantity: inv.quantity || 0,
+            };
+          });
+          return {
+            _id: pid,
+            name: p.name,
+            sku: p.sku,
+            category: p.category,
+            price: p.price,
+            totalStock,
+            locations,
+          };
+        });
+
         return Response.json({
           success: true,
           exists: true,
-          product: {
-            _id: existing._id.toString(),
-            name: existing.name,
-            sku: existing.sku,
-            category: existing.category,
-            price: existing.price,
-            totalStock,
-          },
+          products: enriched,
         });
       }
-      return Response.json({ success: true, exists: false });
+      return Response.json({ success: true, exists: false, products: [] });
     }
 
     const query = searchParams.get("q") || searchParams.get("query") || searchParams.get("search");
@@ -201,11 +232,11 @@ export async function POST(request: Request) {
     await connectDB();
     const user = await requireSessionUser();
 
-    if (user.role !== "ADMIN") {
+    if (user.role !== "ADMIN" && user.role !== "STAFF") {
       return Response.json(
         {
           success: false,
-          message: "Only admin can add products",
+          message: "Unauthorized to add products",
         },
         { status: 403 }
       );
@@ -368,6 +399,17 @@ export async function POST(request: Request) {
       initialQuantity,
     } = body;
 
+    const categoryName = String(body.category || "").trim();
+    if (!categoryName) {
+      return Response.json(
+        {
+          success: false,
+          message: "Category is required to add a product",
+        },
+        { status: 400 }
+      );
+    }
+
     if (!warehouseId || !rackId) {
       return Response.json(
         {
@@ -395,11 +437,19 @@ export async function POST(request: Request) {
 
     const warehouseDoc = await Warehouse.findById(warehouseId);
 
+    let categoryId = body.categoryId;
+    if (!categoryId && categoryName) {
+      const catDoc = await Category.findOne({
+        name: { $regex: new RegExp(`^${categoryName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+      });
+      if (catDoc) categoryId = catDoc._id;
+    }
+
     const product = await Product.create({
       name: trimmedName,
       sku: body.sku,
-      category: body.category,
-      categoryId: body.categoryId,
+      category: categoryName,
+      categoryId,
       serviceIntervalMonths: body.serviceIntervalMonths !== undefined ? Number(body.serviceIntervalMonths) : 3,
       warrantyMonths: body.warrantyMonths !== undefined ? Number(body.warrantyMonths) : 12,
       serialNumber: body.serialNumber ? String(body.serialNumber).trim() : undefined,

@@ -352,8 +352,8 @@ export async function POST(request: Request) {
     await connectDB();
     const user = await requireSessionUser();
 
-    if (user.role !== "ADMIN") {
-      return Response.json({ success: false, message: "Only admin can log stock movements" }, { status: 403 });
+    if (user.role !== "ADMIN" && user.role !== "STAFF") {
+      return Response.json({ success: false, message: "Unauthorized to log stock movements" }, { status: 403 });
     }
 
     const body = await request.json();

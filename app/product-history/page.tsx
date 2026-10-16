@@ -81,7 +81,7 @@ export default function ProductHistoryPage() {
   };
 
   return (
-    <ProtectedPage allowedRoles={["ADMIN"]}>
+    <ProtectedPage>
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">

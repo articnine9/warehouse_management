@@ -349,7 +349,15 @@ export async function DELETE(
 ) {
   try {
     await connectDB();
-    await requireSessionUser();
+    const user = await requireSessionUser();
+
+    if (user.role !== "ADMIN") {
+      return Response.json(
+        { success: false, message: "Only administrators can delete issue records" },
+        { status: 403 }
+      );
+    }
+
     const { id } = await params;
 
     void Product;

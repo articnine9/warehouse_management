@@ -92,31 +92,39 @@ export default function AddProductModal({
   const [restockLoading, setRestockLoading] = useState(false);
 
   // Inline name match warning
-  const [inlineExistingMatch, setInlineExistingMatch] = useState<{
+  type ExistingProductMatch = {
     _id: string;
     name: string;
     sku: string;
     category?: string;
     price?: number;
     totalStock?: number;
-  } | null>(null);
+    locations?: Array<{
+      warehouseId: string;
+      warehouseName: string;
+      rackId: string;
+      rackName: string;
+      quantity: number;
+    }>;
+  };
+  const [inlineExistingMatches, setInlineExistingMatches] = useState<ExistingProductMatch[]>([]);
 
   const checkProductName = useCallback(async (productName: string) => {
     const trimmed = productName.trim();
     if (!trimmed || trimmed.length < 2) {
-      setInlineExistingMatch(null);
+      setInlineExistingMatches([]);
       return;
     }
     try {
       const res = await fetch(`/api/products?checkName=${encodeURIComponent(trimmed)}`);
       const data = await res.json();
-      if (data.success && data.exists && data.product) {
-        setInlineExistingMatch(data.product);
+      if (data.success && data.exists && Array.isArray(data.products)) {
+        setInlineExistingMatches(data.products);
       } else {
-        setInlineExistingMatch(null);
+        setInlineExistingMatches([]);
       }
     } catch {
-      setInlineExistingMatch(null);
+      setInlineExistingMatches([]);
     }
   }, []);
 
@@ -128,10 +136,34 @@ export default function AddProductModal({
     return () => clearTimeout(timer);
   }, [name, checkProductName]);
 
+  function openRestockForProduct(product: ExistingProductMatch) {
+    setExistingProduct(product);
+    setDuplicateModalStep("RESTOCK");
+    const defaultWh = warehouseId || (warehouses[0]?._id ?? "");
+    setRestockWarehouseId(defaultWh);
+    setRestockRackId(rackId || "");
+    setRestockQuantity(initialQuantity && Number(initialQuantity) > 0 ? initialQuantity : "1");
+    setDuplicateModalOpen(true);
+  }
+
   // Sub-modals for inline creation
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [isAddWarehouseOpen, setIsAddWarehouseOpen] = useState(false);
   const [isAddRackOpen, setIsAddRackOpen] = useState(false);
+
+  // Auto-select the only warehouse when there's just one
+  useEffect(() => {
+    if (warehouses.length === 1 && !warehouseId) {
+      setWarehouseId(warehouses[0]._id);
+    }
+  }, [warehouses, warehouseId]);
+
+  // Auto-select the only warehouse for restock when there's just one
+  useEffect(() => {
+    if (warehouses.length === 1 && !restockWarehouseId) {
+      setRestockWarehouseId(warehouses[0]._id);
+    }
+  }, [warehouses, restockWarehouseId]);
 
   // Options
   const categoryOptions: SelectOption[] = useMemo(() => {
@@ -242,7 +274,7 @@ export default function AddProductModal({
       setWarehouseId("");
       setRackId("");
       setInitialQuantity("");
-      setInlineExistingMatch(null);
+      setInlineExistingMatches([]);
 
       if (onSuccess) {
         onSuccess(resData.data || existingProduct);
@@ -261,6 +293,12 @@ export default function AddProductModal({
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+
+    if (!category || category.trim() === "") {
+      setWarningMessage("Please select or enter a product category.");
+      setWarningOpen(true);
+      return;
+    }
 
     if (!warehouseId) {
       setWarningMessage("Please select a warehouse for storage.");
@@ -286,6 +324,9 @@ export default function AddProductModal({
       serviceInterval === CUSTOM_INTERVAL_VALUE ? customServiceInterval : serviceInterval
     );
 
+    const selectedCat = categories.find((c) => c.name.toLowerCase() === category.trim().toLowerCase());
+    const categoryId = selectedCat?._id;
+
     try {
       const response = await fetch("/api/products", {
         method: "POST",
@@ -293,7 +334,8 @@ export default function AddProductModal({
         body: JSON.stringify({
           name: name.trim(),
           sku: sku.trim().toUpperCase(),
-          category,
+          category: category.trim(),
+          categoryId,
           serviceIntervalMonths: intervalVal,
           warrantyMonths: Math.max(0, Number(warrantyMonths) || 0),
           serialNumber: serialNumber.trim() || undefined,
@@ -338,7 +380,7 @@ export default function AddProductModal({
       setWarehouseId("");
       setRackId("");
       setInitialQuantity("");
-      setInlineExistingMatch(null);
+      setInlineExistingMatches([]);
 
       if (onSuccess && result.data) {
         onSuccess(result.data);
@@ -392,29 +434,58 @@ export default function AddProductModal({
                   onChange={(e) => setName(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 />
-                {inlineExistingMatch && (
-                  <div className="mt-1.5 flex items-center justify-between gap-1.5 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800 animate-in fade-in duration-150">
-                    <div className="flex items-center gap-1.5 min-w-0">
+                {inlineExistingMatches.length > 0 && (
+                  <div className="mt-2 rounded-lg border border-slate-200 bg-white overflow-hidden animate-in fade-in duration-150 shadow-sm">
+                    <div className="flex items-center gap-1.5 px-3 py-2 border-b border-slate-200 bg-slate-50">
                       <AlertTriangle className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                      <span className="truncate">
-                        Already exists: <strong>{inlineExistingMatch.name}</strong> ({inlineExistingMatch.sku}, {inlineExistingMatch.totalStock ?? 0} in stock)
+                      <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wide">
+                        Similar products already exist
                       </span>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setExistingProduct(inlineExistingMatch);
-                        setDuplicateModalStep("RESTOCK");
-                        const defaultWh = warehouseId || (warehouses[0]?._id ?? "");
-                        setRestockWarehouseId(defaultWh);
-                        setRestockRackId(rackId || "");
-                        setRestockQuantity(initialQuantity && Number(initialQuantity) > 0 ? initialQuantity : "1");
-                        setDuplicateModalOpen(true);
-                      }}
-                      className="shrink-0 font-bold text-amber-900 underline hover:text-amber-950 text-[11px]"
-                    >
-                      Add Stock Instead
-                    </button>
+                    <div className="max-h-48 overflow-y-auto">
+                      {inlineExistingMatches.map((match) => (
+                        <div
+                          key={match._id}
+                          className="flex items-center justify-between gap-3 px-3 py-2.5 border-b border-slate-100 last:border-b-0 hover:bg-slate-50 transition"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="font-bold text-slate-900 break-words">{match.name}</span>
+                              <span className="font-mono text-[10px] font-bold text-blue-700 bg-blue-100/70 px-1.5 py-0.5 rounded shrink-0">
+                                {match.sku}
+                              </span>
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-slate-500">
+                              {match.locations && match.locations.length > 0 ? (
+                                <span>
+                                  {match.locations.map((loc, i) => (
+                                    <span key={loc.warehouseId + loc.rackId}>
+                                      {i > 0 && ", "}
+                                      {loc.warehouseName} / {loc.rackName} ({loc.quantity})
+                                    </span>
+                                  ))}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">No stock locations</span>
+                              )}
+                              {match.totalStock ? (
+                                <span className="ml-1.5 font-semibold text-emerald-700">
+                                  · Total: {match.totalStock} units
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => openRestockForProduct(match)}
+                            className="shrink-0 inline-flex items-center gap-1 rounded-md bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-blue-700 transition shadow-sm"
+                          >
+                            <PackagePlus className="h-3 w-3" />
+                            Add Stock
+                          </button>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
@@ -435,13 +506,14 @@ export default function AddProductModal({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Category
+                  Category <span className="text-red-500">*</span>
                 </label>
                 <SearchableSelect
                   options={categoryOptions}
                   value={category}
                   onChange={setCategory}
                   placeholder="Select category..."
+                  required
                   onAddNew={() => setIsAddCategoryOpen(true)}
                   addNewLabel="Add Category"
                 />

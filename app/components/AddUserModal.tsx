@@ -4,11 +4,18 @@ import { FormEvent, useEffect, useState, useMemo } from "react";
 import { X, UserCheck, Loader2, Phone, Mail, Building2 } from "lucide-react";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import WarningPopup from "@/app/components/WarningPopup";
+import AddDepartmentModal from "@/app/components/AddDepartmentModal";
 
 type WarehouseItem = {
   _id: string;
   name: string;
   code: string;
+};
+
+type DepartmentItem = {
+  _id: string;
+  name: string;
+  code?: string;
 };
 
 type AddUserModalProps = {
@@ -54,6 +61,8 @@ export default function AddUserModal({
   const [name, setName] = useState("");
   const [userCode, setUserCode] = useState("");
   const [department, setDepartment] = useState("");
+  const [departments, setDepartments] = useState<DepartmentItem[]>([]);
+  const [isAddDepartmentOpen, setIsAddDepartmentOpen] = useState(false);
   const [designation, setDesignation] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -65,9 +74,22 @@ export default function AddUserModal({
   const [warningOpen, setWarningOpen] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
 
-  // Fetch next user code when modal opens
+  async function fetchDepartments() {
+    try {
+      const res = await fetch("/api/departments");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setDepartments(data.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch departments:", err);
+    }
+  }
+
+  // Fetch next user code and departments when modal opens
   useEffect(() => {
     if (isOpen) {
+      void fetchDepartments();
       void (async () => {
         try {
           setFetchingCode(true);
@@ -85,6 +107,20 @@ export default function AddUserModal({
     }
   }, [isOpen]);
 
+  const departmentOptions: SelectOption[] = useMemo(() => {
+    if (departments.length > 0) {
+      return departments.map((d) => ({
+        value: d.name,
+        label: d.name,
+        subLabel: d.code,
+      }));
+    }
+    return COMMON_DEPARTMENTS.map((dept) => ({
+      value: dept,
+      label: dept,
+    }));
+  }, [departments]);
+
   const warehouseOptions: SelectOption[] = useMemo(() => {
     return [
       { value: "", label: "General / All Warehouses" },
@@ -95,6 +131,13 @@ export default function AddUserModal({
       })),
     ];
   }, [warehouses]);
+
+  // Auto-select the only warehouse when there's just one
+  useEffect(() => {
+    if (warehouses.length === 1 && !warehouseId) {
+      setWarehouseId(warehouses[0]._id);
+    }
+  }, [warehouses, warehouseId]);
 
   if (!isOpen) return null;
 
@@ -234,20 +277,14 @@ export default function AddUserModal({
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                   Department <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="text"
-                  required
-                  list="user-department-suggestions"
-                  placeholder="e.g. Operations"
+                <SearchableSelect
+                  options={departmentOptions}
                   value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                  onChange={setDepartment}
+                  placeholder="Select or search department..."
+                  onAddNew={() => setIsAddDepartmentOpen(true)}
+                  addNewLabel="Add Department"
                 />
-                <datalist id="user-department-suggestions">
-                  {COMMON_DEPARTMENTS.map((dept) => (
-                    <option key={dept} value={dept} />
-                  ))}
-                </datalist>
               </div>
 
               <div>
@@ -278,7 +315,7 @@ export default function AddUserModal({
                   <Phone className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
                   <input
                     type="tel"
-                    placeholder="+91 98765 43210"
+                    placeholder="+971 50 123 4567"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
                     className="w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
@@ -376,6 +413,17 @@ export default function AddUserModal({
         open={warningOpen}
         onClose={() => setWarningOpen(false)}
         message={warningMessage}
+      />
+
+      {/* Sub-modal with higher z-index (z-[70]) */}
+      <AddDepartmentModal
+        isOpen={isAddDepartmentOpen}
+        onClose={() => setIsAddDepartmentOpen(false)}
+        zIndex="z-[70]"
+        onSuccess={(newDept) => {
+          void fetchDepartments();
+          setDepartment(newDept.name);
+        }}
       />
     </>
   );

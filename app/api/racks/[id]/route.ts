@@ -69,9 +69,9 @@ export async function PUT(
     const { id } = await params;
     const user = await requireSessionUser();
 
-    if (user.role !== "ADMIN") {
+    if (user.role !== "ADMIN" && user.role !== "STAFF") {
       return Response.json(
-        { success: false, message: "Only admin can update racks" },
+        { success: false, message: "Unauthorized to update racks" },
         { status: 403 }
       );
     }

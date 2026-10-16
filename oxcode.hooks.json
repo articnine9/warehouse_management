@@ -1,0 +1,10 @@
+{
+  "PostToolUse": [
+    {
+      "matcher": "create_file|append_file|edit_file|multi_edit|apply_patch",
+      "command": "npx tsc --noEmit",
+      "timeoutMs": 60000,
+      "debounceMs": 3000
+    }
+  ]
+}

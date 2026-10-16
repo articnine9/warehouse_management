@@ -16,16 +16,16 @@ type InventoryItem = {
     price?: number;
     sellerName?: string;
   };
-  warehouseId: {
+  warehouseId?: {
     _id: string;
     name: string;
     code: string;
-  };
-  rackId: {
+  } | null;
+  rackId?: {
     _id: string;
     name: string;
     code: string;
-  };
+  } | null;
   quantity: number;
   status: "AVAILABLE" | "LOW_STOCK" | "OUT_OF_STOCK";
 };
@@ -233,8 +233,8 @@ export default function BillingPage() {
           inventoryId: currentSelectedInv._id,
           productName: currentSelectedInv.productId.name,
           sku: currentSelectedInv.productId.sku,
-          warehouseName: currentSelectedInv.warehouseId.name,
-          rackName: currentSelectedInv.rackId.name,
+          warehouseName: currentSelectedInv.warehouseId?.name || "Unassigned",
+          rackName: currentSelectedInv.rackId?.name || "No Rack",
           unitPrice,
           maxStock: currentSelectedInv.quantity,
           quantity: qty,
@@ -360,7 +360,7 @@ export default function BillingPage() {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. 9876543210"
+                  placeholder="e.g. +971 50 123 4567"
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
@@ -466,7 +466,7 @@ export default function BillingPage() {
                               </span>
                             </p>
                             <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                              <MapPin className="h-3 w-3" /> {inv.warehouseId.name} • Rack {inv.rackId.name} ({inv.rackId.code})
+                              <MapPin className="h-3 w-3" /> {inv.warehouseId?.name || "Unassigned"} • Rack {inv.rackId?.name || "No Rack"}{inv.rackId?.code ? ` (${inv.rackId.code})` : ""}
                             </p>
                           </div>
                           <div className="text-right">
@@ -501,7 +501,7 @@ export default function BillingPage() {
                     </span>
                     <span>•</span>
                     <span>
-                      Location: <b className="text-slate-700">{currentSelectedInv.warehouseId.code} ({currentSelectedInv.rackId.name})</b>
+                      Location: <b className="text-slate-700">{currentSelectedInv.warehouseId?.code || "N/A"}{currentSelectedInv.rackId?.name ? ` (${currentSelectedInv.rackId.name})` : ""}</b>
                     </span>
                   </div>
                 )}

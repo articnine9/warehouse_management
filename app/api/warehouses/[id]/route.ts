@@ -108,9 +108,9 @@ export async function PUT(
     const { id } = await params;
     const user = await requireSessionUser();
 
-    if (user.role !== "ADMIN") {
+    if (user.role !== "ADMIN" && user.role !== "STAFF") {
       return Response.json(
-        { success: false, message: "Only admin can update warehouses" },
+        { success: false, message: "Unauthorized to update warehouses" },
         { status: 403 }
       );
     }

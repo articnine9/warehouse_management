@@ -6,6 +6,7 @@ import Inventory from "@/models/Inventory";
 import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
 import StockMovement from "@/models/StockMovement";
+import Category from "@/models/Category";
 
 export async function PUT(
   request: Request,
@@ -16,9 +17,9 @@ export async function PUT(
     const { id } = await params;
     const user = await requireSessionUser();
 
-    if (user.role !== "ADMIN") {
+    if (user.role !== "ADMIN" && user.role !== "STAFF") {
       return Response.json(
-        { success: false, message: "Only admin can update products" },
+        { success: false, message: "Unauthorized to update products" },
         { status: 403 }
       );
     }
@@ -40,13 +41,29 @@ export async function PUT(
       return JSON.stringify(oldVal) !== JSON.stringify(newVal);
     });
 
+    if (body.category !== undefined && !String(body.category || "").trim()) {
+      return Response.json(
+        { success: false, message: "Category cannot be empty" },
+        { status: 400 }
+      );
+    }
+
+    let categoryId = body.categoryId;
+    const categoryName = body.category !== undefined ? String(body.category).trim() : oldProduct.category;
+    if (!categoryId && categoryName) {
+      const catDoc = await Category.findOne({
+        name: { $regex: new RegExp(`^${categoryName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") },
+      });
+      if (catDoc) categoryId = catDoc._id;
+    }
+
     const product = await Product.findByIdAndUpdate(
       id,
       {
         name: body.name,
         sku: body.sku,
-        category: body.category,
-        categoryId: body.categoryId,
+        category: categoryName,
+        categoryId: categoryId || oldProduct.categoryId,
         serviceIntervalMonths: body.serviceIntervalMonths !== undefined ? Number(body.serviceIntervalMonths) : 3,
         warrantyMonths: body.warrantyMonths !== undefined ? Number(body.warrantyMonths) : 12,
         serialNumber: body.serialNumber ? String(body.serialNumber).trim() : undefined,

@@ -116,9 +116,9 @@ export async function PUT(
     await connectDB();
     const sessionUser = await requireSessionUser();
 
-    if (sessionUser.role !== "ADMIN") {
+    if (sessionUser.role !== "ADMIN" && sessionUser.role !== "STAFF") {
       return Response.json(
-        { success: false, message: "Only administrators can update users" },
+        { success: false, message: "Unauthorized to update users" },
         { status: 403 }
       );
     }

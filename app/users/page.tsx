@@ -19,10 +19,12 @@ import {
   X,
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import { useAuth } from "@/app/components/AuthProvider";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import AddUserModal from "@/app/components/AddUserModal";
+import AddDepartmentModal from "@/app/components/AddDepartmentModal";
 
 type Warehouse = {
   _id: string;
@@ -58,12 +60,16 @@ const COMMON_DEPARTMENTS = [
 ];
 
 export default function UsersPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
   const [users, setUsers] = useState<UserItem[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [departments, setDepartments] = useState<{ _id: string; name: string; code?: string }[]>([]);
   const [fetching, setFetching] = useState(true);
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isAddDepartmentOpen, setIsAddDepartmentOpen] = useState(false);
   const [warningOpen, setWarningOpen] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
 
@@ -119,14 +125,30 @@ export default function UsersPage() {
     }
   }
 
+  async function fetchDepartments() {
+    try {
+      const res = await fetch("/api/departments", { cache: "no-store" });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setDepartments(data.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch departments:", err);
+    }
+  }
+
   useEffect(() => {
     void fetchUsers();
     void fetchWarehouses();
+    void fetchDepartments();
   }, []);
 
   // Compute departments list
   const departmentsList = useMemo(() => {
     const set = new Set<string>();
+    for (const d of departments) {
+      if (d.name) set.add(d.name);
+    }
     for (const u of users) {
       if (u.department) set.add(u.department);
     }
@@ -134,7 +156,18 @@ export default function UsersPage() {
       set.add(d);
     }
     return Array.from(set).sort();
-  }, [users]);
+  }, [departments, users]);
+
+  const departmentOptions: SelectOption[] = useMemo(() => {
+    return departmentsList.map((dept) => {
+      const match = departments.find((d) => d.name.toLowerCase() === dept.toLowerCase());
+      return {
+        value: dept,
+        label: dept,
+        subLabel: match?.code,
+      };
+    });
+  }, [departmentsList, departments]);
 
   // Warehouse options
   const warehouseOptions: SelectOption[] = useMemo(() => {
@@ -267,7 +300,7 @@ export default function UsersPage() {
   }
 
   return (
-    <ProtectedPage allowedRoles={["ADMIN"]}>
+    <ProtectedPage>
       <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
         {/* Top Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -538,14 +571,16 @@ export default function UsersPage() {
                             >
                               <Pencil className="h-4 w-4" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteUser(u)}
-                              className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
-                              title="Remove User"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => setDeleteUser(u)}
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                                title="Remove User"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -619,13 +654,15 @@ export default function UsersPage() {
                         >
                           <Pencil className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeleteUser(u)}
-                          className="rounded-lg p-1.5 text-red-600 hover:bg-red-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteUser(u)}
+                            className="rounded-lg p-1.5 text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -714,19 +751,14 @@ export default function UsersPage() {
                     <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                       Department <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      required
-                      list="edit-dept-suggestions"
+                    <SearchableSelect
+                      options={departmentOptions}
                       value={editDepartment}
-                      onChange={(e) => setEditDepartment(e.target.value)}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                      onChange={setEditDepartment}
+                      placeholder="Select or search department..."
+                      onAddNew={() => setIsAddDepartmentOpen(true)}
+                      addNewLabel="Add Department"
                     />
-                    <datalist id="edit-dept-suggestions">
-                      {COMMON_DEPARTMENTS.map((dept) => (
-                        <option key={dept} value={dept} />
-                      ))}
-                    </datalist>
                   </div>
 
                   <div>
@@ -748,6 +780,7 @@ export default function UsersPage() {
                     </label>
                     <input
                       type="tel"
+                      placeholder="+971 50 123 4567"
                       value={editPhone}
                       onChange={(e) => setEditPhone(e.target.value)}
                       className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
@@ -924,6 +957,17 @@ export default function UsersPage() {
           open={warningOpen}
           onClose={() => setWarningOpen(false)}
           message={warningMessage}
+        />
+
+        {/* Sub-modal for adding department */}
+        <AddDepartmentModal
+          isOpen={isAddDepartmentOpen}
+          onClose={() => setIsAddDepartmentOpen(false)}
+          zIndex="z-[70]"
+          onSuccess={(newDept) => {
+            void fetchDepartments();
+            setEditDepartment(newDept.name);
+          }}
         />
       </div>
     </ProtectedPage>

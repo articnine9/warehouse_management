@@ -50,6 +50,13 @@ export default function AddRackModal({
     }
   }, [defaultWarehouseId]);
 
+  // Auto-select the only warehouse when there's just one and no default
+  useEffect(() => {
+    if (warehouses.length === 1 && !warehouseId && !defaultWarehouseId) {
+      setWarehouseId(warehouses[0]._id);
+    }
+  }, [warehouses, warehouseId, defaultWarehouseId]);
+
   const warehouseOptions: SelectOption[] = useMemo(() => {
     return warehouses.map((w) => ({
       value: w._id,
