@@ -8,8 +8,8 @@ export interface IProduct {
     serviceIntervalMonths?: number;
     warrantyMonths?: number;
     serialNumber?: string;
-    sellerName: string;
-    price: number;
+    sellerName?: string;
+    price?: number;
     description?: string;
     status: "ACTIVE" | "INACTIVE";
     createdAt?: Date;
@@ -62,14 +62,14 @@ const productSchema = new Schema<IProduct>(
 
         sellerName: {
             type: String,
-            required: true,
             trim: true,
+            default: "",
         },
 
         price: {
             type: Number,
-            required: true,
             min: 0,
+            default: 0,
         },
 
         description: {
@@ -87,6 +87,9 @@ const productSchema = new Schema<IProduct>(
         timestamps: true,
     }
 );
+
+// Indexes for faster search and filtering
+productSchema.index({ name: "text", sku: "text" });
 
 const Product: Model<IProduct> =
     mongoose.models.Product ||

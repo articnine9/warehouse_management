@@ -339,8 +339,8 @@ export default function AddProductModal({
           serviceIntervalMonths: intervalVal,
           warrantyMonths: Math.max(0, Number(warrantyMonths) || 0),
           serialNumber: serialNumber.trim() || undefined,
-          sellerName: sellerName.trim(),
-          price: Number(price),
+          sellerName: sellerName.trim() || undefined,
+          price: price !== "" && !isNaN(Number(price)) ? Number(price) : 0,
           description: description.trim(),
           warehouseId,
           rackId,
@@ -521,11 +521,10 @@ export default function AddProductModal({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Seller Name <span className="text-red-500">*</span>
+                  Seller Name (Optional)
                 </label>
                 <input
                   type="text"
-                  required
                   placeholder="e.g. Dell India, Tech Corp"
                   value={sellerName}
                   onChange={(e) => setSellerName(e.target.value)}
@@ -535,13 +534,12 @@ export default function AddProductModal({
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Price (₹) <span className="text-red-500">*</span>
+                  Price (₹) (Optional)
                 </label>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
-                  required
                   placeholder="Price in ₹"
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}

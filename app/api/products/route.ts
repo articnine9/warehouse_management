@@ -453,8 +453,8 @@ export async function POST(request: Request) {
       serviceIntervalMonths: body.serviceIntervalMonths !== undefined ? Number(body.serviceIntervalMonths) : 3,
       warrantyMonths: body.warrantyMonths !== undefined ? Number(body.warrantyMonths) : 12,
       serialNumber: body.serialNumber ? String(body.serialNumber).trim() : undefined,
-      sellerName: body.sellerName,
-      price: Number(body.price),
+      sellerName: body.sellerName ? String(body.sellerName).trim() : "",
+      price: body.price !== undefined && body.price !== null && body.price !== "" && !isNaN(Number(body.price)) ? Number(body.price) : 0,
       description: body.description,
       status: body.status ?? "ACTIVE",
     });

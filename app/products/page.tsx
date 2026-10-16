@@ -340,8 +340,8 @@ export default function ProductsPage() {
           serviceIntervalMonths: intervalVal,
           warrantyMonths: Math.max(0, Number(editWarrantyMonths) || 0),
           serialNumber: editSerialNumber.trim() || undefined,
-          sellerName: editSellerName,
-          price: Number(editPrice),
+          sellerName: editSellerName.trim() || undefined,
+          price: editPrice !== "" && !isNaN(Number(editPrice)) ? Number(editPrice) : 0,
           description: editDescription,
           status: editStatus,
           locations: editLocations,
@@ -1015,21 +1015,20 @@ export default function ProductsPage() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
-                            Seller / Vendor <span className="text-red-500">*</span>
+                            Seller / Vendor (Optional)
                           </label>
                           <input
                             type="text"
                             placeholder="e.g. Dell India, Tech Corp"
                             value={editSellerName}
                             onChange={(e) => setEditSellerName(e.target.value)}
-                            required
                             className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-medium text-slate-800"
                           />
                         </div>
 
                         <div>
                           <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
-                            Unit Price (₹) <span className="text-red-500">*</span>
+                            Unit Price (₹) (Optional)
                           </label>
                           <input
                             type="number"
@@ -1038,7 +1037,6 @@ export default function ProductsPage() {
                             onChange={(e) => setEditPrice(e.target.value)}
                             min="0"
                             step="0.01"
-                            required
                             className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-bold text-slate-900"
                           />
                         </div>
