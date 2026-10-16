@@ -19,7 +19,8 @@ type Product = {
   price?: number;
 };
 type Warehouse = { _id: string; name: string; code: string };
-type Rack = { _id: string; name: string; code: string; warehouseId: { _id: string; name: string; code: string } };
+type Zone = { _id: string; name: string; code?: string; warehouseId?: any };
+type Rack = { _id: string; name: string; code: string; warehouseId: { _id: string; name: string; code: string }; zoneId?: any };
 type Inventory = {
   _id: string;
   productId: Product;
@@ -37,6 +38,7 @@ function InventoryContent() {
 
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [racks, setRacks] = useState<Rack[]>([]);
   const [inventory, setInventory] = useState<Inventory[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -87,6 +89,12 @@ function InventoryContent() {
     if (d.success) setWarehouses(d.data || []);
   }
 
+  async function fetchZones() {
+    const r = await fetch("/api/zones");
+    const d = await r.json();
+    if (d.success) setZones(d.data || []);
+  }
+
   async function fetchRacks() {
     const r = await fetch("/api/racks");
     const d = await r.json();
@@ -129,6 +137,7 @@ function InventoryContent() {
   useEffect(() => {
     void fetchProducts();
     void fetchWarehouses();
+    void fetchZones();
     void fetchRacks();
     void fetchInventory();
   }, []);
@@ -474,6 +483,7 @@ function InventoryContent() {
         onClose={() => setIsAddModalOpen(false)}
         products={products}
         warehouses={warehouses}
+        zones={zones}
         racks={racks}
         defaultProductId={productId}
         defaultWarehouseId={warehouseId}
@@ -482,6 +492,7 @@ function InventoryContent() {
         onSuccess={() => void fetchInventory()}
         onProductsChanged={() => void fetchProducts()}
         onWarehousesChanged={() => void fetchWarehouses()}
+        onZonesChanged={() => void fetchZones()}
         onRacksChanged={() => void fetchRacks()}
       />
 

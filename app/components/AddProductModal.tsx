@@ -1,11 +1,12 @@
 "use client";
 
 import { FormEvent, useState, useMemo, useEffect, useCallback } from "react";
-import { X, Tag, Warehouse as WarehouseIcon, Loader2, AlertTriangle, PackagePlus, ArrowRight, CheckCircle2 } from "lucide-react";
+import { X, Tag, Warehouse as WarehouseIcon, Loader2, AlertTriangle, PackagePlus, ArrowRight, CheckCircle2, Layers } from "lucide-react";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import WarningPopup from "@/app/components/WarningPopup";
 import AddCategoryModal from "@/app/components/AddCategoryModal";
 import AddWarehouseModal from "@/app/components/AddWarehouseModal";
+import AddZoneModal from "@/app/components/AddZoneModal";
 import AddRackModal from "@/app/components/AddRackModal";
 import { CUSTOM_INTERVAL_VALUE, normalizeIntervalMonths } from "@/lib/serviceCycle";
 
@@ -21,11 +22,19 @@ type WarehouseItem = {
   code: string;
 };
 
+type ZoneItem = {
+  _id: string;
+  name: string;
+  code?: string;
+  warehouseId?: string | { _id: string; name: string; code?: string };
+};
+
 type RackItem = {
   _id: string;
   name: string;
   code: string;
   warehouseId: string | { _id: string; name: string; code: string };
+  zoneId?: string | { _id: string; name: string; code?: string };
 };
 
 type AddProductModalProps = {
@@ -33,10 +42,12 @@ type AddProductModalProps = {
   onClose: () => void;
   categories: CategoryItem[];
   warehouses: WarehouseItem[];
+  zones?: ZoneItem[];
   racks: RackItem[];
   onSuccess?: (product: any) => void;
   onCategoriesChanged?: () => void;
   onWarehousesChanged?: () => void;
+  onZonesChanged?: () => void;
   onRacksChanged?: () => void;
   zIndex?: string;
 };
@@ -46,10 +57,12 @@ export default function AddProductModal({
   onClose,
   categories,
   warehouses,
+  zones = [],
   racks,
   onSuccess,
   onCategoriesChanged,
   onWarehousesChanged,
+  onZonesChanged,
   onRacksChanged,
   zIndex = "z-50",
 }: AddProductModalProps) {
@@ -64,8 +77,10 @@ export default function AddProductModal({
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
 
-  // Warehouse & Rack storage allocation
+  // Warehouse, Zone & Rack storage allocation
+  const [localZones, setLocalZones] = useState<ZoneItem[]>(zones || []);
   const [warehouseId, setWarehouseId] = useState("");
+  const [zoneId, setZoneId] = useState("");
   const [rackId, setRackId] = useState("");
   const [initialQuantity, setInitialQuantity] = useState("");
 
@@ -88,6 +103,7 @@ export default function AddProductModal({
   // Restock inputs for existing product
   const [restockQuantity, setRestockQuantity] = useState("1");
   const [restockWarehouseId, setRestockWarehouseId] = useState("");
+  const [restockZoneId, setRestockZoneId] = useState("");
   const [restockRackId, setRestockRackId] = useState("");
   const [restockLoading, setRestockLoading] = useState(false);
 
@@ -141,6 +157,7 @@ export default function AddProductModal({
     setDuplicateModalStep("RESTOCK");
     const defaultWh = warehouseId || (warehouses[0]?._id ?? "");
     setRestockWarehouseId(defaultWh);
+    setRestockZoneId(zoneId || "");
     setRestockRackId(rackId || "");
     setRestockQuantity(initialQuantity && Number(initialQuantity) > 0 ? initialQuantity : "1");
     setDuplicateModalOpen(true);
@@ -149,7 +166,33 @@ export default function AddProductModal({
   // Sub-modals for inline creation
   const [isAddCategoryOpen, setIsAddCategoryOpen] = useState(false);
   const [isAddWarehouseOpen, setIsAddWarehouseOpen] = useState(false);
+  const [isAddZoneOpen, setIsAddZoneOpen] = useState(false);
   const [isAddRackOpen, setIsAddRackOpen] = useState(false);
+
+  // Auto-fetch zones if not passed or after updates
+  const fetchLocalZones = useCallback(async () => {
+    try {
+      const res = await fetch("/api/zones");
+      const data = await res.json();
+      if (data.success && Array.isArray(data.data)) {
+        setLocalZones(data.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch zones in AddProductModal:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (zones && zones.length > 0) {
+      setLocalZones(zones);
+    } else if (isOpen) {
+      void fetchLocalZones();
+    }
+  }, [zones, isOpen, fetchLocalZones]);
+
+  const effectiveZones = useMemo(() => {
+    return zones && zones.length > 0 ? zones : localZones;
+  }, [zones, localZones]);
 
   // Auto-select the only warehouse when there's just one
   useEffect(() => {
@@ -182,37 +225,102 @@ export default function AddProductModal({
     }));
   }, [warehouses]);
 
+  // Main form: zones filtered by warehouse
+  const filteredZones = useMemo(() => {
+    if (!warehouseId) return [];
+    return effectiveZones.filter((z) => {
+      const wId = typeof z.warehouseId === "object" && z.warehouseId ? z.warehouseId._id : z.warehouseId;
+      return String(wId) === String(warehouseId);
+    });
+  }, [effectiveZones, warehouseId]);
+
+  const zoneOptions: SelectOption[] = useMemo(() => {
+    return filteredZones.map((z) => ({
+      value: z._id,
+      label: z.name,
+      subLabel: z.code || undefined,
+    }));
+  }, [filteredZones]);
+
+  // Auto-select zone when there is only one in the selected warehouse
+  useEffect(() => {
+    if (warehouseId && filteredZones.length === 1 && !zoneId) {
+      setZoneId(filteredZones[0]._id);
+    }
+  }, [warehouseId, filteredZones, zoneId]);
+
+  // Main form: racks filtered by warehouse AND zone
   const filteredRacks = useMemo(() => {
     if (!warehouseId) return [];
     return racks.filter((r) => {
       const wId = typeof r.warehouseId === "object" && r.warehouseId ? r.warehouseId._id : r.warehouseId;
-      return String(wId) === String(warehouseId);
+      if (String(wId) !== String(warehouseId)) return false;
+      if (zoneId) {
+        const zId = typeof r.zoneId === "object" && r.zoneId ? r.zoneId._id : r.zoneId;
+        return String(zId) === String(zoneId);
+      }
+      return true;
     });
-  }, [racks, warehouseId]);
+  }, [racks, warehouseId, zoneId]);
 
   const rackOptions: SelectOption[] = useMemo(() => {
-    return filteredRacks.map((r) => ({
-      value: r._id,
-      label: r.name,
-      subLabel: r.code,
-    }));
+    return filteredRacks.map((r) => {
+      const zoneName = typeof r.zoneId === "object" && r.zoneId ? r.zoneId.name : null;
+      return {
+        value: r._id,
+        label: r.name,
+        subLabel: zoneName ? `${r.code} • Zone: ${zoneName}` : r.code,
+      };
+    });
   }, [filteredRacks]);
 
-  // Options for restock rack dropdown
+  // Restock form: zones filtered by warehouse
+  const restockFilteredZones = useMemo(() => {
+    if (!restockWarehouseId) return [];
+    return effectiveZones.filter((z) => {
+      const wId = typeof z.warehouseId === "object" && z.warehouseId ? z.warehouseId._id : z.warehouseId;
+      return String(wId) === String(restockWarehouseId);
+    });
+  }, [effectiveZones, restockWarehouseId]);
+
+  const restockZoneOptions: SelectOption[] = useMemo(() => {
+    return restockFilteredZones.map((z) => ({
+      value: z._id,
+      label: z.name,
+      subLabel: z.code || undefined,
+    }));
+  }, [restockFilteredZones]);
+
+  // Auto-select restock zone when there is only one in selected warehouse
+  useEffect(() => {
+    if (restockWarehouseId && restockFilteredZones.length === 1 && !restockZoneId) {
+      setRestockZoneId(restockFilteredZones[0]._id);
+    }
+  }, [restockWarehouseId, restockFilteredZones, restockZoneId]);
+
+  // Restock form: racks filtered by warehouse AND zone
   const restockFilteredRacks = useMemo(() => {
     if (!restockWarehouseId) return [];
     return racks.filter((r) => {
       const wId = typeof r.warehouseId === "object" && r.warehouseId ? r.warehouseId._id : r.warehouseId;
-      return String(wId) === String(restockWarehouseId);
+      if (String(wId) !== String(restockWarehouseId)) return false;
+      if (restockZoneId) {
+        const zId = typeof r.zoneId === "object" && r.zoneId ? r.zoneId._id : r.zoneId;
+        return String(zId) === String(restockZoneId);
+      }
+      return true;
     });
-  }, [racks, restockWarehouseId]);
+  }, [racks, restockWarehouseId, restockZoneId]);
 
   const restockRackOptions: SelectOption[] = useMemo(() => {
-    return restockFilteredRacks.map((r) => ({
-      value: r._id,
-      label: r.name,
-      subLabel: r.code,
-    }));
+    return restockFilteredRacks.map((r) => {
+      const zoneName = typeof r.zoneId === "object" && r.zoneId ? r.zoneId.name : null;
+      return {
+        value: r._id,
+        label: r.name,
+        subLabel: zoneName ? `${r.code} • Zone: ${zoneName}` : r.code,
+      };
+    });
   }, [restockFilteredRacks]);
 
   async function handleRestockSubmit(e?: FormEvent) {
@@ -225,8 +333,14 @@ export default function AddProductModal({
       return;
     }
 
+    if (!restockZoneId) {
+      setWarningMessage("Please select a zone / room in the selected warehouse.");
+      setWarningOpen(true);
+      return;
+    }
+
     if (!restockRackId) {
-      setWarningMessage("Please select a rack in the selected warehouse.");
+      setWarningMessage("Please select a rack in the selected zone.");
       setWarningOpen(true);
       return;
     }
@@ -272,7 +386,11 @@ export default function AddProductModal({
       setPrice("");
       setDescription("");
       setWarehouseId("");
+      setZoneId("");
       setRackId("");
+      setRestockWarehouseId("");
+      setRestockZoneId("");
+      setRestockRackId("");
       setInitialQuantity("");
       setInlineExistingMatches([]);
 
@@ -306,8 +424,14 @@ export default function AddProductModal({
       return;
     }
 
+    if (!zoneId) {
+      setWarningMessage("Please select a zone / room in the selected warehouse.");
+      setWarningOpen(true);
+      return;
+    }
+
     if (!rackId) {
-      setWarningMessage("Please select a rack in the selected warehouse.");
+      setWarningMessage("Please select a rack in the selected zone.");
       setWarningOpen(true);
       return;
     }
@@ -356,6 +480,7 @@ export default function AddProductModal({
           setDuplicateModalStep("CONFIRM");
           const defaultWh = warehouseId || (warehouses[0]?._id ?? "");
           setRestockWarehouseId(defaultWh);
+          setRestockZoneId(zoneId || "");
           setRestockRackId(rackId || "");
           setRestockQuantity(initialQuantity && Number(initialQuantity) > 0 ? initialQuantity : "1");
           setDuplicateModalOpen(true);
@@ -378,7 +503,11 @@ export default function AddProductModal({
       setPrice("");
       setDescription("");
       setWarehouseId("");
+      setZoneId("");
       setRackId("");
+      setRestockWarehouseId("");
+      setRestockZoneId("");
+      setRestockRackId("");
       setInitialQuantity("");
       setInlineExistingMatches([]);
 
@@ -567,15 +696,16 @@ export default function AddProductModal({
                 <div>
                   <p className="text-xs font-bold text-blue-900 uppercase flex items-center gap-1.5">
                     <WarehouseIcon className="h-4 w-4 text-blue-600" />
-                    Storage Location & Initial Stock (Warehouse & Rack) <span className="text-red-500">*</span>
+                    Storage Location & Initial Stock (Warehouse ➔ Zone ➔ Rack) <span className="text-red-500">*</span>
                   </p>
                   <p className="text-[11px] text-blue-700/80">
-                    Assign this product to a warehouse & rack with initial inventory (Required).
+                    Assign this product to a warehouse, room/zone & rack with initial inventory (Required).
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {/* 1. Warehouse */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                     Warehouse <span className="text-red-500">*</span>
@@ -585,6 +715,7 @@ export default function AddProductModal({
                     value={warehouseId}
                     onChange={(val) => {
                       setWarehouseId(val);
+                      setZoneId("");
                       setRackId("");
                     }}
                     placeholder="Select warehouse..."
@@ -594,9 +725,36 @@ export default function AddProductModal({
                   />
                 </div>
 
+                {/* 2. Zone / Room */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                    Rack {warehouseId ? `(${filteredRacks.length})` : ""} <span className="text-red-500">*</span>
+                    Zone / Room {warehouseId ? `(${filteredZones.length})` : ""} <span className="text-red-500">*</span>
+                  </label>
+                  <SearchableSelect
+                    options={zoneOptions}
+                    value={zoneId}
+                    onChange={(val) => {
+                      setZoneId(val);
+                      setRackId("");
+                    }}
+                    placeholder={
+                      !warehouseId
+                        ? "Select warehouse first..."
+                        : filteredZones.length === 0
+                        ? "No zones - Click to add"
+                        : "Select zone / room..."
+                    }
+                    disabled={!warehouseId}
+                    onAddNew={warehouseId ? () => setIsAddZoneOpen(true) : undefined}
+                    addNewLabel="Add Zone"
+                    required
+                  />
+                </div>
+
+                {/* 3. Rack */}
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                    Rack {zoneId ? `(${filteredRacks.length})` : ""} <span className="text-red-500">*</span>
                   </label>
                   <SearchableSelect
                     options={rackOptions}
@@ -605,17 +763,20 @@ export default function AddProductModal({
                     placeholder={
                       !warehouseId
                         ? "Select warehouse first..."
+                        : !zoneId
+                        ? "Select zone first..."
                         : filteredRacks.length === 0
                         ? "No racks - Click to add"
                         : "Select rack..."
                     }
-                    disabled={!warehouseId}
-                    onAddNew={warehouseId ? () => setIsAddRackOpen(true) : undefined}
+                    disabled={!warehouseId || !zoneId}
+                    onAddNew={warehouseId && zoneId ? () => setIsAddRackOpen(true) : undefined}
                     addNewLabel="Add Rack"
                     required
                   />
                 </div>
 
+                {/* 4. Initial Stock */}
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                     Initial Stock (Qty) <span className="text-red-500">*</span>
@@ -626,7 +787,7 @@ export default function AddProductModal({
                     placeholder="e.g. 10"
                     value={initialQuantity}
                     onChange={(e) => setInitialQuantity(e.target.value)}
-                    disabled={!warehouseId || !rackId}
+                    disabled={!warehouseId || !zoneId || !rackId}
                     required
                     className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:bg-slate-100 disabled:text-slate-400"
                   />
@@ -656,7 +817,7 @@ export default function AddProductModal({
         </div>
       </div>
 
-      {/* Sub-modals with higher z-index (z-[70]) */}
+      {/* Sub-modals with higher z-index */}
       <AddCategoryModal
         isOpen={isAddCategoryOpen}
         onClose={() => setIsAddCategoryOpen(false)}
@@ -674,6 +835,21 @@ export default function AddProductModal({
         onSuccess={(newWh) => {
           if (onWarehousesChanged) onWarehousesChanged();
           setWarehouseId(newWh._id);
+          setZoneId("");
+          setRackId("");
+        }}
+      />
+
+      <AddZoneModal
+        isOpen={isAddZoneOpen}
+        onClose={() => setIsAddZoneOpen(false)}
+        warehouses={warehouses}
+        defaultWarehouseId={warehouseId}
+        zIndex="z-[75]"
+        onSuccess={(newZone) => {
+          if (onZonesChanged) onZonesChanged();
+          void fetchLocalZones();
+          setZoneId(newZone._id);
           setRackId("");
         }}
       />
@@ -682,9 +858,12 @@ export default function AddProductModal({
         isOpen={isAddRackOpen}
         onClose={() => setIsAddRackOpen(false)}
         warehouses={warehouses}
+        zones={effectiveZones}
         defaultWarehouseId={warehouseId}
-        zIndex="z-[70]"
+        defaultZoneId={zoneId}
+        zIndex="z-[75]"
         onAddNewWarehouse={() => setIsAddWarehouseOpen(true)}
+        onAddNewZone={() => setIsAddZoneOpen(true)}
         onSuccess={(newRk) => {
           if (onRacksChanged) onRacksChanged();
           setRackId(newRk._id);
@@ -794,6 +973,7 @@ export default function AddProductModal({
                       value={restockWarehouseId}
                       onChange={(val) => {
                         setRestockWarehouseId(val);
+                        setRestockZoneId("");
                         setRestockRackId("");
                       }}
                       placeholder="Select warehouse..."
@@ -802,7 +982,29 @@ export default function AddProductModal({
 
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                      Rack Location <span className="text-red-500">*</span>
+                      Zone / Room {restockWarehouseId ? `(${restockFilteredZones.length})` : ""} <span className="text-red-500">*</span>
+                    </label>
+                    <SearchableSelect
+                      options={restockZoneOptions}
+                      value={restockZoneId}
+                      onChange={(val) => {
+                        setRestockZoneId(val);
+                        setRestockRackId("");
+                      }}
+                      placeholder={
+                        !restockWarehouseId
+                          ? "Select warehouse first..."
+                          : restockFilteredZones.length === 0
+                          ? "No zones in this warehouse"
+                          : "Select zone / room..."
+                      }
+                      disabled={!restockWarehouseId}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                      Rack Location {restockZoneId ? `(${restockFilteredRacks.length})` : ""} <span className="text-red-500">*</span>
                     </label>
                     <SearchableSelect
                       options={restockRackOptions}
@@ -811,11 +1013,13 @@ export default function AddProductModal({
                       placeholder={
                         !restockWarehouseId
                           ? "Select warehouse first..."
+                          : !restockZoneId
+                          ? "Select zone first..."
                           : restockFilteredRacks.length === 0
-                          ? "No racks in this warehouse"
+                          ? "No racks in this zone"
                           : "Select rack..."
                       }
-                      disabled={!restockWarehouseId}
+                      disabled={!restockWarehouseId || !restockZoneId}
                     />
                   </div>
 
@@ -829,7 +1033,7 @@ export default function AddProductModal({
                     </button>
                     <button
                       type="submit"
-                      disabled={restockLoading || !restockWarehouseId || !restockRackId}
+                      disabled={restockLoading || !restockWarehouseId || !restockZoneId || !restockRackId}
                       className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50 transition"
                     >
                       {restockLoading ? (

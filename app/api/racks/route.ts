@@ -10,6 +10,7 @@ export async function GET() {
 
     const racks = await Rack.find()
       .populate("warehouseId", "name code")
+      .populate("zoneId", "name code")
       .sort({
         createdAt: -1,
       });
@@ -65,10 +66,25 @@ export async function POST(request: Request) {
 
     const body = await request.json();
 
+    if (!body.warehouseId) {
+      return Response.json(
+        { success: false, message: "Warehouse is required for rack" },
+        { status: 400 }
+      );
+    }
+
+    if (!body.zoneId) {
+      return Response.json(
+        { success: false, message: "Zone is required for rack. Every rack must belong to a zone." },
+        { status: 400 }
+      );
+    }
+
     const rack = await Rack.create({
       name: body.name,
       code: body.code,
       warehouseId: body.warehouseId,
+      zoneId: body.zoneId,
       status: body.status ?? "ACTIVE",
     });
 

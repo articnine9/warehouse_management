@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
 import Rack from "@/models/Rack";
 import Warehouse from "@/models/Warehouse";
+import Zone from "@/models/Zone";
 import Inventory from "@/models/Inventory";
 import Product from "@/models/Product";
 import StockMovement from "@/models/StockMovement";
@@ -20,8 +21,11 @@ export async function GET(
     // Ensure models are registered for populate
     void Product;
     void Warehouse;
+    void Zone;
 
-    const rack = await Rack.findById(id).populate("warehouseId", "name code address");
+    const rack = await Rack.findById(id)
+      .populate("warehouseId", "name code address")
+      .populate("zoneId", "name code");
     if (!rack) {
       return Response.json(
         { success: false, message: "Rack not found" },
@@ -88,6 +92,12 @@ export async function PUT(
 
     const oldName = oldRack.name;
     const newName = body.name ? String(body.name).trim() : oldName;
+    if (body.zoneId === "" || body.zoneId === null) {
+      return Response.json(
+        { success: false, message: "Zone is required for rack" },
+        { status: 400 }
+      );
+    }
 
     const rack = await Rack.findByIdAndUpdate(
       id,
@@ -95,10 +105,12 @@ export async function PUT(
         name: newName,
         code: body.code ? String(body.code).trim() : oldRack.code,
         warehouseId: body.warehouseId || oldRack.warehouseId,
+        zoneId: body.zoneId || oldRack.zoneId,
         status: body.status || oldRack.status,
       },
       { new: true }
-    ).populate("warehouseId", "name code");
+    ).populate("warehouseId", "name code")
+     .populate("zoneId", "name code");
 
     if (!rack) {
       return Response.json(

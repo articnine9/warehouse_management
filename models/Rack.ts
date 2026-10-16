@@ -4,6 +4,7 @@ export interface IRack {
     name: string;
     code: string;
     warehouseId: mongoose.Types.ObjectId;
+    zoneId: mongoose.Types.ObjectId;
     status: "ACTIVE" | "INACTIVE";
 }
 
@@ -28,6 +29,12 @@ const rackSchema = new Schema<IRack>(
             required: true,
         },
 
+        zoneId: {
+            type: Schema.Types.ObjectId,
+            ref: "Zone",
+            required: [true, "Zone is required for rack"],
+        },
+
         status: {
             type: String,
             enum: ["ACTIVE", "INACTIVE"],
@@ -38,6 +45,11 @@ const rackSchema = new Schema<IRack>(
         timestamps: true,
     }
 );
+
+// Reset cached model in development so schema updates take effect
+if (mongoose.models.Rack) {
+    delete mongoose.models.Rack;
+}
 
 const Rack: Model<IRack> =
     mongoose.models.Rack ||

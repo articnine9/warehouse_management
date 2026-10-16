@@ -1,13 +1,14 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { Tag, Box, Eye, Warehouse as WarehouseIcon, Plus } from "lucide-react";
+import { Tag, Box, Eye, Warehouse as WarehouseIcon, Plus, Layers } from "lucide-react";
 import { useRouter } from "next/navigation";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import { useAuth } from "@/app/components/AuthProvider";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 import WarehouseDetailsModal from "@/app/components/WarehouseDetailsModal";
+import ZoneDetailsModal from "@/app/components/ZoneDetailsModal";
 import RackDetailsModal from "@/app/components/RackDetailsModal";
 import AddWarehouseModal from "@/app/components/AddWarehouseModal";
 
@@ -20,6 +21,7 @@ type Warehouse = {
   productCount?: number;
   totalUnits?: number;
   rackCount?: number;
+  zoneCount?: number;
 };
 
 export default function WarehousesPage() {
@@ -34,6 +36,7 @@ export default function WarehousesPage() {
 
   // Modal inspection state
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [selectedRackId, setSelectedRackId] = useState<string | null>(null);
 
   // Pagination state
@@ -229,6 +232,7 @@ export default function WarehousesPage() {
                     <th className="px-5 py-3">Warehouse Name</th>
                     <th className="px-5 py-3">Code</th>
                     <th className="px-5 py-3">Address</th>
+                    <th className="px-5 py-3">Zones</th>
                     <th className="px-5 py-3">Racks</th>
                     <th className="px-5 py-3">Inventory Products</th>
                     <th className="px-5 py-3">Status</th>
@@ -254,6 +258,14 @@ export default function WarehousesPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3 text-slate-500 text-xs">{warehouse.address || "-"}</td>
+                      <td className="px-5 py-3">
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-bold text-violet-700"
+                          title="Total zones in this warehouse"
+                        >
+                          <Layers className="h-3 w-3 text-violet-500" /> {warehouse.zoneCount ?? 0} Zones
+                        </span>
+                      </td>
                       <td className="px-5 py-3">
                         <span
                           className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700"
@@ -519,8 +531,26 @@ export default function WarehousesPage() {
         onSelectRack={(rackId) => {
           setSelectedRackId(rackId);
         }}
+        onSelectZone={(zoneId) => {
+          setSelectedZoneId(zoneId);
+        }}
         onAddRack={() => {
           router.push("/racks");
+        }}
+        onAddZone={() => {
+          router.push("/zones");
+        }}
+      />
+
+      {/* Zone Details Inspection Modal */}
+      <ZoneDetailsModal
+        zoneId={selectedZoneId}
+        onClose={() => setSelectedZoneId(null)}
+        onSelectRack={(rackId) => {
+          setSelectedRackId(rackId);
+        }}
+        onSelectWarehouse={(whId) => {
+          setSelectedWarehouseId(whId);
         }}
       />
 
@@ -531,6 +561,10 @@ export default function WarehousesPage() {
         onSelectWarehouse={(whId) => {
           setSelectedRackId(null);
           setSelectedWarehouseId(whId);
+        }}
+        onSelectZone={(zId) => {
+          setSelectedRackId(null);
+          setSelectedZoneId(zId);
         }}
       />
 

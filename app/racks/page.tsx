@@ -1,16 +1,18 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { Tag, Box, Eye, Warehouse as WarehouseIcon, Plus } from "lucide-react";
+import { Tag, Box, Eye, Warehouse as WarehouseIcon, Layers, Plus } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import { useAuth } from "@/app/components/AuthProvider";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 import WarehouseDetailsModal from "@/app/components/WarehouseDetailsModal";
+import ZoneDetailsModal from "@/app/components/ZoneDetailsModal";
 import RackDetailsModal from "@/app/components/RackDetailsModal";
 import AddRackModal from "@/app/components/AddRackModal";
 import AddWarehouseModal from "@/app/components/AddWarehouseModal";
+import AddZoneModal from "@/app/components/AddZoneModal";
 
 type Warehouse = {
   _id: string;
@@ -27,8 +29,24 @@ type Rack = {
     name: string;
     code: string;
   };
+  zoneId?: {
+    _id: string;
+    name: string;
+    code?: string;
+  } | null;
   status: "ACTIVE" | "INACTIVE";
   productCount?: number;
+};
+
+type Zone = {
+  _id: string;
+  name: string;
+  code?: string;
+  warehouseId: {
+    _id: string;
+    name: string;
+    code: string;
+  };
 };
 
 export default function RacksPage() {
@@ -36,15 +54,19 @@ export default function RacksPage() {
   const isAdmin = user?.role === "ADMIN";
   const [racks, setRacks] = useState<Rack[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isAddWarehouseModalOpen, setIsAddWarehouseModalOpen] = useState(false);
+  const [isAddZoneModalOpen, setIsAddZoneModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [filterZoneId, setFilterZoneId] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
 
   // Modal inspection state
   const [selectedRackId, setSelectedRackId] = useState<string | null>(null);
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | null>(null);
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -54,6 +76,7 @@ export default function RacksPage() {
   const [editName, setEditName] = useState("");
   const [editCode, setEditCode] = useState("");
   const [editWarehouseId, setEditWarehouseId] = useState("");
+  const [editZoneId, setEditZoneId] = useState("");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [editLoading, setEditLoading] = useState(false);
 
@@ -89,7 +112,18 @@ export default function RacksPage() {
   useEffect(() => {
     void fetchRacks();
     void fetchWarehouses();
+    void fetchZones();
   }, []);
+
+  async function fetchZones() {
+    try {
+      const response = await fetch("/api/zones");
+      const result = await response.json();
+      if (result.success) setZones(result.data || []);
+    } catch (error) {
+      console.error("Failed to fetch zones:", error);
+    }
+  }
 
   const warehouseOptions: SelectOption[] = useMemo(() => {
     return warehouses.map((w) => ({
@@ -104,6 +138,7 @@ export default function RacksPage() {
     setEditName(rack.name);
     setEditCode(rack.code);
     setEditWarehouseId(rack.warehouseId?._id || "");
+    setEditZoneId(rack.zoneId?._id || "");
     setEditStatus(rack.status);
   }
 
@@ -111,6 +146,11 @@ export default function RacksPage() {
     event.preventDefault();
     if (!editId || !editWarehouseId) {
       setWarningMessage("Please select a warehouse");
+      setWarningOpen(true);
+      return;
+    }
+    if (!editZoneId) {
+      setWarningMessage("Please select a zone for this rack. Every rack must belong to a zone.");
       setWarningOpen(true);
       return;
     }
@@ -123,6 +163,7 @@ export default function RacksPage() {
           name: editName,
           code: editCode,
           warehouseId: editWarehouseId,
+          zoneId: editZoneId,
           status: editStatus,
         }),
       });
@@ -166,20 +207,52 @@ export default function RacksPage() {
   }
 
   const filteredRacks = useMemo(() => {
-    if (!searchQuery.trim()) return racks;
-    const q = searchQuery.toLowerCase().trim();
-    return racks.filter(
-      (r) =>
-        r.name.toLowerCase().includes(q) ||
-        r.code.toLowerCase().includes(q) ||
-        (r.warehouseId?.name && r.warehouseId.name.toLowerCase().includes(q)) ||
-        (r.warehouseId?.code && r.warehouseId.code.toLowerCase().includes(q))
-    );
-  }, [racks, searchQuery]);
+    let result = racks;
+    // Filter by zone
+    if (filterZoneId) {
+      result = result.filter((r) => r.zoneId?._id === filterZoneId);
+    }
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      result = result.filter(
+        (r) =>
+          r.name.toLowerCase().includes(q) ||
+          r.code.toLowerCase().includes(q) ||
+          (r.warehouseId?.name && r.warehouseId.name.toLowerCase().includes(q)) ||
+          (r.warehouseId?.code && r.warehouseId.code.toLowerCase().includes(q)) ||
+          (r.zoneId?.name && r.zoneId.name.toLowerCase().includes(q)) ||
+          (r.zoneId?.code && r.zoneId.code.toLowerCase().includes(q))
+      );
+    }
+    return result;
+  }, [racks, searchQuery, filterZoneId]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, pageSize]);
+  }, [searchQuery, pageSize, filterZoneId]);
+
+  const zoneOptions: SelectOption[] = useMemo(() => {
+    return zones.map((z) => ({
+      value: z._id,
+      label: z.name,
+      subLabel: z.code || undefined,
+    }));
+  }, [zones]);
+
+  const editZoneOptions: SelectOption[] = useMemo(() => {
+    const list = editWarehouseId
+      ? zones.filter((z) => {
+          const zWhId = typeof z.warehouseId === "object" ? z.warehouseId?._id : z.warehouseId;
+          return !zWhId || zWhId === editWarehouseId;
+        })
+      : zones;
+    return list.map((z) => ({
+      value: z._id,
+      label: z.name,
+      subLabel: z.code || undefined,
+    }));
+  }, [zones, editWarehouseId]);
 
   const paginatedRacks = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
@@ -210,7 +283,9 @@ export default function RacksPage() {
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
           warehouses={warehouses}
+          zones={zones}
           onAddNewWarehouse={() => setIsAddWarehouseModalOpen(true)}
+          onAddNewZone={() => setIsAddZoneModalOpen(true)}
           onSuccess={() => void fetchRacks()}
         />
 
@@ -222,6 +297,15 @@ export default function RacksPage() {
           onSuccess={() => void fetchWarehouses()}
         />
 
+        {/* Nested modal for creating zone on the fly */}
+        <AddZoneModal
+          isOpen={isAddZoneModalOpen}
+          onClose={() => setIsAddZoneModalOpen(false)}
+          warehouses={warehouses}
+          zIndex="z-[70]"
+          onSuccess={() => void fetchZones()}
+        />
+
         {/* Rack list */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           <div className="border-b border-slate-100 px-4 py-4 md:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -229,13 +313,31 @@ export default function RacksPage() {
               Rack List ({filteredRacks.length})
             </h2>
 
-            <input
-              type="text"
-              placeholder="Search rack name, code, warehouse..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-64"
-            />
+            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+              {/* Zone filter */}
+              {zones.length > 0 && (
+                <select
+                  value={filterZoneId}
+                  onChange={(e) => setFilterZoneId(e.target.value)}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-violet-500 w-full sm:w-auto"
+                >
+                  <option value="">All Zones</option>
+                  {zones.map((z) => (
+                    <option key={z._id} value={z._id}>
+                      {z.name}{z.code ? ` (${z.code})` : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              <input
+                type="text"
+                placeholder="Search rack name, code, warehouse, zone..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-64"
+              />
+            </div>
           </div>
 
           {/* Loading */}
@@ -258,6 +360,7 @@ export default function RacksPage() {
                     <th className="px-5 py-3">Rack Name</th>
                     <th className="px-5 py-3">Code</th>
                     <th className="px-5 py-3">Warehouse</th>
+                    <th className="px-5 py-3">Zone</th>
                     <th className="px-5 py-3">Stored Products</th>
                     <th className="px-5 py-3">Status</th>
                     <th className="px-5 py-3 text-right">Actions</th>
@@ -298,6 +401,27 @@ export default function RacksPage() {
                           </button>
                         ) : (
                           <span className="text-slate-400 text-xs">-</span>
+                        )}
+                      </td>
+                      <td className="px-5 py-3">
+                        {rack.zoneId?._id ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (rack.zoneId?._id) setSelectedZoneId(rack.zoneId._id);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-full bg-violet-50 hover:bg-violet-100 border border-violet-200 px-2.5 py-0.5 text-xs font-semibold text-violet-700 transition cursor-pointer"
+                            title="Click to view Zone details & racks"
+                          >
+                            <Layers className="h-3 w-3 text-violet-500 shrink-0" />
+                            <span>{rack.zoneId.name}</span>
+                            {rack.zoneId.code && (
+                              <span className="font-mono text-violet-400 text-[10px]">({rack.zoneId.code})</span>
+                            )}
+                          </button>
+                        ) : (
+                          <span className="text-slate-400 text-xs italic">Unassigned</span>
                         )}
                       </td>
                       <td className="px-5 py-3">
@@ -402,6 +526,19 @@ export default function RacksPage() {
                       <span>{rack.warehouseId.name} ({rack.warehouseId.code})</span>
                     </button>
                   )}
+                  {rack.zoneId && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (rack.zoneId?._id) setSelectedZoneId(rack.zoneId._id);
+                      }}
+                      className="text-xs text-violet-700 hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <Layers className="h-3 w-3 text-violet-500" />
+                      <span>Zone: {rack.zoneId.name}{rack.zoneId.code ? ` (${rack.zoneId.code})` : ""}</span>
+                    </button>
+                  )}
                   <div className="pt-1">
                     <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-bold text-blue-700">
                       <Tag className="h-3 w-3" /> {rack.productCount ?? 0} Products
@@ -499,10 +636,44 @@ export default function RacksPage() {
                   <SearchableSelect
                     options={warehouseOptions}
                     value={editWarehouseId}
-                    onChange={setEditWarehouseId}
+                    onChange={(val) => {
+                      setEditWarehouseId(val);
+                      if (editZoneId) {
+                        const z = zones.find((item) => item._id === editZoneId);
+                        const zWhId = typeof z?.warehouseId === "object" ? z?.warehouseId?._id : z?.warehouseId;
+                        if (zWhId && zWhId !== val) {
+                          setEditZoneId("");
+                        }
+                      }
+                    }}
                     placeholder="Search warehouse..."
                     onAddNew={() => setIsAddWarehouseModalOpen(true)}
                     addNewLabel="Add Warehouse"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-600 uppercase">
+                      Zone / Room <span className="text-red-500">*</span>
+                    </label>
+                    <span className="text-[10px] text-slate-400">e.g. Zone A, Cold Room</span>
+                  </div>
+                  <SearchableSelect
+                    options={editZoneOptions}
+                    value={editZoneId}
+                    onChange={(val) => {
+                      setEditZoneId(val);
+                      if (val && !editWarehouseId) {
+                        const found = zones.find((z) => z._id === val);
+                        const zWhId = typeof found?.warehouseId === "object" ? found?.warehouseId?._id : found?.warehouseId;
+                        if (zWhId) setEditWarehouseId(zWhId);
+                      }
+                    }}
+                    placeholder={editWarehouseId ? "Select zone..." : "Select zone (or pick warehouse first)..."}
+                    onAddNew={() => setIsAddZoneModalOpen(true)}
+                    addNewLabel="Add Zone"
                     required
                   />
                 </div>
@@ -580,6 +751,10 @@ export default function RacksPage() {
           setSelectedRackId(null);
           setSelectedWarehouseId(whId);
         }}
+        onSelectZone={(zId) => {
+          setSelectedRackId(null);
+          setSelectedZoneId(zId);
+        }}
       />
 
       {/* Warehouse Details Inspection Modal */}
@@ -589,6 +764,20 @@ export default function RacksPage() {
         onSelectRack={(rkId) => {
           setSelectedWarehouseId(null);
           setSelectedRackId(rkId);
+        }}
+      />
+
+      {/* Zone Details Inspection Modal */}
+      <ZoneDetailsModal
+        zoneId={selectedZoneId}
+        onClose={() => setSelectedZoneId(null)}
+        onSelectRack={(rkId) => {
+          setSelectedZoneId(null);
+          setSelectedRackId(rkId);
+        }}
+        onSelectWarehouse={(whId) => {
+          setSelectedZoneId(null);
+          setSelectedWarehouseId(whId);
         }}
       />
 

@@ -55,11 +55,19 @@ type Warehouse = {
   code: string;
 };
 
+type Zone = {
+  _id: string;
+  name: string;
+  code?: string;
+  warehouseId?: string | { _id: string; name: string; code?: string };
+};
+
 type Rack = {
   _id: string;
   name: string;
   code: string;
   warehouseId: string | { _id: string; name: string; code: string };
+  zoneId?: string | { _id: string; name: string; code?: string };
 };
 
 export default function ProductsPage() {
@@ -68,6 +76,7 @@ export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
+  const [zones, setZones] = useState<Zone[]>([]);
   const [racks, setRacks] = useState<Rack[]>([]);
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -93,6 +102,7 @@ export default function ProductsPage() {
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [editLocations, setEditLocations] = useState<ProductLocation[]>([]);
   const [newLocWarehouseId, setNewLocWarehouseId] = useState("");
+  const [newLocZoneId, setNewLocZoneId] = useState("");
   const [newLocRackId, setNewLocRackId] = useState("");
   const [newLocQuantity, setNewLocQuantity] = useState("1");
   const [editLoading, setEditLoading] = useState(false);
@@ -145,6 +155,18 @@ export default function ProductsPage() {
     }
   }
 
+  async function fetchZones() {
+    try {
+      const response = await fetch("/api/zones");
+      const result = await response.json();
+      if (result.success) {
+        setZones(result.data || []);
+      }
+    } catch (error) {
+      console.error("Failed to fetch zones:", error);
+    }
+  }
+
   async function fetchRacks() {
     try {
       const response = await fetch("/api/racks");
@@ -161,6 +183,7 @@ export default function ProductsPage() {
     void fetchProducts();
     void fetchCategories();
     void fetchWarehouses();
+    void fetchZones();
     void fetchRacks();
 
     if (typeof window !== "undefined") {
@@ -210,13 +233,33 @@ export default function ProductsPage() {
   }, [warehouses]);
 
 
+  const availableZonesForNewLoc = useMemo(() => {
+    if (!newLocWarehouseId) return [];
+    return zones.filter((z) => {
+      const whId = typeof z.warehouseId === "object" && z.warehouseId ? z.warehouseId._id : z.warehouseId;
+      return String(whId) === String(newLocWarehouseId);
+    });
+  }, [zones, newLocWarehouseId]);
+
+  // Auto-select zone when there's only one in the selected warehouse
+  useEffect(() => {
+    if (newLocWarehouseId && availableZonesForNewLoc.length === 1 && !newLocZoneId) {
+      setNewLocZoneId(availableZonesForNewLoc[0]._id);
+    }
+  }, [newLocWarehouseId, availableZonesForNewLoc, newLocZoneId]);
+
   const availableRacksForNewLoc = useMemo(() => {
     if (!newLocWarehouseId) return [];
     return racks.filter((r) => {
       const whId = typeof r.warehouseId === "object" ? (r.warehouseId as any)?._id : r.warehouseId;
-      return whId === newLocWarehouseId;
+      if (String(whId) !== String(newLocWarehouseId)) return false;
+      if (newLocZoneId) {
+        const zId = typeof r.zoneId === "object" ? (r.zoneId as any)?._id : r.zoneId;
+        return String(zId) === String(newLocZoneId);
+      }
+      return true;
     });
-  }, [racks, newLocWarehouseId]);
+  }, [racks, newLocWarehouseId, newLocZoneId]);
 
   const totalEditStock = useMemo(() => {
     return editLocations.reduce((sum, l) => sum + (Number(l.quantity) || 0), 0);
@@ -237,8 +280,13 @@ export default function ProductsPage() {
       setWarningOpen(true);
       return;
     }
+    if (!newLocZoneId) {
+      setWarningMessage("Please select a zone / room in the selected warehouse");
+      setWarningOpen(true);
+      return;
+    }
     if (!newLocRackId) {
-      setWarningMessage("Please select a rack in the selected warehouse");
+      setWarningMessage("Please select a rack in the selected zone");
       setWarningOpen(true);
       return;
     }
@@ -562,10 +610,12 @@ export default function ProductsPage() {
           onClose={() => setIsAddModalOpen(false)}
           categories={categories}
           warehouses={warehouses}
+          zones={zones}
           racks={racks}
           onSuccess={() => void fetchProducts()}
           onCategoriesChanged={() => void fetchCategories()}
           onWarehousesChanged={() => void fetchWarehouses()}
+          onZonesChanged={() => void fetchZones()}
           onRacksChanged={() => void fetchRacks()}
         />
 
@@ -1202,11 +1252,12 @@ export default function ProductsPage() {
                         </span>
 
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                          <div className="sm:col-span-5">
+                          <div className="sm:col-span-4">
                             <select
                               value={newLocWarehouseId}
                               onChange={(e) => {
                                 setNewLocWarehouseId(e.target.value);
+                                setNewLocZoneId("");
                                 setNewLocRackId("");
                               }}
                               className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 font-medium"
@@ -1220,15 +1271,46 @@ export default function ProductsPage() {
                             </select>
                           </div>
 
-                          <div className="sm:col-span-4">
+                          <div className="sm:col-span-3">
                             <select
-                              value={newLocRackId}
-                              onChange={(e) => setNewLocRackId(e.target.value)}
+                              value={newLocZoneId}
+                              onChange={(e) => {
+                                setNewLocZoneId(e.target.value);
+                                setNewLocRackId("");
+                              }}
                               disabled={!newLocWarehouseId}
                               className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 font-medium disabled:opacity-50"
                             >
                               <option value="">
-                                {newLocWarehouseId ? "Select Rack..." : "Choose Warehouse First"}
+                                {!newLocWarehouseId
+                                  ? "Warehouse First"
+                                  : availableZonesForNewLoc.length === 0
+                                  ? "No Zones"
+                                  : "Select Zone..."}
+                              </option>
+                              {availableZonesForNewLoc.map((z) => (
+                                <option key={z._id} value={z._id}>
+                                  {z.name} {z.code ? `(${z.code})` : ""}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          <div className="sm:col-span-3">
+                            <select
+                              value={newLocRackId}
+                              onChange={(e) => setNewLocRackId(e.target.value)}
+                              disabled={!newLocWarehouseId || !newLocZoneId}
+                              className="w-full px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-700 font-medium disabled:opacity-50"
+                            >
+                              <option value="">
+                                {!newLocWarehouseId
+                                  ? "Warehouse First"
+                                  : !newLocZoneId
+                                  ? "Select Zone First"
+                                  : availableRacksForNewLoc.length === 0
+                                  ? "No Racks in Zone"
+                                  : "Select Rack..."}
                               </option>
                               {availableRacksForNewLoc.map((r) => (
                                 <option key={r._id} value={r._id}>
@@ -1238,20 +1320,20 @@ export default function ProductsPage() {
                             </select>
                           </div>
 
-                          <div className="sm:col-span-3 flex items-center gap-1.5">
+                          <div className="sm:col-span-2 flex items-center gap-1.5">
                             <input
                               type="number"
                               min="1"
                               placeholder="Qty"
                               value={newLocQuantity}
                               onChange={(e) => setNewLocQuantity(e.target.value)}
-                              className="w-16 px-2 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-900 font-bold text-center"
+                              className="w-14 px-1.5 py-2 text-xs rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 text-slate-900 font-bold text-center"
                             />
                             <button
                               type="button"
                               onClick={handleAddNewLocation}
-                              disabled={!newLocWarehouseId || !newLocRackId}
-                              className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold text-xs py-2 px-3 transition shadow-xs cursor-pointer flex items-center justify-center gap-1"
+                              disabled={!newLocWarehouseId || !newLocZoneId || !newLocRackId}
+                              className="flex-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 text-white font-bold text-xs py-2 px-2.5 transition shadow-xs cursor-pointer flex items-center justify-center gap-1"
                             >
                               <Plus className="h-3.5 w-3.5" />
                               <span>Add</span>

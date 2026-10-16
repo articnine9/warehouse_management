@@ -11,6 +11,7 @@ import {
   Loader2,
   AlertTriangle,
   ArrowRight,
+  Layers,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -25,6 +26,11 @@ export type RackDetailsData = {
       name: string;
       code: string;
       address?: string;
+    };
+    zoneId?: {
+      _id: string;
+      name: string;
+      code?: string;
     };
     createdAt: string;
   };
@@ -59,6 +65,7 @@ interface RackDetailsModalProps {
   onClose: () => void;
   onEditRack?: (rack: any) => void;
   onSelectWarehouse?: (warehouseId: string) => void;
+  onSelectZone?: (zoneId: string) => void;
 }
 
 export default function RackDetailsModal({
@@ -66,6 +73,7 @@ export default function RackDetailsModal({
   onClose,
   onEditRack,
   onSelectWarehouse,
+  onSelectZone,
 }: RackDetailsModalProps) {
   const [data, setData] = useState<RackDetailsData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -144,6 +152,28 @@ export default function RackDetailsModal({
                   ) : (
                     <span className="font-semibold text-slate-700">
                       {data.rack.warehouseId.name} ({data.rack.warehouseId.code})
+                    </span>
+                  )}
+                </div>
+              )}
+              {data?.rack.zoneId && (
+                <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <Layers className="h-3.5 w-3.5 text-violet-500" />
+                  <span>Zone:</span>
+                  {onSelectZone ? (
+                    <button
+                      type="button"
+                      onClick={() => onSelectZone(data.rack.zoneId!._id)}
+                      className="font-bold text-violet-600 hover:underline inline-flex items-center gap-1"
+                    >
+                      <span>{data.rack.zoneId.name}</span>
+                      {data.rack.zoneId.code && (
+                        <span className="text-violet-400 font-mono text-[10px]">({data.rack.zoneId.code})</span>
+                      )}
+                    </button>
+                  ) : (
+                    <span className="font-semibold text-slate-700">
+                      {data.rack.zoneId.name}{data.rack.zoneId.code ? ` (${data.rack.zoneId.code})` : ""}
                     </span>
                   )}
                 </div>

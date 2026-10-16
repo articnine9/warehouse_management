@@ -11,20 +11,31 @@ type WarehouseItem = {
   code: string;
 };
 
+type ZoneItem = {
+  _id: string;
+  name: string;
+  code?: string;
+  warehouseId?: any;
+};
+
 type RackResult = {
   _id: string;
   name: string;
   code: string;
   warehouseId: any;
+  zoneId?: any;
 };
 
 type AddRackModalProps = {
   isOpen: boolean;
   onClose: () => void;
   warehouses: WarehouseItem[];
+  zones?: ZoneItem[];
   defaultWarehouseId?: string;
+  defaultZoneId?: string;
   onSuccess?: (rack: RackResult) => void;
   onAddNewWarehouse?: () => void;
+  onAddNewZone?: () => void;
   zIndex?: string;
 };
 
@@ -32,12 +43,16 @@ export default function AddRackModal({
   isOpen,
   onClose,
   warehouses,
+  zones = [],
   defaultWarehouseId = "",
+  defaultZoneId = "",
   onSuccess,
   onAddNewWarehouse,
+  onAddNewZone,
   zIndex = "z-50",
 }: AddRackModalProps) {
   const [warehouseId, setWarehouseId] = useState(defaultWarehouseId);
+  const [zoneId, setZoneId] = useState(defaultZoneId);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
@@ -49,6 +64,12 @@ export default function AddRackModal({
       setWarehouseId(defaultWarehouseId);
     }
   }, [defaultWarehouseId]);
+
+  useEffect(() => {
+    if (defaultZoneId) {
+      setZoneId(defaultZoneId);
+    }
+  }, [defaultZoneId]);
 
   // Auto-select the only warehouse when there's just one and no default
   useEffect(() => {
@@ -65,12 +86,34 @@ export default function AddRackModal({
     }));
   }, [warehouses]);
 
+  const filteredZones = useMemo(() => {
+    if (!zones || zones.length === 0) return [];
+    if (!warehouseId) return zones;
+    return zones.filter((z) => {
+      const zWhId = typeof z.warehouseId === "object" ? z.warehouseId?._id : z.warehouseId;
+      return !zWhId || zWhId === warehouseId;
+    });
+  }, [zones, warehouseId]);
+
+  const zoneOptions: SelectOption[] = useMemo(() => {
+    return filteredZones.map((z) => ({
+      value: z._id,
+      label: z.name,
+      subLabel: z.code || undefined,
+    }));
+  }, [filteredZones]);
+
   if (!isOpen) return null;
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!warehouseId) {
       setWarningMessage("Please select a warehouse for this rack");
+      setWarningOpen(true);
+      return;
+    }
+    if (!zoneId) {
+      setWarningMessage("Please select a zone / room for this rack. Every rack must belong to a zone.");
       setWarningOpen(true);
       return;
     }
@@ -82,6 +125,7 @@ export default function AddRackModal({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           warehouseId,
+          zoneId,
           name: name.trim(),
           code: code.trim().toUpperCase(),
         }),
@@ -97,6 +141,7 @@ export default function AddRackModal({
 
       setName("");
       setCode("");
+      setZoneId("");
       if (onSuccess && result.data) {
         onSuccess(result.data);
       }
@@ -122,7 +167,7 @@ export default function AddRackModal({
               </div>
               <div>
                 <h3 className="text-base font-bold text-slate-800">Add New Rack</h3>
-                <p className="text-xs text-slate-500">Add a shelf/rack to a warehouse</p>
+                <p className="text-xs text-slate-500">Add a shelf/rack to a warehouse zone</p>
               </div>
             </div>
             <button
@@ -143,10 +188,45 @@ export default function AddRackModal({
               <SearchableSelect
                 options={warehouseOptions}
                 value={warehouseId}
-                onChange={setWarehouseId}
+                onChange={(val) => {
+                  setWarehouseId(val);
+                  // If selected zone doesn't belong to the new warehouse, clear it
+                  if (zoneId) {
+                    const z = zones.find((item) => item._id === zoneId);
+                    const zWhId = typeof z?.warehouseId === "object" ? z?.warehouseId?._id : z?.warehouseId;
+                    if (zWhId && zWhId !== val) {
+                      setZoneId("");
+                    }
+                  }
+                }}
                 placeholder="Select parent warehouse..."
                 onAddNew={onAddNewWarehouse}
                 addNewLabel="Add Warehouse"
+                required
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-semibold text-slate-700 uppercase">
+                  Zone / Room <span className="text-red-500">*</span>
+                </label>
+                <span className="text-[10px] text-slate-400">e.g. Zone A, Cold Room</span>
+              </div>
+              <SearchableSelect
+                options={zoneOptions}
+                value={zoneId}
+                onChange={(val) => {
+                  setZoneId(val);
+                  if (val && !warehouseId) {
+                    const found = zones.find((z) => z._id === val);
+                    const zWhId = typeof found?.warehouseId === "object" ? found?.warehouseId?._id : found?.warehouseId;
+                    if (zWhId) setWarehouseId(zWhId);
+                  }
+                }}
+                placeholder={warehouseId ? "Select zone in this warehouse..." : "Select zone (or pick warehouse first)..."}
+                onAddNew={onAddNewZone}
+                addNewLabel="Add Zone"
                 required
               />
             </div>

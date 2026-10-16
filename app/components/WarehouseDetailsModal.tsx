@@ -28,11 +28,23 @@ export type WarehouseDetailsData = {
     status: "ACTIVE" | "INACTIVE";
     createdAt: string;
   };
+  zones?: Array<{
+    _id: string;
+    name: string;
+    code?: string;
+    status: "ACTIVE" | "INACTIVE";
+    rackCount: number;
+  }>;
   racks: Array<{
     _id: string;
     name: string;
     code: string;
     status: "ACTIVE" | "INACTIVE";
+    zoneId?: {
+      _id: string;
+      name: string;
+      code?: string;
+    };
     productCount: number;
     totalUnits: number;
   }>;
@@ -64,6 +76,7 @@ export type WarehouseDetailsData = {
     email?: string;
   }>;
   summary: {
+    totalZones?: number;
     totalRacks: number;
     totalProducts: number;
     totalUnits: number;
@@ -78,7 +91,9 @@ interface WarehouseDetailsModalProps {
   onClose: () => void;
   onEditWarehouse?: (warehouse: WarehouseDetailsData["warehouse"]) => void;
   onSelectRack?: (rackId: string) => void;
+  onSelectZone?: (zoneId: string) => void;
   onAddRack?: (warehouseId: string) => void;
+  onAddZone?: (warehouseId: string) => void;
 }
 
 export default function WarehouseDetailsModal({
@@ -86,11 +101,13 @@ export default function WarehouseDetailsModal({
   onClose,
   onEditWarehouse,
   onSelectRack,
+  onSelectZone,
   onAddRack,
+  onAddZone,
 }: WarehouseDetailsModalProps) {
   const [data, setData] = useState<WarehouseDetailsData | null>(null);
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<"RACKS" | "INVENTORY" | "STAFF">("RACKS");
+  const [activeTab, setActiveTab] = useState<"ZONES" | "RACKS" | "INVENTORY" | "STAFF">("RACKS");
 
   useEffect(() => {
     if (!warehouseId) {
@@ -196,7 +213,18 @@ export default function WarehouseDetailsModal({
         {!loading && data && (
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-5">
             {/* KPI Summary Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="rounded-xl border border-slate-200 bg-violet-50/50 p-3 shadow-2xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-violet-700 uppercase">Zones / Rooms</span>
+                  <Layers className="h-4 w-4 text-violet-600" />
+                </div>
+                <p className="text-2xl font-extrabold text-violet-900 mt-1">
+                  {data.summary.totalZones ?? data.zones?.length ?? 0}
+                </p>
+                <p className="text-[10px] text-violet-600 mt-0.5">Sub-divided rooms/sections</p>
+              </div>
+
               <div className="rounded-xl border border-slate-200 bg-blue-50/50 p-3 shadow-2xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-blue-700 uppercase">Racks Allocated</span>
@@ -205,7 +233,7 @@ export default function WarehouseDetailsModal({
                 <p className="text-2xl font-extrabold text-blue-900 mt-1">
                   {data.summary.totalRacks}
                 </p>
-                <p className="text-[10px] text-blue-600 mt-0.5">Storage racks inside warehouse</p>
+                <p className="text-[10px] text-blue-600 mt-0.5">Storage racks inside</p>
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-indigo-50/50 p-3 shadow-2xs">
@@ -231,7 +259,7 @@ export default function WarehouseDetailsModal({
                 <p className="text-[10px] text-emerald-600 mt-0.5">Physical items stored</p>
               </div>
 
-              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-2xs">
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 shadow-2xs col-span-2 sm:col-span-1">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-slate-700 uppercase">Assigned Staff</span>
                   <Users className="h-4 w-4 text-slate-500" />
@@ -246,6 +274,19 @@ export default function WarehouseDetailsModal({
             {/* Navigation Tabs */}
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("ZONES")}
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition whitespace-nowrap ${
+                    activeTab === "ZONES"
+                      ? "bg-violet-600 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  <Layers className="h-3.5 w-3.5" />
+                  Zones / Rooms ({data.zones?.length ?? 0})
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setActiveTab("RACKS")}
@@ -286,6 +327,19 @@ export default function WarehouseDetailsModal({
                 </button>
               </div>
 
+              {activeTab === "ZONES" && onAddZone && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onAddZone(warehouseId);
+                  }}
+                  className="hidden sm:inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700 transition shadow-2xs cursor-pointer"
+                >
+                  <Plus className="h-3.5 w-3.5" /> Add Zone
+                </button>
+              )}
+
               {activeTab === "RACKS" && onAddRack && (
                 <button
                   type="button"
@@ -300,7 +354,76 @@ export default function WarehouseDetailsModal({
               )}
             </div>
 
-            {/* TAB 1: RACKS LIST */}
+            {/* TAB: ZONES LIST */}
+            {activeTab === "ZONES" && (
+              <div className="space-y-3">
+                {(!data.zones || data.zones.length === 0) ? (
+                  <div className="p-8 text-center text-xs text-slate-400 border border-dashed rounded-xl space-y-2">
+                    <Layers className="h-8 w-8 text-slate-300 mx-auto" />
+                    <p>No zones / rooms configured for this warehouse yet.</p>
+                    {onAddZone && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose();
+                          onAddZone(warehouseId);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> Create First Zone
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {data.zones.map((zone) => (
+                      <div
+                        key={zone._id}
+                        onClick={() => {
+                          if (onSelectZone) onSelectZone(zone._id);
+                        }}
+                        className="rounded-xl border border-slate-200 bg-white p-4 hover:border-violet-300 hover:shadow-md transition cursor-pointer space-y-2 group"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-50 text-violet-600 group-hover:scale-110 transition">
+                              <Layers className="h-4 w-4" />
+                            </div>
+                            <div>
+                              <h4 className="text-xs font-bold text-slate-900 group-hover:text-violet-600 transition">
+                                {zone.name}
+                              </h4>
+                              {zone.code && (
+                                <span className="font-mono text-[10px] text-slate-400">{zone.code}</span>
+                              )}
+                            </div>
+                          </div>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              zone.status === "ACTIVE"
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-slate-100 text-slate-600"
+                            }`}
+                          >
+                            {zone.status}
+                          </span>
+                        </div>
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
+                          <span className="text-slate-500 font-medium">
+                            <span className="font-bold text-slate-800">{zone.rackCount || 0}</span> Racks inside
+                          </span>
+                          <span className="text-violet-600 font-bold inline-flex items-center gap-0.5 text-[11px] group-hover:translate-x-0.5 transition">
+                            View Zone &rarr;
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB: RACKS LIST */}
             {activeTab === "RACKS" && (
               <div className="space-y-3">
                 {data.racks.length === 0 ? (
@@ -325,6 +448,7 @@ export default function WarehouseDetailsModal({
                       <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px]">
                         <tr>
                           <th className="p-3">Rack Name & Code</th>
+                          <th className="p-3">Zone / Room</th>
                           <th className="p-3">Product Types</th>
                           <th className="p-3">Total Units</th>
                           <th className="p-3">Status</th>
@@ -339,6 +463,24 @@ export default function WarehouseDetailsModal({
                               <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                                 {rack.code}
                               </span>
+                            </td>
+                            <td className="p-3">
+                              {rack.zoneId ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onSelectZone) onSelectZone(rack.zoneId!._id);
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded-full bg-violet-50 hover:bg-violet-100 border border-violet-200 px-2 py-0.5 text-[10px] font-bold text-violet-700 transition"
+                                  title="View Zone"
+                                >
+                                  <Layers className="h-2.5 w-2.5 text-violet-500" />
+                                  <span>{rack.zoneId.name}</span>
+                                </button>
+                              ) : (
+                                <span className="text-slate-400 text-[11px] italic">Unassigned</span>
+                              )}
                             </td>
                             <td className="p-3 font-semibold text-slate-700">
                               <span className="inline-flex items-center gap-1 rounded bg-blue-50 text-blue-700 px-2 py-0.5 font-bold text-[11px]">

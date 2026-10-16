@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
 import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
+import Zone from "@/models/Zone";
 import Inventory from "@/models/Inventory";
 import Product from "@/models/Product";
 import Employee from "@/models/Employee";
@@ -21,6 +22,7 @@ export async function GET(
     // Ensure models are registered for populate
     void Product;
     void Rack;
+    void Zone;
 
     const warehouse = await Warehouse.findById(id);
     if (!warehouse) {
@@ -30,8 +32,25 @@ export async function GET(
       );
     }
 
-    // 1. Get all racks in this warehouse
-    const racks = await Rack.find({ warehouseId: id }).sort({ name: 1 });
+    // 1. Get all zones in this warehouse
+    const zones = await Zone.find({ warehouseId: id }).sort({ name: 1 });
+    const zoneIds = zones.map((z) => z._id);
+    const zoneRackCounts = await Rack.aggregate([
+      { $match: { zoneId: { $in: zoneIds } } },
+      { $group: { _id: "$zoneId", rackCount: { $sum: 1 } } },
+    ]);
+    const zoneRackMap = new Map(
+      zoneRackCounts.map((item) => [item._id.toString(), item.rackCount])
+    );
+    const populatedZones = zones.map((z) => ({
+      ...z.toObject(),
+      rackCount: zoneRackMap.get(z._id.toString()) || 0,
+    }));
+
+    // 2. Get all racks in this warehouse
+    const racks = await Rack.find({ warehouseId: id })
+      .populate("zoneId", "name code")
+      .sort({ name: 1 });
     const rackIds = racks.map((r) => r._id);
 
     // Product counts & units per rack
@@ -58,17 +77,17 @@ export async function GET(
       totalUnits: rackStatsMap.get(r._id.toString())?.totalUnits || 0,
     }));
 
-    // 2. Get all inventory items in this warehouse
+    // 3. Get all inventory items in this warehouse
     const inventory = await Inventory.find({ warehouseId: id })
       .populate("productId", "name sku price category unit")
       .populate("rackId", "name code")
       .sort({ updatedAt: -1 });
 
-    // 3. Get employees assigned to this warehouse
+    // 4. Get employees assigned to this warehouse
     const employees = await Employee.find({ warehouseId: id, status: "ACTIVE" })
       .select("name employeeCode department designation phone email");
 
-    // 4. Calculate summary KPIs
+    // 5. Calculate summary KPIs
     const totalUnits = inventory.reduce((sum, item) => sum + (item.quantity || 0), 0);
     const lowStockCount = inventory.filter((item) => item.status === "LOW_STOCK").length;
     const outOfStockCount = inventory.filter((item) => item.status === "OUT_OF_STOCK").length;
@@ -77,10 +96,12 @@ export async function GET(
       success: true,
       data: {
         warehouse,
+        zones: populatedZones,
         racks: populatedRacks,
         inventory,
         employees,
         summary: {
+          totalZones: zones.length,
           totalRacks: racks.length,
           totalProducts: inventory.length,
           totalUnits,

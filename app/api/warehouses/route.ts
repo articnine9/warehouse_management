@@ -3,6 +3,7 @@ import { requireSessionUser } from "@/lib/auth";
 import Warehouse from "@/models/Warehouse";
 import Inventory from "@/models/Inventory";
 import Rack from "@/models/Rack";
+import Zone from "@/models/Zone";
 import StockMovement from "@/models/StockMovement";
 import Invoice from "@/models/Invoice";
 import EmployeeIssue from "@/models/EmployeeIssue";
@@ -17,7 +18,7 @@ export async function GET() {
 
     const warehouseIds = warehouses.map((w) => w._id);
 
-    const [productCounts, rackCounts] = await Promise.all([
+    const [productCounts, rackCounts, zoneCounts] = await Promise.all([
       Inventory.aggregate([
         { $match: { warehouseId: { $in: warehouseIds } } },
         { $group: { _id: "$warehouseId", productCount: { $sum: 1 }, totalUnits: { $sum: "$quantity" } } },
@@ -25,6 +26,10 @@ export async function GET() {
       Rack.aggregate([
         { $match: { warehouseId: { $in: warehouseIds } } },
         { $group: { _id: "$warehouseId", rackCount: { $sum: 1 } } },
+      ]),
+      Zone.aggregate([
+        { $match: { warehouseId: { $in: warehouseIds } } },
+        { $group: { _id: "$warehouseId", zoneCount: { $sum: 1 } } },
       ]),
     ]);
 
@@ -37,6 +42,9 @@ export async function GET() {
     const rackCountMap = new Map(
       rackCounts.map((item) => [item._id.toString(), item.rackCount])
     );
+    const zoneCountMap = new Map(
+      zoneCounts.map((item) => [item._id.toString(), item.zoneCount])
+    );
 
     const data = warehouses.map((w) => {
       const invStats = countMap.get(w._id.toString());
@@ -45,6 +53,7 @@ export async function GET() {
         productCount: invStats?.productCount || 0,
         totalUnits: invStats?.totalUnits || 0,
         rackCount: rackCountMap.get(w._id.toString()) || 0,
+        zoneCount: zoneCountMap.get(w._id.toString()) || 0,
       };
     });
 

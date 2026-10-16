@@ -30,6 +30,7 @@ import {
   History,
   UserCheck,
   RotateCcw,
+  Layers,
 } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import NotificationBell from "./NotificationBell";
@@ -41,6 +42,7 @@ const iconMap: Record<string, React.ReactNode> = {
   Settings: <Settings className="h-4 w-4" />,
   "Add & Modify": <Settings className="h-4 w-4" />,
   Warehouses: <Warehouse className="h-4 w-4" />,
+  Zones: <Layers className="h-4 w-4" />,
   Racks: <Box className="h-4 w-4" />,
   Categories: <FolderTree className="h-4 w-4" />,
   Departments: <Building2 className="h-4 w-4" />,
@@ -79,6 +81,7 @@ export default function Sidebar() {
 
   const isSettingsActive = [
     "/warehouses",
+    "/zones",
     "/racks",
     "/categories",
     "/departments",
@@ -117,6 +120,7 @@ export default function Sidebar() {
             name: "Add & Modify",
             children: [
               { name: "Warehouses", path: "/warehouses" },
+              { name: "Zones", path: "/zones" },
               { name: "Racks", path: "/racks" },
               { name: "Categories", path: "/categories" },
               { name: "Departments", path: "/departments" },
@@ -139,6 +143,7 @@ export default function Sidebar() {
             name: "Add & Modify",
             children: [
               { name: "Warehouses", path: "/warehouses" },
+              { name: "Zones", path: "/zones" },
               { name: "Racks", path: "/racks" },
               { name: "Categories", path: "/categories" },
               { name: "Departments", path: "/departments" },
