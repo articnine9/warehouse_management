@@ -95,7 +95,7 @@ interface ProductHistoryData {
   inventoryLocations: Array<{
     id: string;
     warehouse?: { _id: string; name: string; code: string; address?: string };
-    rack?: { _id: string; name: string; code: string };
+    rack?: { _id: string; name: string; code: string; zoneId?: { _id: string; name: string; code?: string } | string };
     quantity: number;
     status: string;
     updatedAt?: string;
@@ -954,10 +954,17 @@ export default function ProductHistoryModal({
                                 {loc.warehouse?.code || "WH"}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between text-xs pt-0.5">
-                              <div className="flex items-center gap-1 text-slate-600">
-                                <Box className="h-3 w-3 text-slate-400" />
-                                <span className="text-[11px]">Rack: <b>{loc.rack?.name || "Unassigned"}</b></span>
+                            <div className="flex items-center justify-between text-xs pt-0.5 gap-2 flex-wrap">
+                              <div className="flex items-center gap-1.5 text-slate-600 flex-wrap">
+                                {loc.rack?.zoneId && (
+                                  <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 rounded font-semibold">
+                                    Zone: <b>{typeof loc.rack.zoneId === "object" ? loc.rack.zoneId.name : loc.rack.zoneId}</b>
+                                  </span>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <Box className="h-3 w-3 text-slate-400" />
+                                  <span className="text-[11px]">Rack: <b>{loc.rack?.name || "Unassigned"}</b></span>
+                                </div>
                               </div>
                               <span className="font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg text-[11px]">
                                 {loc.quantity} units

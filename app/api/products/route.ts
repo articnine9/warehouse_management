@@ -4,6 +4,7 @@ import Product from "@/models/Product";
 import ProductHistory from "@/models/ProductHistory";
 import Inventory from "@/models/Inventory";
 import Warehouse from "@/models/Warehouse";
+import Zone from "@/models/Zone";
 import Rack from "@/models/Rack";
 import StockMovement from "@/models/StockMovement";
 import Category from "@/models/Category";
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
 
     // Ensure models are registered for Mongoose population
     void Warehouse;
+    void Zone;
     void Rack;
     void Product;
     void Inventory;
@@ -36,7 +38,14 @@ export async function GET(request: Request) {
         const productIds = existingProducts.map((p) => p._id);
         const inventories = await Inventory.find({ productId: { $in: productIds } })
           .populate("warehouseId", "name code")
-          .populate("rackId", "name code");
+          .populate({
+            path: "rackId",
+            select: "name code zoneId",
+            populate: {
+              path: "zoneId",
+              select: "name code",
+            },
+          });
 
         const enriched = existingProducts.map((p) => {
           const pid = p._id.toString();
@@ -47,11 +56,14 @@ export async function GET(request: Request) {
           const locations = prodInvs.map((inv) => {
             const w = inv.warehouseId as any;
             const r = inv.rackId as any;
+            const z = r?.zoneId as any;
             return {
               warehouseId: w?._id?.toString() || "",
-              warehouseName: w?.name || "Warehouse",
+              warehouseName: w?.name || "Unassigned",
+              zoneId: z?._id?.toString() || (typeof r?.zoneId === "string" ? r.zoneId : ""),
+              zoneName: z?.name || "",
               rackId: r?._id?.toString() || "",
-              rackName: r?.name || "Rack",
+              rackName: r?.name || "Unassigned",
               quantity: inv.quantity || 0,
             };
           });
@@ -90,19 +102,31 @@ export async function GET(request: Request) {
 
     if (query?.trim()) {
       const regex = { $regex: query.trim(), $options: "i" };
-      const [matchingWarehouses, matchingRacks] = await Promise.all([
+      const [matchingWarehouses, matchingZones, matchingRacks] = await Promise.all([
         Warehouse.find({ name: regex }).select("_id"),
+        Zone.find({ name: regex }).select("_id"),
         Rack.find({ name: regex }).select("_id"),
       ]);
       const wIds = matchingWarehouses.map((w) => w._id);
-      const rIds = matchingRacks.map((r) => r._id);
+      const zIds = matchingZones.map((z) => z._id);
+      let racksInMatchingZones: any[] = [];
+      if (zIds.length) {
+        racksInMatchingZones = await Rack.find({ zoneId: { $in: zIds } }).select("_id");
+      }
+      const allRkIds = Array.from(
+        new Set([
+          ...matchingRacks.map((r) => r._id.toString()),
+          ...racksInMatchingZones.map((r) => r._id.toString()),
+        ])
+      );
+
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let invProductIds: any[] = [];
-      if (wIds.length || rIds.length) {
+      if (wIds.length || allRkIds.length) {
         const invs = await Inventory.find({
           $or: [
             ...(wIds.length ? [{ warehouseId: { $in: wIds } }] : []),
-            ...(rIds.length ? [{ rackId: { $in: rIds } }] : []),
+            ...(allRkIds.length ? [{ rackId: { $in: allRkIds } }] : []),
           ],
         }).select("productId");
         invProductIds = invs.map((i) => i.productId);
@@ -117,18 +141,34 @@ export async function GET(request: Request) {
       ];
     }
 
-    // Helper to enrich products with warehouse & rack inventory details
+    // Helper to enrich products with warehouse, zone & rack inventory details
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const enrichProductsWithStock = async (productList: any[]) => {
       if (!productList.length) return [];
       const productIds = productList.map((p) => p._id);
       const inventories = await Inventory.find({ productId: { $in: productIds } })
         .populate("warehouseId", "name code")
-        .populate("rackId", "name code");
+        .populate({
+          path: "rackId",
+          select: "name code zoneId",
+          populate: {
+            path: "zoneId",
+            select: "name code",
+          },
+        });
 
       const invMap = new Map<
         string,
-        Array<{ inventoryId?: string; warehouseId: string; warehouseName: string; rackId: string; rackName: string; quantity: number }>
+        Array<{
+          inventoryId?: string;
+          warehouseId: string;
+          warehouseName: string;
+          zoneId?: string;
+          zoneName?: string;
+          rackId: string;
+          rackName: string;
+          quantity: number;
+        }>
       >();
       const stockMap = new Map<string, number>();
 
@@ -139,13 +179,16 @@ export async function GET(request: Request) {
         const w = inv.warehouseId as any;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const r = inv.rackId as any;
+        const z = r?.zoneId as any;
         const list = invMap.get(pid) || [];
         list.push({
           inventoryId: inv._id.toString(),
           warehouseId: w?._id?.toString() || "",
-          warehouseName: w?.name || "Warehouse",
+          warehouseName: w?.name || "Unassigned",
+          zoneId: z?._id?.toString() || (typeof r?.zoneId === "string" ? r.zoneId : ""),
+          zoneName: z?.name || "",
           rackId: r?._id?.toString() || "",
-          rackName: r?.name || "Rack",
+          rackName: r?.name || "Unassigned",
           quantity: inv.quantity || 0,
         });
         invMap.set(pid, list);

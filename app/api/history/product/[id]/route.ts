@@ -6,6 +6,7 @@ import EmployeeIssue from "@/models/EmployeeIssue";
 import StockMovement from "@/models/StockMovement";
 import ProductHistory from "@/models/ProductHistory";
 import Warehouse from "@/models/Warehouse";
+import Zone from "@/models/Zone";
 import Rack from "@/models/Rack";
 import Employee from "@/models/Employee";
 
@@ -19,11 +20,11 @@ export async function GET(
 
     // Ensure models are registered for populate
     void Warehouse;
+    void Zone;
     void Rack;
     void Employee;
 
     const { id: productId } = await params;
-
     if (!productId) {
       return Response.json(
         { success: false, message: "Product ID is required" },
@@ -65,7 +66,14 @@ export async function GET(
     const [inventoryItems, issues, movements, changeLogs, allWarehouses, allRacks] = await Promise.all([
       Inventory.find({ productId: effectiveProductId })
         .populate("warehouseId", "name code address")
-        .populate("rackId", "name code")
+        .populate({
+          path: "rackId",
+          select: "name code zoneId",
+          populate: {
+            path: "zoneId",
+            select: "name code",
+          },
+        })
         .sort({ quantity: -1 })
         .lean() as Promise<any[]>,
       EmployeeIssue.find({

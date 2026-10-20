@@ -18,11 +18,11 @@ export default function Pagination({
   pageSize,
   onPageChange,
   onPageSizeChange,
-  pageSizeOptions = [10, 25, 50, 100],
+  pageSizeOptions = [5, 10, 25, 50, 100],
   className = "",
 }: PaginationProps) {
-  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+  const totalPages = Math.max(1, Math.ceil(totalItems / (pageSize || 1)));
+  const safeCurrentPage = Math.min(Math.max(1, Number(currentPage) || 1), totalPages);
 
   const startItem = totalItems === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1;
   const endItem = Math.min(safeCurrentPage * pageSize, totalItems);
@@ -67,6 +67,7 @@ export default function Pagination({
                 onPageSizeChange(Number(e.target.value));
                 onPageChange(1);
               }}
+              aria-label="Items per page"
               className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
             >
               {pageSizeOptions.map((opt) => (
@@ -80,8 +81,30 @@ export default function Pagination({
         )}
       </div>
 
-      {/* Navigation Buttons */}
-      <div className="flex items-center gap-1 self-center sm:self-auto">
+      {/* Navigation Controls: Page Dropdown + Buttons */}
+      <div className="flex flex-wrap items-center gap-2 self-center sm:self-auto">
+        {/* Page selection dropdown (Jump to page) */}
+        {totalPages > 1 && (
+          <div className="flex items-center gap-1.5 text-slate-500 text-xs mr-1">
+            <span className="font-medium">Page</span>
+            <select
+              value={safeCurrentPage}
+              onChange={(e) => onPageChange(Number(e.target.value))}
+              aria-label="Select page"
+              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+            >
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <span className="font-medium">of {totalPages}</span>
+          </div>
+        )}
+
+        {/* Buttons */}
+        <div className="flex items-center gap-1">
         {/* First Page */}
         <button
           type="button"
@@ -159,6 +182,7 @@ export default function Pagination({
         >
           <ChevronsRight className="h-4 w-4" />
         </button>
+        </div>
       </div>
     </div>
   );

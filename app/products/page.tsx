@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { FolderTree, History, Warehouse as WarehouseIcon, Plus, Layers, Box, Trash2, X } from "lucide-react";
+import { FolderTree, History, Warehouse as WarehouseIcon, Plus, Layers, Box, Trash2, X, AlertTriangle } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import { useAuth } from "@/app/components/AuthProvider";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
@@ -20,6 +20,8 @@ type ProductLocation = {
   inventoryId?: string;
   warehouseId: string;
   warehouseName: string;
+  zoneId?: string;
+  zoneName?: string;
   rackId: string;
   rackName: string;
   quantity: number;
@@ -82,11 +84,12 @@ export default function ProductsPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("ALL");
   const [selectedWarehouseFilter, setSelectedWarehouseFilter] = useState("ALL");
+  const [selectedZoneFilter, setSelectedZoneFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(5);
 
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
@@ -232,6 +235,37 @@ export default function ProductsPage() {
     ];
   }, [warehouses]);
 
+  const filterZoneOptions: SelectOption[] = useMemo(() => {
+    let list = zones;
+    if (selectedWarehouseFilter !== "ALL") {
+      const wh = warehouses.find(
+        (w) => w.name.toLowerCase() === selectedWarehouseFilter.toLowerCase()
+      );
+      if (wh) {
+        list = zones.filter((z) => {
+          const zWhId =
+            typeof z.warehouseId === "object" && z.warehouseId
+              ? z.warehouseId._id
+              : z.warehouseId;
+          return String(zWhId) === String(wh._id);
+        });
+      }
+    }
+    return [
+      { value: "ALL", label: "All Zones" },
+      ...list.map((z) => ({
+        value: z.name,
+        label: z.name,
+        subLabel: z.code,
+      })),
+    ];
+  }, [zones, warehouses, selectedWarehouseFilter]);
+
+  // Reset zone filter if selected warehouse filter changes
+  useEffect(() => {
+    setSelectedZoneFilter("ALL");
+  }, [selectedWarehouseFilter]);
+
 
   const availableZonesForNewLoc = useMemo(() => {
     if (!newLocWarehouseId) return [];
@@ -292,6 +326,7 @@ export default function ProductsPage() {
     }
     const qty = Math.max(1, parseInt(newLocQuantity, 10) || 1);
     const wh = warehouses.find((w) => w._id === newLocWarehouseId);
+    const zn = zones.find((z) => z._id === newLocZoneId);
     const rk = racks.find((r) => r._id === newLocRackId);
 
     const existingIndex = editLocations.findIndex(
@@ -302,6 +337,8 @@ export default function ProductsPage() {
         const next = [...prev];
         next[existingIndex] = {
           ...next[existingIndex],
+          zoneId: newLocZoneId || next[existingIndex].zoneId,
+          zoneName: zn?.name || next[existingIndex].zoneName,
           quantity: (Number(next[existingIndex].quantity) || 0) + qty,
         };
         return next;
@@ -312,6 +349,8 @@ export default function ProductsPage() {
         {
           warehouseId: newLocWarehouseId,
           warehouseName: wh?.name || "Warehouse",
+          zoneId: newLocZoneId,
+          zoneName: zn?.name || "Zone",
           rackId: newLocRackId,
           rackName: rk?.name || "Rack",
           quantity: qty,
@@ -320,6 +359,7 @@ export default function ProductsPage() {
     }
 
     setNewLocWarehouseId("");
+    setNewLocZoneId("");
     setNewLocRackId("");
     setNewLocQuantity("1");
   }
@@ -351,8 +391,22 @@ export default function ProductsPage() {
     setEditSellerName(product.sellerName || "");
     setEditPrice(product.price?.toString() || "");
     setEditStatus(product.status);
-    setEditLocations(product.locations ? product.locations.map((l) => ({ ...l })) : []);
+    const enrichedLocations = (product.locations || []).map((l) => {
+      let zId = l.zoneId;
+      let zName = l.zoneName;
+      if (!zName && l.rackId) {
+        const foundRack = racks.find((r) => r._id === l.rackId);
+        if (foundRack?.zoneId) {
+          zId = typeof foundRack.zoneId === "object" ? (foundRack.zoneId as any)._id : foundRack.zoneId;
+          const foundZone = zones.find((z) => z._id === zId);
+          zName = foundZone?.name || (typeof foundRack.zoneId === "object" ? (foundRack.zoneId as any).name : undefined);
+        }
+      }
+      return { ...l, zoneId: zId, zoneName: zName };
+    });
+    setEditLocations(enrichedLocations);
     setNewLocWarehouseId("");
+    setNewLocZoneId("");
     setNewLocRackId("");
     setNewLocQuantity("1");
     setActiveEditTab("DETAILS");
@@ -436,9 +490,35 @@ export default function ProductsPage() {
     }
   }
 
+  // Helper to ensure each product location has zoneName if rack is known
+  const enrichedProducts = useMemo(() => {
+    if (!racks.length && !zones.length) return products;
+    return products.map((p) => {
+      if (!p.locations || !p.locations.length) return p;
+      let hasMissingZone = false;
+      const locations = p.locations.map((loc) => {
+        if (!loc.zoneName && loc.rackId) {
+          hasMissingZone = true;
+          const rk = racks.find((r) => r._id === loc.rackId);
+          if (rk?.zoneId) {
+            const zId = typeof rk.zoneId === "object" ? (rk.zoneId as any)._id : rk.zoneId;
+            const zn = zones.find((z) => z._id === zId);
+            return {
+              ...loc,
+              zoneId: loc.zoneId || zId,
+              zoneName: zn?.name || (typeof rk.zoneId === "object" ? (rk.zoneId as any).name : undefined),
+            };
+          }
+        }
+        return loc;
+      });
+      return hasMissingZone ? { ...p, locations } : p;
+    });
+  }, [products, racks, zones]);
+
   const filteredProducts = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return products.filter((p) => {
+    return enrichedProducts.filter((p) => {
       const matchesCategory =
         selectedCategoryFilter === "ALL" || p.category === selectedCategoryFilter;
 
@@ -450,6 +530,15 @@ export default function ProductsPage() {
               loc.warehouseName.toLowerCase() === selectedWarehouseFilter.toLowerCase()
           ));
 
+      const matchesZone =
+        selectedZoneFilter === "ALL" ||
+        (p.locations &&
+          p.locations.some(
+            (loc) =>
+              loc.zoneName &&
+              loc.zoneName.toLowerCase() === selectedZoneFilter.toLowerCase()
+          ));
+
       const matchesSearch =
         !q ||
         p.name.toLowerCase().includes(q) ||
@@ -459,17 +548,18 @@ export default function ProductsPage() {
           p.locations.some(
             (loc) =>
               loc.warehouseName.toLowerCase().includes(q) ||
+              (loc.zoneName && loc.zoneName.toLowerCase().includes(q)) ||
               loc.rackName.toLowerCase().includes(q)
           ));
 
-      return matchesCategory && matchesWarehouse && matchesSearch;
+      return matchesCategory && matchesWarehouse && matchesZone && matchesSearch;
     });
-  }, [products, selectedCategoryFilter, selectedWarehouseFilter, searchQuery]);
+  }, [enrichedProducts, selectedCategoryFilter, selectedWarehouseFilter, selectedZoneFilter, searchQuery]);
 
   // Reset page on filter changes
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedCategoryFilter, selectedWarehouseFilter, searchQuery, pageSize]);
+  }, [selectedCategoryFilter, selectedWarehouseFilter, selectedZoneFilter, searchQuery, pageSize]);
 
   // Paginated records
   const paginatedProducts = useMemo(() => {
@@ -628,18 +718,18 @@ export default function ProductsPage() {
               </h2>
             </div>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center flex-wrap">
               {/* Search input in list */}
               <input
                 type="text"
-                placeholder="Search product, SKU, warehouse, rack..."
+                placeholder="Search product, SKU, warehouse, zone, rack..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-56"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-blue-500 w-full sm:w-52"
               />
 
               {/* Warehouse Filter */}
-              <div className="w-full sm:w-44">
+              <div className="w-full sm:w-40">
                 <SearchableSelect
                   options={filterWarehouseOptions}
                   value={selectedWarehouseFilter}
@@ -649,8 +739,19 @@ export default function ProductsPage() {
                 />
               </div>
 
+              {/* Zone Filter */}
+              <div className="w-full sm:w-40">
+                <SearchableSelect
+                  options={filterZoneOptions}
+                  value={selectedZoneFilter}
+                  onChange={(val) => setSelectedZoneFilter(val || "ALL")}
+                  placeholder="All Zones"
+                  allowClear={false}
+                />
+              </div>
+
               {/* Category Filter */}
-              <div className="w-full sm:w-44">
+              <div className="w-full sm:w-40">
                 <SearchableSelect
                   options={filterCategoryOptions}
                   value={selectedCategoryFilter}
@@ -721,13 +822,38 @@ export default function ProductsPage() {
                                   key={`${loc.warehouseId}-${loc.rackId}-${locIdx}`}
                                   className="flex items-center gap-1.5 flex-wrap"
                                 >
-                                  <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200/70 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                                    <WarehouseIcon className="h-3 w-3 text-blue-600 shrink-0" />
-                                    {loc.warehouseName}
-                                  </span>
-                                  <span className="inline-flex items-center rounded-md bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 text-[11px] font-mono text-slate-700">
-                                    Rack: {loc.rackName}
-                                  </span>
+                                  {loc.warehouseName === "Unassigned" || loc.warehouseName === "Warehouse" ? (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-300/80 px-2 py-0.5 text-xs font-semibold text-amber-800"
+                                      title="Warehouse was deleted or unassigned"
+                                    >
+                                      <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                                      Unassigned Warehouse
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200/70 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                      <WarehouseIcon className="h-3 w-3 text-blue-600 shrink-0" />
+                                      {loc.warehouseName}
+                                    </span>
+                                  )}
+                                  {loc.zoneName && (
+                                    <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                                      <Layers className="h-3 w-3 text-indigo-600 shrink-0" />
+                                      Zone: {loc.zoneName}
+                                    </span>
+                                  )}
+                                  {loc.rackName === "Unassigned" || loc.rackName === "Rack" ? (
+                                    <span
+                                      className="inline-flex items-center rounded-md bg-amber-50 border border-amber-200/70 px-1.5 py-0.5 text-[11px] font-mono text-amber-800"
+                                      title="Rack was deleted or unassigned"
+                                    >
+                                      Rack: Unassigned
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center rounded-md bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 text-[11px] font-mono text-slate-700">
+                                      Rack: {loc.rackName}
+                                    </span>
+                                  )}
                                   <span className="inline-flex items-center font-bold text-xs text-slate-800">
                                     • {loc.quantity} {loc.quantity === 1 ? "unit" : "units"}
                                   </span>
@@ -877,15 +1003,33 @@ export default function ProductsPage() {
                         {product.locations.map((loc, lIdx) => (
                           <div
                             key={lIdx}
-                            className="flex items-center justify-between bg-white rounded-md border border-slate-200/70 px-2 py-1"
+                            className="flex items-center justify-between bg-white rounded-md border border-slate-200/70 px-2 py-1 gap-2 flex-wrap"
                           >
-                            <span className="font-semibold text-blue-700 flex items-center gap-1">
-                              <WarehouseIcon className="h-3 w-3 shrink-0" />
-                              {loc.warehouseName}
-                            </span>
-                            <span className="text-slate-600">
-                              Rack: <b className="font-mono text-slate-800">{loc.rackName}</b> •{" "}
-                              <b className="text-slate-800">{loc.quantity} units</b>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {loc.warehouseName === "Unassigned" || loc.warehouseName === "Warehouse" ? (
+                                <span className="font-semibold text-amber-800 flex items-center gap-1 text-xs bg-amber-50 border border-amber-300/80 px-1.5 py-0.5 rounded-md">
+                                  <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                                  Unassigned WH
+                                </span>
+                              ) : (
+                                <span className="font-semibold text-blue-700 flex items-center gap-1 text-xs">
+                                  <WarehouseIcon className="h-3 w-3 shrink-0" />
+                                  {loc.warehouseName}
+                                </span>
+                              )}
+                              {loc.zoneName && (
+                                <span className="inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                  <Layers className="h-2.5 w-2.5 text-indigo-600 shrink-0" />
+                                  Zone: {loc.zoneName}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-slate-600 text-xs shrink-0">
+                              {loc.rackName === "Unassigned" || loc.rackName === "Rack" ? (
+                                <span className="text-amber-800 font-medium">Rack: <b>Unassigned</b></span>
+                              ) : (
+                                <>Rack: <b className="font-mono text-slate-800">{loc.rackName}</b></>
+                              )} • <b className="text-slate-800">{loc.quantity} units</b>
                             </span>
                           </div>
                         ))}
@@ -938,7 +1082,7 @@ export default function ProductsPage() {
               pageSize={pageSize}
               onPageChange={(p) => setCurrentPage(p)}
               onPageSizeChange={(s) => setPageSize(s)}
-              pageSizeOptions={[10, 25, 50, 100]}
+              pageSizeOptions={[2, 5, 10, 25, 50, 100]}
             />
           )}
         </div>
@@ -1179,14 +1323,36 @@ export default function ProductsPage() {
                                 }`}
                               >
                                 <div className="min-w-0 flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-                                    <span className="text-sm font-bold text-slate-900 truncate">
-                                      {loc.warehouseName}
-                                    </span>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    {loc.warehouseName === "Unassigned" || loc.warehouseName === "Warehouse" ? (
+                                      <span className="text-xs font-bold text-amber-800 bg-amber-50 border border-amber-300/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                        <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                                        Unassigned Warehouse
+                                      </span>
+                                    ) : (
+                                      <span className="text-sm font-bold text-slate-900 truncate">
+                                        {loc.warehouseName}
+                                      </span>
+                                    )}
+                                    {loc.zoneName && (
+                                      <>
+                                        <span className="text-slate-300">•</span>
+                                        <span className="text-xs font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                          <Layers className="h-3 w-3 text-indigo-600 shrink-0" />
+                                          Zone: {loc.zoneName}
+                                        </span>
+                                      </>
+                                    )}
                                     <span className="text-slate-300">•</span>
-                                    <span className="text-xs font-mono text-blue-700 bg-blue-50 border border-blue-200/70 px-2 py-0.5 rounded-md font-semibold">
-                                      Rack: {loc.rackName}
-                                    </span>
+                                    {loc.rackName === "Unassigned" || loc.rackName === "Rack" ? (
+                                      <span className="text-xs font-mono text-amber-800 bg-amber-50 border border-amber-200/70 px-2 py-0.5 rounded-md font-semibold">
+                                        Rack: Unassigned
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs font-mono text-blue-700 bg-blue-50 border border-blue-200/70 px-2 py-0.5 rounded-md font-semibold">
+                                        Rack: {loc.rackName}
+                                      </span>
+                                    )}
                                     {loc.quantity === 0 && (
                                       <span className="text-[10px] font-bold text-rose-600 bg-rose-100/90 border border-rose-200 px-2 py-0.5 rounded-md">
                                         Out of Stock
