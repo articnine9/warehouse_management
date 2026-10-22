@@ -16,8 +16,11 @@ import {
   Eye,
   Info,
   Box,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import { useAuth } from "@/app/components/AuthProvider";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
 import IssueBillModal, { IssueBillData } from "@/app/components/IssueBillModal";
@@ -133,6 +136,37 @@ export default function AssetHistoryPage() {
       }
       return next;
     });
+  }
+
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+
+  // Delete state
+  const [deleteIssueId, setDeleteIssueId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  async function handleDeleteIssue() {
+    if (!deleteIssueId) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/employee-issues/${deleteIssueId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDeleteIssueId(null);
+        void fetchData();
+      } else {
+        setWarningMessage(data.message || "Failed to delete issue record");
+        setWarningOpen(true);
+      }
+    } catch (err) {
+      console.error(err);
+      setWarningMessage("Error deleting issue record");
+      setWarningOpen(true);
+    } finally {
+      setDeleteLoading(false);
+    }
   }
 
   async function fetchData() {
@@ -335,7 +369,7 @@ export default function AssetHistoryPage() {
 
   return (
     <ProtectedPage>
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
+      <div className="min-h-screen bg-slate-50 p-3 md:p-4 lg:p-5 space-y-6">
         {/* Top Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -927,6 +961,16 @@ export default function AssetHistoryPage() {
                               >
                                 <Eye className="h-4 w-4" />
                               </button>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteIssueId(issue._id)}
+                                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50 transition shadow-2xs active:scale-95 cursor-pointer"
+                                  title="Delete Issue Record (Restores stock)"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1404,6 +1448,17 @@ export default function AssetHistoryPage() {
                         })}
                       </div>
                     )}
+                    {isAdmin && (
+                      <div className="pt-2 border-t border-slate-100 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setDeleteIssueId(issue._id)}
+                          className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer transition"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1471,6 +1526,47 @@ export default function AssetHistoryPage() {
             }
           }}
         />
+      )}
+
+      {/* Delete Issue Confirmation Modal for Admin */}
+      {deleteIssueId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Delete Issue Record</h3>
+                <p className="text-xs text-slate-500">Admin Authorization Required</p>
+              </div>
+            </div>
+
+            <p className="mt-3 text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to delete this issue record? Any unreturned stock will be automatically restored back to the warehouse inventory.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteIssueId(null)}
+                disabled={deleteLoading}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteIssue}
+                disabled={deleteLoading}
+                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              >
+                {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {deleteLoading ? "Deleting..." : "Delete & Restore Stock"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <WarningPopup

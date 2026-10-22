@@ -160,7 +160,7 @@ export default function DepartmentsPage() {
 
   return (
     <ProtectedPage>
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
+      <div className="min-h-screen bg-slate-50 p-3 md:p-4 lg:p-5 space-y-6">
         {/* Top Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>

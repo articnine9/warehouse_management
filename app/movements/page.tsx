@@ -16,7 +16,10 @@ import {
   TrendingDown,
   Layers,
   FileSpreadsheet,
+  Trash2,
+  Loader2,
 } from "lucide-react";
+import { useAuth } from "@/app/components/AuthProvider";
 
 type StockMovementItem = {
   _id: string;
@@ -91,6 +94,13 @@ export default function StockMovementsPage() {
   const [selectedWarehouse, setSelectedWarehouse] = useState<string>("ALL");
   const [searchQuery, setSearchQuery] = useState<string>("");
 
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+
+  // Delete state
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   // Pagination
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(15);
@@ -107,6 +117,28 @@ export default function StockMovementsPage() {
       console.error("Failed to load warehouses:", e);
     }
   }, []);
+
+  async function handleDeleteMovement() {
+    if (!deleteId) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/movements/${deleteId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDeleteId(null);
+        void fetchMovements();
+      } else {
+        alert(data.message || "Failed to delete movement record");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting movement record");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   const fetchMovements = useCallback(async () => {
     setLoading(true);
@@ -293,7 +325,7 @@ export default function StockMovementsPage() {
 
   return (
     <ProtectedPage allowedRoles={["ADMIN", "STAFF"]}>
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
+      <div className="min-h-screen bg-slate-50 p-3 md:p-4 lg:p-5 space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -594,6 +626,7 @@ export default function StockMovementsPage() {
                     <th className="px-5 py-3 text-right">Value (₹)</th>
                     <th className="px-5 py-3">Entity / Customer / Employee</th>
                     <th className="px-5 py-3">Ref & Location</th>
+                    {isAdmin && <th className="px-5 py-3 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -678,6 +711,19 @@ export default function StockMovementsPage() {
                           {m.warehouseName || "Warehouse"} {m.rackName ? `/ ${m.rackName}` : ""}
                         </span>
                       </td>
+
+                      {isAdmin && (
+                        <td className="px-5 py-3 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => setDeleteId(m._id)}
+                            className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                            title="Delete Movement Record"
+                          >
+                            <Trash2 className="h-3 w-3" /> Delete
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -751,6 +797,18 @@ export default function StockMovementsPage() {
                       </span>
                       <span>{m.referenceNumber || m.warehouseName}</span>
                     </div>
+
+                    {isAdmin && (
+                      <div className="pt-2 border-t border-slate-100 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setDeleteId(m._id)}
+                          className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer transition"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
@@ -778,6 +836,46 @@ export default function StockMovementsPage() {
               onPageSizeChange={(s) => setPageSize(s)}
               pageSizeOptions={[10, 15, 25, 50, 100]}
             />
+          )}
+          {/* Delete Confirmation Modal for Admin */}
+          {deleteId && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
+                <div className="flex items-center gap-3 text-red-600">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100">
+                    <Trash2 className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">Delete Movement Record</h3>
+                    <p className="text-xs text-slate-500">Admin Authorization Required</p>
+                  </div>
+                </div>
+
+                <p className="mt-3 text-xs text-slate-600 leading-relaxed">
+                  Are you sure you want to delete this movement record? This will remove the audit log entry permanently.
+                </p>
+
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDeleteId(null)}
+                    disabled={deleteLoading}
+                    className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteMovement}
+                    disabled={deleteLoading}
+                    className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                    {deleteLoading ? "Deleting..." : "Confirm Delete"}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       </div>

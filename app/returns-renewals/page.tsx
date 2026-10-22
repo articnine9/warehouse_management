@@ -33,8 +33,11 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
+import { useAuth } from "@/app/components/AuthProvider";
 import IssueBillModal, { IssueBillData } from "@/app/components/IssueBillModal";
 import Pagination from "@/app/components/Pagination";
 import SearchableSelect from "@/app/components/SearchableSelect";
@@ -151,11 +154,38 @@ export default function ReturnsRenewalsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
 
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+
   // Modals
   const [selectedBillIssue, setSelectedBillIssue] = useState<IssueBillData | null>(null);
   const [renewTarget, setRenewTarget] = useState<ReturnableItemRow | null>(null);
   const [returnTarget, setReturnTarget] = useState<ReturnableItemRow | null>(null);
   const [historyTarget, setHistoryTarget] = useState<ReturnableItemRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ReturnableItemRow | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  async function handleDeleteIssue() {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/employee-issues/${deleteTarget.issueId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDeleteTarget(null);
+        void fetchData();
+      } else {
+        alert(data.message || "Failed to delete issue record");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting issue record");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   // Toast / Status banner
   const [toastMessage, setToastMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -452,7 +482,7 @@ export default function ReturnsRenewalsPage() {
 
   return (
     <ProtectedPage>
-      <div className="min-h-screen bg-slate-50/70 p-3 sm:p-6 lg:p-8 space-y-6">
+      <div className="min-h-screen bg-slate-50/70 p-3 sm:p-4 lg:p-5 space-y-6">
         {/* Toast Alert */}
         {toastMessage && (
           <div
@@ -1294,6 +1324,18 @@ export default function ReturnsRenewalsPage() {
                                   <History className="h-3.5 w-3.5 text-indigo-600" />
                                 </button>
                               )}
+
+                              {/* Admin Delete Issue Button */}
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleteTarget(item)}
+                                  className="flex items-center gap-1 rounded-xl border border-red-200 bg-white hover:bg-red-50 text-red-600 p-1.5 text-xs font-bold transition shadow-2xs cursor-pointer"
+                                  title="Delete Issue Record (Restores stock)"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1355,6 +1397,52 @@ export default function ReturnsRenewalsPage() {
             issue={selectedBillIssue}
             onClose={() => setSelectedBillIssue(null)}
           />
+        )}
+
+        {/* 5. Delete Issue Confirmation Modal for Admin */}
+        {deleteTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
+              <div className="flex items-center gap-3 text-red-600">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Delete Issue Record</h3>
+                  <p className="text-xs text-slate-500">Voucher: {deleteTarget.issueNumber}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl bg-red-50/60 border border-red-200/60 p-3 text-xs text-red-800">
+                <p className="font-semibold">
+                  Are you sure you want to delete this issue record for <strong>{deleteTarget.employeeName}</strong>?
+                </p>
+                <p className="mt-1 text-[11px] text-red-700">
+                  Any unreturned stock ({deleteTarget.productName}) will be automatically restored back to the warehouse inventory.
+                </p>
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleteLoading}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteIssue}
+                  disabled={deleteLoading}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {deleteLoading ? "Deleting..." : "Delete & Restore Stock"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </ProtectedPage>

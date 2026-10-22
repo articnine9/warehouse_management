@@ -16,8 +16,10 @@ import {
   CheckCircle2,
   Calendar,
   Layers,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/app/components/AuthProvider";
 
 export type WarehouseDetailsData = {
   warehouse: {
@@ -90,6 +92,8 @@ interface WarehouseDetailsModalProps {
   warehouseId: string | null;
   onClose: () => void;
   onEditWarehouse?: (warehouse: WarehouseDetailsData["warehouse"]) => void;
+  onDeleteWarehouse?: (warehouseId: string) => void;
+  onDeleteSuccess?: () => void;
   onSelectRack?: (rackId: string) => void;
   onSelectZone?: (zoneId: string) => void;
   onAddRack?: (warehouseId: string) => void;
@@ -100,14 +104,77 @@ export default function WarehouseDetailsModal({
   warehouseId,
   onClose,
   onEditWarehouse,
+  onDeleteWarehouse,
+  onDeleteSuccess,
   onSelectRack,
   onSelectZone,
   onAddRack,
   onAddZone,
 }: WarehouseDetailsModalProps) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+
   const [data, setData] = useState<WarehouseDetailsData | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"ZONES" | "RACKS" | "INVENTORY" | "STAFF">("RACKS");
+
+  // Delete states
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: "WAREHOUSE" | "ZONE" | "RACK" | "INVENTORY";
+    id: string;
+    name: string;
+  } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  async function reloadWarehouseData() {
+    if (!warehouseId) return;
+    try {
+      const res = await fetch(`/api/warehouses/${warehouseId}`);
+      const json = await res.json();
+      if (json.success) {
+        setData(json.data);
+      }
+    } catch (err) {
+      console.error("Error reloading warehouse details:", err);
+    }
+  }
+
+  async function handleDeleteExecute() {
+    if (!deleteConfirm) return;
+    setDeleteLoading(true);
+    setDeleteError("");
+
+    try {
+      let endpoint = "";
+      if (deleteConfirm.type === "WAREHOUSE") endpoint = `/api/warehouses/${deleteConfirm.id}`;
+      else if (deleteConfirm.type === "ZONE") endpoint = `/api/zones/${deleteConfirm.id}`;
+      else if (deleteConfirm.type === "RACK") endpoint = `/api/racks/${deleteConfirm.id}`;
+      else if (deleteConfirm.type === "INVENTORY") endpoint = `/api/inventory/${deleteConfirm.id}`;
+
+      const res = await fetch(endpoint, { method: "DELETE" });
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setDeleteError(json.message || `Failed to delete ${deleteConfirm.type.toLowerCase()}`);
+      } else {
+        setDeleteConfirm(null);
+        if (deleteConfirm.type === "WAREHOUSE") {
+          onClose();
+          if (onDeleteWarehouse) onDeleteWarehouse(deleteConfirm.id);
+          else if (onDeleteSuccess) onDeleteSuccess();
+        } else {
+          await reloadWarehouseData();
+          if (onDeleteSuccess) onDeleteSuccess();
+        }
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+      setDeleteError("Network error occurred while deleting");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!warehouseId) {
@@ -184,9 +251,26 @@ export default function WarehouseDetailsModal({
                 onClick={() => {
                   onEditWarehouse(data.warehouse);
                 }}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
               >
                 Edit
+              </button>
+            )}
+            {data && isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirm({
+                    type: "WAREHOUSE",
+                    id: data.warehouse._id,
+                    name: data.warehouse.name,
+                  });
+                }}
+                className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition shadow-2xs cursor-pointer flex items-center gap-1"
+                title="Delete Warehouse"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
               </button>
             )}
             <button
@@ -412,9 +496,29 @@ export default function WarehouseDetailsModal({
                           <span className="text-slate-500 font-medium">
                             <span className="font-bold text-slate-800">{zone.rackCount || 0}</span> Racks inside
                           </span>
-                          <span className="text-violet-600 font-bold inline-flex items-center gap-0.5 text-[11px] group-hover:translate-x-0.5 transition">
-                            View Zone &rarr;
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteConfirm({
+                                    type: "ZONE",
+                                    id: zone._id,
+                                    name: zone.name,
+                                  });
+                                }}
+                                className="rounded px-2 py-0.5 text-[11px] font-bold text-red-600 hover:bg-red-50 border border-red-200 transition cursor-pointer flex items-center gap-0.5"
+                                title="Delete Zone"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                                Delete
+                              </button>
+                            )}
+                            <span className="text-violet-600 font-bold inline-flex items-center gap-0.5 text-[11px] group-hover:translate-x-0.5 transition">
+                              View Zone &rarr;
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -502,15 +606,33 @@ export default function WarehouseDetailsModal({
                               </span>
                             </td>
                             <td className="p-3 text-right">
-                              {onSelectRack && (
-                                <button
-                                  type="button"
-                                  onClick={() => onSelectRack(rack._id)}
-                                  className="rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100 transition inline-flex items-center gap-1 cursor-pointer"
-                                >
-                                  View Rack <ExternalLink className="h-3 w-3" />
-                                </button>
-                              )}
+                              <div className="flex items-center justify-end gap-1.5">
+                                {isAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDeleteConfirm({
+                                        type: "RACK",
+                                        id: rack._id,
+                                        name: rack.name,
+                                      });
+                                    }}
+                                    className="rounded-lg bg-red-50 border border-red-200 px-2 py-1 text-[11px] font-bold text-red-600 hover:bg-red-100 transition inline-flex items-center gap-1 cursor-pointer"
+                                    title="Delete Rack"
+                                  >
+                                    <Trash2 className="h-3 w-3" /> Delete
+                                  </button>
+                                )}
+                                {onSelectRack && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onSelectRack(rack._id)}
+                                    className="rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100 transition inline-flex items-center gap-1 cursor-pointer"
+                                  >
+                                    View Rack <ExternalLink className="h-3 w-3" />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -538,6 +660,7 @@ export default function WarehouseDetailsModal({
                           <th className="p-3">Quantity</th>
                           <th className="p-3">Status</th>
                           <th className="p-3 text-right">Unit Price</th>
+                          {isAdmin && <th className="p-3 text-right">Actions</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
@@ -582,6 +705,24 @@ export default function WarehouseDetailsModal({
                                 ? `₹${inv.productId.price.toLocaleString("en-IN")}`
                                 : "-"}
                             </td>
+                            {isAdmin && (
+                              <td className="p-3 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDeleteConfirm({
+                                      type: "INVENTORY",
+                                      id: inv._id,
+                                      name: `${inv.productId?.name || "Product"} (${inv.quantity} units)`,
+                                    });
+                                  }}
+                                  className="rounded-lg bg-red-50 border border-red-200 px-2 py-1 text-[11px] font-bold text-red-600 hover:bg-red-100 transition inline-flex items-center gap-1 cursor-pointer"
+                                  title="Delete Inventory"
+                                >
+                                  <Trash2 className="h-3 w-3" /> Delete
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -624,6 +765,64 @@ export default function WarehouseDetailsModal({
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Delete Confirmation Modal for Admin */}
+        {deleteConfirm && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+              <div className="flex items-center gap-3 text-red-600">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Delete {deleteConfirm.type.charAt(0) + deleteConfirm.type.slice(1).toLowerCase()}
+                  </h3>
+                  <p className="text-xs text-slate-500">Admin Authorization Required</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl bg-red-50/60 border border-red-200/60 p-3 text-xs text-red-800">
+                <p className="font-semibold">
+                  Are you sure you want to delete <span className="font-bold underline">{deleteConfirm.name}</span>?
+                </p>
+                <p className="mt-1 text-[11px] text-red-700">
+                  This action cannot be undone. Any linked associations might be permanently removed.
+                </p>
+              </div>
+
+              {deleteError && (
+                <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-800 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirm(null);
+                    setDeleteError("");
+                  }}
+                  disabled={deleteLoading}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteExecute}
+                  disabled={deleteLoading}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {deleteLoading ? "Deleting..." : "Confirm Delete"}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -569,7 +569,7 @@ export default function ProductsPage() {
 
   return (
     <ProtectedPage>
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
+      <div className="min-h-screen bg-slate-50 p-3 md:p-4 lg:p-5 space-y-6">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">
@@ -613,7 +613,7 @@ export default function ProductsPage() {
             }`}
           >
             <p className="text-[11px] font-bold tracking-wider text-blue-900/80 uppercase">ALL</p>
-            <p className="mt-1 text-sm font-bold text-blue-950">All Categories</p>
+            <p className="mt-1 text-sm font-bold text-blue-950">All Products</p>
             <p className="mt-1 text-2xl font-black text-blue-700">
               {products.length}
             </p>

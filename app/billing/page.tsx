@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState, useRef, useMemo } from "react";
-import { X, Search, MapPin, Receipt, Printer, RefreshCw } from "lucide-react";
+import { X, Search, MapPin, Receipt, Printer, RefreshCw, Trash2, Loader2, AlertTriangle } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import WarningPopup from "@/app/components/WarningPopup";
+import { useAuth } from "@/app/components/AuthProvider";
 
 type InventoryItem = {
   _id: string;
@@ -97,11 +98,45 @@ export default function BillingPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const quantityInputRef = useRef<HTMLInputElement>(null);
 
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+
   // Print Modal state
   const [activeInvoice, setActiveInvoice] = useState<Invoice | null>(null);
 
+  // Delete Invoice state
+  const [deleteInvoiceId, setDeleteInvoiceId] = useState<string | null>(null);
+  const [deleteInvoiceNumber, setDeleteInvoiceNumber] = useState<string>("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
   const [warningOpen, setWarningOpen] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
+
+  async function handleDeleteInvoice() {
+    if (!deleteInvoiceId) return;
+    setDeleteLoading(true);
+
+    try {
+      const res = await fetch(`/api/billing/${deleteInvoiceId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        setWarningMessage(data.message || "Failed to delete invoice");
+        setWarningOpen(true);
+      } else {
+        setDeleteInvoiceId(null);
+        await Promise.all([fetchInvoices(), fetchInventory()]);
+      }
+    } catch (err) {
+      console.error("Delete invoice error:", err);
+      setWarningMessage("Failed to delete invoice");
+      setWarningOpen(true);
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -324,7 +359,7 @@ export default function BillingPage() {
 
   return (
     <ProtectedPage>
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6 print:p-0 print:bg-white">
+      <div className="min-h-screen bg-slate-50 p-3 md:p-4 lg:p-5 space-y-6 print:p-0 print:bg-white">
       {/* Header (Hidden on Print) */}
       <div className="print:hidden">
         <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Billing & Stock Dispatch</h1>
@@ -747,13 +782,28 @@ export default function BillingPage() {
                           ₹{inv.grandTotal.toLocaleString("en-IN")}
                         </td>
                         <td className="px-5 py-3 text-center">
-                          <button
-                            type="button"
-                            onClick={() => setActiveInvoice(inv)}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-50 inline-flex items-center gap-1"
-                          >
-                            <Printer className="h-3.5 w-3.5" /> Print
-                          </button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setActiveInvoice(inv)}
+                              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-blue-600 transition hover:bg-blue-50 inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Printer className="h-3.5 w-3.5" /> Print
+                            </button>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeleteInvoiceId(inv._id);
+                                  setDeleteInvoiceNumber(inv.invoiceNumber);
+                                }}
+                                className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer"
+                                title="Delete Invoice"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Delete
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -790,14 +840,26 @@ export default function BillingPage() {
                         {inv.paymentMethod}
                       </span>
                     </div>
-                    <div className="mt-2">
+                    <div className="mt-2 flex items-center gap-2">
                       <button
                         type="button"
                         onClick={() => setActiveInvoice(inv)}
-                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 transition hover:bg-blue-50 inline-flex items-center gap-1"
+                        className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-blue-600 transition hover:bg-blue-50 inline-flex items-center gap-1 cursor-pointer"
                       >
                         <Printer className="h-3.5 w-3.5" /> View / Print
                       </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDeleteInvoiceId(inv._id);
+                            setDeleteInvoiceNumber(inv.invoiceNumber);
+                          }}
+                          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -825,6 +887,48 @@ export default function BillingPage() {
           </div>
         );
       })()}
+
+      {/* Delete Invoice Modal for Admin */}
+      {deleteInvoiceId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100">
+                <Trash2 className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Delete Invoice</h3>
+                <p className="text-xs text-slate-500">Invoice: {deleteInvoiceNumber}</p>
+              </div>
+            </div>
+
+            <p className="mt-3 text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to delete invoice <strong className="text-slate-800">{deleteInvoiceNumber}</strong>?
+              Sold stock quantities will be automatically restored back to the respective warehouse inventory.
+            </p>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeleteInvoiceId(null)}
+                disabled={deleteLoading}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteInvoice}
+                disabled={deleteLoading}
+                className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              >
+                {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                {deleteLoading ? "Deleting..." : "Delete & Restore Stock"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Invoice Print & Preview Modal */}
       {activeInvoice && (

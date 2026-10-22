@@ -12,8 +12,10 @@ import {
   AlertTriangle,
   ArrowRight,
   Layers,
+  Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import { useAuth } from "@/app/components/AuthProvider";
 
 export type RackDetailsData = {
   rack: {
@@ -64,6 +66,8 @@ interface RackDetailsModalProps {
   rackId: string | null;
   onClose: () => void;
   onEditRack?: (rack: any) => void;
+  onDeleteRack?: (rackId: string) => void;
+  onDeleteSuccess?: () => void;
   onSelectWarehouse?: (warehouseId: string) => void;
   onSelectZone?: (zoneId: string) => void;
 }
@@ -72,11 +76,72 @@ export default function RackDetailsModal({
   rackId,
   onClose,
   onEditRack,
+  onDeleteRack,
+  onDeleteSuccess,
   onSelectWarehouse,
   onSelectZone,
 }: RackDetailsModalProps) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+
   const [data, setData] = useState<RackDetailsData | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Delete states
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: "RACK" | "INVENTORY";
+    id: string;
+    name: string;
+  } | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  async function reloadRackData() {
+    if (!rackId) return;
+    try {
+      const res = await fetch(`/api/racks/${rackId}`);
+      const json = await res.json();
+      if (json.success) {
+        setData(json.data);
+      }
+    } catch (err) {
+      console.error("Error reloading rack:", err);
+    }
+  }
+
+  async function handleDeleteExecute() {
+    if (!deleteConfirm) return;
+    setDeleteLoading(true);
+    setDeleteError("");
+
+    try {
+      const endpoint = deleteConfirm.type === "RACK"
+        ? `/api/racks/${deleteConfirm.id}`
+        : `/api/inventory/${deleteConfirm.id}`;
+
+      const res = await fetch(endpoint, { method: "DELETE" });
+      const json = await res.json();
+
+      if (!res.ok || !json.success) {
+        setDeleteError(json.message || `Failed to delete ${deleteConfirm.type.toLowerCase()}`);
+      } else {
+        setDeleteConfirm(null);
+        if (deleteConfirm.type === "RACK") {
+          onClose();
+          if (onDeleteRack) onDeleteRack(deleteConfirm.id);
+          else if (onDeleteSuccess) onDeleteSuccess();
+        } else {
+          await reloadRackData();
+          if (onDeleteSuccess) onDeleteSuccess();
+        }
+      }
+    } catch (err) {
+      console.error("Delete error:", err);
+      setDeleteError("Network error occurred while deleting");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (!rackId) {
@@ -186,9 +251,26 @@ export default function RackDetailsModal({
               <button
                 type="button"
                 onClick={() => onEditRack(data.rack)}
-                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
               >
                 Edit
+              </button>
+            )}
+            {data && isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDeleteConfirm({
+                    type: "RACK",
+                    id: data.rack._id,
+                    name: data.rack.name,
+                  });
+                }}
+                className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 transition shadow-2xs cursor-pointer flex items-center gap-1"
+                title="Delete Rack"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete
               </button>
             )}
             <button
@@ -287,6 +369,7 @@ export default function RackDetailsModal({
                         <th className="p-3">Quantity</th>
                         <th className="p-3">Stock Status</th>
                         <th className="p-3 text-right">Unit Price</th>
+                        {isAdmin && <th className="p-3 text-right">Actions</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
@@ -324,12 +407,87 @@ export default function RackDetailsModal({
                               ? `₹${inv.productId.price.toLocaleString("en-IN")}`
                               : "-"}
                           </td>
+                          {isAdmin && (
+                            <td className="p-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeleteConfirm({
+                                    type: "INVENTORY",
+                                    id: inv._id,
+                                    name: `${inv.productId?.name || "Product"} (${inv.quantity} units)`,
+                                  });
+                                }}
+                                className="rounded-lg bg-red-50 border border-red-200 px-2 py-1 text-[11px] font-bold text-red-600 hover:bg-red-100 transition inline-flex items-center gap-1 cursor-pointer"
+                                title="Delete Inventory"
+                              >
+                                <Trash2 className="h-3 w-3" /> Delete
+                              </button>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
+            </div>
+          </div>
+        )}
+        {/* Delete Confirmation Modal for Admin */}
+        {deleteConfirm && (
+          <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95">
+              <div className="flex items-center gap-3 text-red-600">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">
+                    Delete {deleteConfirm.type === "RACK" ? "Rack" : "Inventory Item"}
+                  </h3>
+                  <p className="text-xs text-slate-500">Admin Authorization Required</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-xl bg-red-50/60 border border-red-200/60 p-3 text-xs text-red-800">
+                <p className="font-semibold">
+                  Are you sure you want to delete <span className="font-bold underline">{deleteConfirm.name}</span>?
+                </p>
+                <p className="mt-1 text-[11px] text-red-700">
+                  This action cannot be undone. Any linked items will be affected.
+                </p>
+              </div>
+
+              {deleteError && (
+                <div className="mt-3 rounded-lg bg-amber-50 border border-amber-200 p-2 text-xs text-amber-800 flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600" />
+                  <span>{deleteError}</span>
+                </div>
+              )}
+
+              <div className="mt-6 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirm(null);
+                    setDeleteError("");
+                  }}
+                  disabled={deleteLoading}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteExecute}
+                  disabled={deleteLoading}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-red-700 transition flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+                >
+                  {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {deleteLoading ? "Deleting..." : "Confirm Delete"}
+                </button>
+              </div>
             </div>
           </div>
         )}

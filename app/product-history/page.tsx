@@ -3,7 +3,8 @@
 import { useEffect, useState, useMemo } from "react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
-import { History } from "lucide-react";
+import { History, Trash2, Loader2 } from "lucide-react";
+import { useAuth } from "@/app/components/AuthProvider";
 
 type HistoryEntry = {
   _id: string;
@@ -25,10 +26,39 @@ export default function ProductHistoryPage() {
   const [loading, setLoading] = useState(true);
   const [actionFilter, setActionFilter] = useState("");
 
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
   const [totalItems, setTotalItems] = useState(0);
+
+  // Delete state
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  async function handleDeleteHistory() {
+    if (!deleteId) return;
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/product-history/${deleteId}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDeleteId(null);
+        void fetchHistory();
+      } else {
+        alert(data.message || "Failed to delete history record");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error deleting history record");
+    } finally {
+      setDeleteLoading(false);
+    }
+  }
 
   async function fetchHistory() {
     setLoading(true);
@@ -82,7 +112,7 @@ export default function ProductHistoryPage() {
 
   return (
     <ProtectedPage>
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6 lg:p-8 space-y-6">
+      <div className="min-h-screen bg-slate-50 p-3 md:p-4 lg:p-5 space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">
             Product History
@@ -134,6 +164,7 @@ export default function ProductHistoryPage() {
                       <th className="px-5 py-3">Changed By</th>
                       <th className="px-5 py-3">Changed Fields</th>
                       <th className="px-5 py-3">Details</th>
+                      {isAdmin && <th className="px-5 py-3 text-right">Actions</th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -196,6 +227,18 @@ export default function ProductHistoryPage() {
                             </div>
                           </details>
                         </td>
+                        {isAdmin && (
+                          <td className="px-5 py-3 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setDeleteId(entry._id)}
+                              className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                              title="Delete Record"
+                            >
+                              <Trash2 className="h-3 w-3" /> Delete
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -237,6 +280,17 @@ export default function ProductHistoryPage() {
                         ))}
                       </div>
                     )}
+                    {isAdmin && (
+                      <div className="mt-2.5 pt-2 border-t border-slate-100 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => setDeleteId(entry._id)}
+                          className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer transition"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Delete
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -259,6 +313,46 @@ export default function ProductHistoryPage() {
             onPageSizeChange={(s) => setPageSize(s)}
             pageSizeOptions={[10, 25, 50, 100]}
           />
+        )}
+        {/* Delete Confirmation Modal for Admin */}
+        {deleteId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
+              <div className="flex items-center gap-3 text-red-600">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-100">
+                  <Trash2 className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Delete History Log</h3>
+                  <p className="text-xs text-slate-500">Admin Authorization Required</p>
+                </div>
+              </div>
+
+              <p className="mt-3 text-xs text-slate-600 leading-relaxed">
+                Are you sure you want to delete this product history audit log? This cannot be undone.
+              </p>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeleteId(null)}
+                  disabled={deleteLoading}
+                  className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteHistory}
+                  disabled={deleteLoading}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+                >
+                  {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                  {deleteLoading ? "Deleting..." : "Confirm Delete"}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </ProtectedPage>
