@@ -4,8 +4,19 @@ import Inventory from "@/models/Inventory";
 import Product from "@/models/Product";
 import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
-import Invoice from "@/models/Invoice";
+import Invoice, { type IInvoice } from "@/models/Invoice";
+import type { HydratedDocument } from "mongoose";
+import { resolveProductType } from "@/lib/productType";
 import StockMovement from "@/models/StockMovement";
+
+async function invoiceProductTypes(invoices: HydratedDocument<IInvoice>[]) {
+  const products = await Product.find({ _id: { $in: invoices.flatMap((invoice) => invoice.items.map((item) => item.productId)) } }).select("_id productType").lean();
+  const types = new Map(products.map((product) => [String(product._id), product.productType]));
+  return invoices.map((invoice) => {
+    const plain = invoice.toObject();
+    return { ...plain, items: plain.items.map((item) => ({ ...item, productType: resolveProductType(item.productType, undefined, types.get(String(item.productId))) })) };
+  });
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -47,7 +58,7 @@ export async function GET(request: NextRequest) {
 
       return Response.json({
         success: true,
-        data: invoices,
+        data: await invoiceProductTypes(invoices),
         pagination: {
           total,
           page,
@@ -61,7 +72,7 @@ export async function GET(request: NextRequest) {
 
     return Response.json({
       success: true,
-      data: invoices,
+      data: await invoiceProductTypes(invoices),
       count: invoices.length,
     });
   } catch (error) {
@@ -215,6 +226,7 @@ export async function POST(request: NextRequest) {
         productId: inv.productId?._id || inv.productId,
         productName: update.productName,
         sku: update.sku,
+        productType: inv.productId?.productType,
         warehouseId: inv.warehouseId?._id || inv.warehouseId || null,
         warehouseName: update.warehouseName,
         rackId: inv.rackId?._id || inv.rackId || null,
@@ -257,6 +269,7 @@ export async function POST(request: NextRequest) {
           productId: item.productId,
           productName: item.productName,
           sku: item.sku,
+          productType: item.productType,
           warehouseId: item.warehouseId,
           warehouseName: item.warehouseName,
           rackId: item.rackId,

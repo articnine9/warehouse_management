@@ -2,6 +2,8 @@
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
+import ProductMoveAction from "./ProductMoveAction";
+import ProductTypeBadge from "./ProductTypeBadge";
 import {
   ArrowLeft,
   X,
@@ -38,6 +40,7 @@ import {
   FileText,
   BadgeCheck,
   Filter,
+  MapPin,
 } from "lucide-react";
 
 interface ProductHistoryData {
@@ -51,6 +54,7 @@ interface ProductHistoryData {
     description?: string;
     warrantyMonths?: number;
     serviceIntervalMonths?: number;
+    productType?: "REUSABLE" | "NON_REUSABLE";
     sellerName?: string;
     sellerEmail?: string;
     sellerPhone?: string;
@@ -144,6 +148,7 @@ interface ProductHistoryData {
     issuedByName?: string;
   }>;
   movements: Array<{
+    productType?: "REUSABLE" | "NON_REUSABLE";
     id: string;
     movementType: "INWARD" | "OUTWARD";
     reason: string;
@@ -168,6 +173,7 @@ interface ProductHistoryModalProps {
   onClose: () => void;
   onSelectEmployee?: (employeeIdOrName: string) => void;
   backLabel?: string;
+  onInventoryChanged?: () => void;
 }
 
 interface LoanHistoryRow {
@@ -199,6 +205,7 @@ export default function ProductHistoryModal({
   onClose,
   onSelectEmployee,
   backLabel = "Back to Inventory",
+  onInventoryChanged,
 }: ProductHistoryModalProps) {
   const [data, setData] = useState<ProductHistoryData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -634,7 +641,7 @@ export default function ProductHistoryModal({
       )}
 
       {/* ─── APP BAR HEADER (Back / Product Title / Open Dedicated / Close) ─── */}
-      <div className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 sm:px-8 py-3.5 shrink-0 shadow-2xs">
+      <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 sm:px-8 py-3.5 shrink-0 shadow-2xs">
         <button
           type="button"
           onClick={onClose}
@@ -656,6 +663,18 @@ export default function ProductHistoryModal({
         )}
 
         <div className="flex items-center gap-2.5">
+          {data && !loading && (
+            <ProductMoveAction
+              key={data.product.id}
+              product={data.product}
+              inventoryLocations={data.inventoryLocations}
+              onSuccess={() => {
+                showToast("Product moved successfully");
+                void fetchProductHistory();
+                onInventoryChanged?.();
+              }}
+            />
+          )}
           <Link
             href={`/product-history/${productId}`}
             onClick={onClose}
@@ -740,11 +759,33 @@ export default function ProductHistoryModal({
               <b className="text-slate-800">{product?.category || "General"}</b>
             </span>
             <span className="text-slate-300">•</span>
-            <span className="flex items-center gap-1.5 font-medium text-slate-600">
-              <Warehouse className="h-3.5 w-3.5 text-slate-400" />
-              <span>Warehouses:</span>
-              <b className="text-slate-800">{data?.inventoryLocations?.length || 0} racks</b>
-            </span>
+            {data?.inventoryLocations && data.inventoryLocations.length > 0 ? (
+              <span className="flex items-center gap-1.5 font-medium text-slate-700 bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-200/70">
+                <Warehouse className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                <span className="font-black text-slate-900">{data.inventoryLocations[0].warehouse?.name || "Warehouse"}</span>
+                <span className="text-slate-300">•</span>
+                <span className="font-bold text-indigo-700">
+                  Zone: {typeof data.inventoryLocations[0].rack?.zoneId === "object"
+                    ? data.inventoryLocations[0].rack.zoneId.name
+                    : (data.inventoryLocations[0].rack?.zoneId || "Zone")}
+                </span>
+                <span className="text-slate-300">•</span>
+                <span className="font-mono font-black text-blue-800">
+                  Rack: {data.inventoryLocations[0].rack?.name || "Rack"}
+                </span>
+                {data.inventoryLocations.length > 1 && (
+                  <span className="text-[10px] font-bold text-blue-700 bg-white px-1.5 py-0.5 rounded border border-blue-200">
+                    +{data.inventoryLocations.length - 1} more
+                  </span>
+                )}
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 font-medium text-slate-600">
+                <Warehouse className="h-3.5 w-3.5 text-slate-400" />
+                <span>Warehouses:</span>
+                <b className="text-slate-800">0 racks</b>
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -800,17 +841,44 @@ export default function ProductHistoryModal({
                   </p>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs">
+                <div className="bg-gradient-to-br from-white to-blue-50/50 rounded-2xl border border-blue-200/80 p-4 shadow-xs">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-500">Storage Shelves</span>
-                    <Warehouse className="h-4 w-4 text-slate-600" />
+                    <span className="text-xs font-black text-blue-900 uppercase tracking-wide">Storage Rack & Zone</span>
+                    <Warehouse className="h-4 w-4 text-blue-600" />
                   </div>
-                  <p className="text-xl font-black text-slate-900 mt-2">
-                    {data.inventoryLocations?.length || 0} Racks
-                  </p>
-                  <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-                    Active warehouse racks
-                  </p>
+                  {data.inventoryLocations && data.inventoryLocations.length > 0 ? (
+                    <div className="mt-2 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-sm font-black text-blue-900 font-mono bg-blue-100 border border-blue-300 px-2.5 py-0.5 rounded-lg shadow-2xs">
+                          Rack: {data.inventoryLocations[0].rack?.name || "Rack"}
+                        </span>
+                        {(() => {
+                          const zn = typeof data.inventoryLocations[0].rack?.zoneId === "object"
+                            ? data.inventoryLocations[0].rack.zoneId.name
+                            : (data.inventoryLocations[0].rack?.zoneId || null);
+                          return zn ? (
+                            <span className="text-xs font-extrabold text-indigo-800 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-lg shadow-2xs">
+                              Zone: {zn}
+                            </span>
+                          ) : null;
+                        })()}
+                      </div>
+                      <p className="text-[11px] text-slate-700 font-bold truncate mt-1.5" title={data.inventoryLocations[0].warehouse?.name}>
+                        {data.inventoryLocations[0].warehouse?.name || "Main Warehouse"}
+                        {data.inventoryLocations[0].warehouse?.code && (
+                          <span className="text-slate-400 font-mono ml-1 font-semibold">({data.inventoryLocations[0].warehouse.code})</span>
+                        )}
+                        {data.inventoryLocations.length > 1 && (
+                          <span className="text-blue-700 font-black ml-1.5">+{data.inventoryLocations.length - 1} more</span>
+                        )}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mt-2">
+                      <p className="text-xl font-black text-slate-400">Unassigned</p>
+                      <p className="text-[11px] text-slate-400 font-medium mt-0.5">No warehouse rack assigned</p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -858,9 +926,7 @@ export default function ProductHistoryModal({
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 px-2.5 py-0.5 text-[10px] font-bold">
-                          Returnable Asset
-                        </span>
+                        <ProductTypeBadge productType={product.productType} />
                         {product.category && (
                           <span className="rounded-full bg-slate-100 text-slate-600 px-2.5 py-0.5 text-[10px] font-bold">
                             {product.category}
@@ -912,6 +978,34 @@ export default function ProductHistoryModal({
                           <span className="font-semibold text-slate-700">Every {product.serviceIntervalMonths} Months</span>
                         </div>
                       )}
+
+                      {data.inventoryLocations && data.inventoryLocations.length > 0 && (
+                        <div className="p-3 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 sm:col-span-2 space-y-2 shadow-2xs">
+                          <div className="flex items-center justify-between">
+                            <span className="text-blue-950 font-black flex items-center gap-1.5 text-xs uppercase tracking-wide">
+                              <MapPin className="h-4 w-4 text-blue-600 shrink-0" />
+                              Warehouse Location
+                            </span>
+                            <span className="text-[11px] font-bold text-slate-500">
+                              {data.inventoryLocations.length} {data.inventoryLocations.length === 1 ? "rack assigned" : "racks assigned"}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-900 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
+                              <Building2 className="h-3 w-3 text-blue-600" />
+                              {data.inventoryLocations[0].warehouse?.name || "Main Warehouse"}
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-xs font-bold text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 shadow-2xs">
+                              <Layers className="h-3 w-3 text-indigo-600" />
+                              Zone: {typeof data.inventoryLocations[0].rack?.zoneId === "object" ? data.inventoryLocations[0].rack.zoneId.name : (data.inventoryLocations[0].rack?.zoneId || "Zone")}
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-xs font-mono font-black text-blue-800 bg-blue-100 px-2.5 py-1 rounded-lg border border-blue-300 shadow-2xs">
+                              <Box className="h-3 w-3 text-blue-700" />
+                              Rack: {data.inventoryLocations[0].rack?.name || "Rack"}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {product.description && (
@@ -928,53 +1022,121 @@ export default function ProductHistoryModal({
                 {/* ─── RIGHT COLUMN (6 cols): WAREHOUSE STORAGE & INITIAL ARRIVAL ─── */}
                 <div className="lg:col-span-6 flex flex-col gap-4">
                   {/* 1. Warehouse Storage & Shelves */}
-                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex-1 space-y-3.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Warehouse className="h-4 w-4 text-blue-600" />
-                        <h3 className="text-sm font-bold text-slate-800">Warehouse Storage & Shelves</h3>
+                  <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs flex-1 space-y-4">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                          <Warehouse className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-black text-slate-900">Warehouse Storage & Shelves</h3>
+                          <p className="text-[11px] text-slate-500 font-medium">Assigned warehouse, zone & rack location</p>
+                        </div>
                       </div>
-                      <span className="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-xs font-bold">
+                      <span className={`rounded-xl px-3 py-1 text-xs font-black border shadow-2xs ${
+                        data.summary.totalInStock === 0
+                          ? "bg-slate-100 text-slate-600 border-slate-200"
+                          : "bg-emerald-50 text-emerald-800 border-emerald-300"
+                      }`}>
                         {data.summary.totalInStock} Total In Stock
                       </span>
                     </div>
 
                     {data.inventoryLocations && data.inventoryLocations.length > 0 ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[175px] overflow-y-auto pr-1">
-                        {data.inventoryLocations.map((loc) => (
-                          <div
-                            key={loc.id}
-                            className="rounded-xl border border-slate-200/80 bg-slate-50/50 p-3 hover:border-blue-300 hover:bg-blue-50/20 transition space-y-1.5"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="font-bold text-slate-900 text-xs truncate max-w-[140px]" title={loc.warehouse?.name || "Warehouse"}>
-                                {loc.warehouse?.name || "Main Warehouse"}
-                              </span>
-                              <span className="font-mono text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
-                                {loc.warehouse?.code || "WH"}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between text-xs pt-0.5 gap-2 flex-wrap">
-                              <div className="flex items-center gap-1.5 text-slate-600 flex-wrap">
-                                {loc.rack?.zoneId && (
-                                  <span className="text-[10px] text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 rounded font-semibold">
-                                    Zone: <b>{typeof loc.rack.zoneId === "object" ? loc.rack.zoneId.name : loc.rack.zoneId}</b>
+                      <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                        {data.inventoryLocations.map((loc) => {
+                          const zoneName = typeof loc.rack?.zoneId === "object" ? loc.rack?.zoneId?.name : (loc.rack?.zoneId || null);
+                          const isZero = (loc.quantity || 0) === 0;
+
+                          return (
+                            <div
+                              key={loc.id}
+                              className="rounded-2xl border-2 border-slate-200 bg-slate-50/70 p-4 hover:border-blue-400 hover:bg-blue-50/20 transition-all space-y-3"
+                            >
+                              {/* Warehouse Header + Quantity */}
+                              <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-200/70 pb-3">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white shadow-2xs shrink-0">
+                                    <Building2 className="h-5 w-5" />
                                   </span>
-                                )}
-                                <div className="flex items-center gap-1">
-                                  <Box className="h-3 w-3 text-slate-400" />
-                                  <span className="text-[11px]">Rack: <b>{loc.rack?.name || "Unassigned"}</b></span>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-black text-slate-900 text-base tracking-tight">
+                                        {loc.warehouse?.name || "Main Warehouse"}
+                                      </span>
+                                      {loc.warehouse?.code && (
+                                        <span className="font-mono text-xs font-bold bg-white text-slate-700 border border-slate-200 px-2 py-0.5 rounded-md shadow-2xs">
+                                          {loc.warehouse.code}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-wider">Warehouse Location</p>
+                                  </div>
+                                </div>
+
+                                <div className={`px-3.5 py-1.5 rounded-xl font-black text-xs border flex items-center gap-1.5 shadow-2xs shrink-0 ${
+                                  isZero
+                                    ? "bg-slate-100 text-slate-500 border-slate-200"
+                                    : "bg-emerald-100/90 text-emerald-900 border-emerald-300"
+                                }`}>
+                                  <span className={`h-2 w-2 rounded-full ${isZero ? "bg-slate-400" : "bg-emerald-600 animate-pulse"}`} />
+                                  <span>{loc.quantity} {loc.quantity === 1 ? "unit" : "units"}</span>
                                 </div>
                               </div>
-                              <span className="font-black text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-lg text-[11px]">
-                                {loc.quantity} units
-                              </span>
+
+                              {/* Big, Clear Zone & Rack Breakdown */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                {/* Zone Block */}
+                                <div className="flex items-center gap-3 p-3.5 rounded-xl bg-indigo-50/70 border border-indigo-200 shadow-2xs">
+                                  <div className="h-10 w-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                    <Layers className="h-5 w-5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="text-[10px] font-black uppercase text-indigo-700 tracking-wider block">
+                                      Zone / Room
+                                    </span>
+                                    <p className="text-base font-black text-indigo-950 truncate" title={zoneName || "No Zone"}>
+                                      {zoneName ? (
+                                        zoneName
+                                      ) : (
+                                        <span className="text-slate-400 font-normal italic">Unassigned Zone</span>
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Rack Block */}
+                                <div className="flex items-center gap-3 p-3.5 rounded-xl bg-blue-50/70 border border-blue-200 shadow-2xs">
+                                  <div className="h-10 w-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-2xs">
+                                    <Box className="h-5 w-5" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider block">
+                                      Rack / Shelf
+                                    </span>
+                                    <p className="text-base font-black text-blue-950 font-mono truncate" title={loc.rack?.name || "No Rack"}>
+                                      {loc.rack?.name ? (
+                                        <>
+                                          {loc.rack.name}
+                                          {loc.rack.code && loc.rack.code !== loc.rack.name && (
+                                            <span className="text-xs text-slate-500 font-sans font-semibold ml-1.5">
+                                              ({loc.rack.code})
+                                            </span>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <span className="text-slate-400 font-normal italic">Unassigned Rack</span>
+                                      )}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
-                      <div className="py-6 text-center text-xs text-slate-400 bg-slate-50 rounded-xl">
+                      <div className="py-8 text-center text-xs text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                         No warehouse rack allocations recorded for this product.
                       </div>
                     )}
@@ -992,10 +1154,10 @@ export default function ProductHistoryModal({
                             <h4 className="text-xs font-black text-blue-950 uppercase tracking-wider">
                               Initial Stock Inward Arrival
                             </h4>
-                            <p className="text-[10px] text-blue-700">Origin record of first batch received</p>
+                            <p className="text-[10px] text-blue-700 font-medium">Origin record of first batch received</p>
                           </div>
                         </div>
-                        <span className="text-[10px] font-mono text-blue-900 font-bold bg-white/80 border border-blue-200 px-2 py-0.5 rounded-lg">
+                        <span className="text-[10px] font-mono text-blue-900 font-bold bg-white/80 border border-blue-200 px-2 py-0.5 rounded-lg shadow-2xs">
                           {new Date(data.initialStockArrival.date).toLocaleDateString("en-IN", {
                             day: "2-digit",
                             month: "short",
@@ -1005,25 +1167,25 @@ export default function ProductHistoryModal({
                       </div>
 
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-0.5 text-xs">
-                        <div className="bg-white/80 rounded-xl p-2 border border-blue-100">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Initial Qty</span>
-                          <span className="text-xs sm:text-sm font-black text-slate-800">{data.initialStockArrival.quantity} units</span>
+                        <div className="bg-white/80 rounded-xl p-2.5 border border-blue-100 shadow-2xs">
+                          <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Initial Qty</span>
+                          <span className="text-xs sm:text-sm font-black text-slate-900">{data.initialStockArrival.quantity} units</span>
                         </div>
-                        <div className="bg-white/80 rounded-xl p-2 border border-blue-100">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Location</span>
-                          <span className="text-[11px] font-bold text-slate-800 truncate block">
-                            {data.initialStockArrival.warehouseName} ({data.initialStockArrival.rackName})
+                        <div className="bg-white/80 rounded-xl p-2.5 border border-blue-100 shadow-2xs min-w-0">
+                          <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Initial Location</span>
+                          <span className="text-xs font-black text-slate-900 block truncate" title={`${data.initialStockArrival.warehouseName} • ${data.initialStockArrival.rackName}`}>
+                            {data.initialStockArrival.warehouseName} • <span className="font-mono text-blue-800">{data.initialStockArrival.rackName}</span>
                           </span>
                         </div>
-                        <div className="bg-white/80 rounded-xl p-2 border border-blue-100">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Supplier</span>
-                          <span className="text-[11px] font-bold text-slate-800 truncate block">
+                        <div className="bg-white/80 rounded-xl p-2.5 border border-blue-100 shadow-2xs min-w-0">
+                          <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Supplier</span>
+                          <span className="text-xs font-bold text-slate-900 block truncate" title={data.initialStockArrival.supplier || "Supplier Inward"}>
                             {data.initialStockArrival.supplier || "Supplier Inward"}
                           </span>
                         </div>
-                        <div className="bg-white/80 rounded-xl p-2 border border-blue-100">
-                          <span className="text-[10px] text-slate-400 block font-semibold">Reference</span>
-                          <span className="text-[11px] font-mono font-bold text-slate-700 truncate block">
+                        <div className="bg-white/80 rounded-xl p-2.5 border border-blue-100 shadow-2xs min-w-0">
+                          <span className="text-[10px] text-slate-500 block font-bold uppercase tracking-wider">Reference</span>
+                          <span className="text-xs font-mono font-bold text-slate-700 block truncate" title={data.initialStockArrival.referenceNumber || "INITIAL-STOCK"}>
                             {data.initialStockArrival.referenceNumber || "INITIAL-STOCK"}
                           </span>
                         </div>
@@ -1156,6 +1318,7 @@ export default function ProductHistoryModal({
                               <td className="py-3 px-3">
                                 <span className="font-bold text-slate-800 block">
                                   {m.reason ? m.reason.replace(/_/g, " ") : "Movement"}
+                                  <ProductTypeBadge productType={m.productType} />
                                 </span>
                                 {m.notes && <span className="text-[11px] text-slate-500 block truncate max-w-[220px]" title={m.notes}>{m.notes}</span>}
                               </td>
@@ -1284,6 +1447,7 @@ export default function ProductHistoryModal({
                           >
                             {currentHolder.employeeName}
                           </p>
+                          <ProductTypeBadge productType={currentHolder.productType} returnDueDate={currentHolder.returnDueDate} />
                           <span className="rounded-md bg-blue-100 text-blue-800 px-2 py-0.5 text-[10px] font-bold">
                             {currentHolder.employeeCode || currentHolder.employeeId?.slice(-6) || "EMP"}
                           </span>

@@ -96,7 +96,14 @@ export default function AddRackModal({
   }, [zones, warehouseId]);
 
   const zoneOptions: SelectOption[] = useMemo(() => {
-    return filteredZones.map((z) => ({
+    const seen = new Set<string>();
+    const unique = filteredZones.filter((z) => {
+      const name = z.name.trim().toLowerCase();
+      if (seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
+    return unique.map((z) => ({
       value: z._id,
       label: z.name,
       subLabel: z.code || undefined,

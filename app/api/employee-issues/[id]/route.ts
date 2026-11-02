@@ -156,6 +156,38 @@ export async function PUT(
 
     const changes: string[] = [];
 
+    // 0. Product Classification (Returnable vs Non-Returnable)
+    if (body.productType !== undefined) {
+      const newType: "REUSABLE" | "NON_REUSABLE" =
+        body.productType === "REUSABLE" ? "REUSABLE" : "NON_REUSABLE";
+      if (item.productType !== newType) {
+        item.productType = newType;
+        changes.push(
+          `classification updated to ${newType === "REUSABLE" ? "Returnable" : "Non-Returnable"}`
+        );
+        if (newType === "REUSABLE") {
+          const days = Math.max(1, Number(body.returnDueDays) || item.returnDueDays || 30);
+          item.returnDueDays = days;
+          if (!item.returnDueDate) {
+            item.returnDueDate = new Date(Date.now() + days * 86400000);
+          }
+        } else {
+          item.returnDueDays = 0;
+          item.returnDueDate = undefined;
+        }
+      }
+    }
+
+    if (
+      body.returnDueDays !== undefined &&
+      (item.productType === "REUSABLE" || body.productType === "REUSABLE")
+    ) {
+      const days = Math.max(1, Number(body.returnDueDays));
+      item.returnDueDays = days;
+      item.returnDueDate = new Date(Date.now() + days * 86400000);
+      changes.push(`return period set to ${days} days`);
+    }
+
     // 1. Service interval (recurring cycle)
     if (body.serviceIntervalMonths !== undefined) {
       const interval = Number(body.serviceIntervalMonths);
@@ -215,6 +247,7 @@ export async function PUT(
             warehouseName: item.warehouseName,
             rackId: item.rackId,
             rackName: item.rackName,
+            productType: item.productType,
             movementType: "INWARD",
             reason: "EMPLOYEE_RETURN",
             quantity: item.quantity || 1,

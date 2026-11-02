@@ -7,6 +7,8 @@ import Rack from "@/models/Rack";
 import EmployeeIssue from "@/models/EmployeeIssue";
 import Invoice from "@/models/Invoice";
 import Inventory from "@/models/Inventory";
+import { isValidObjectId } from "mongoose";
+import { movementProductType } from "@/lib/movementProductType";
 
 function getPeriodDateRange(period?: string | null, startDate?: string | null, endDate?: string | null, singleDate?: string | null) {
   const now = new Date();
@@ -285,12 +287,21 @@ export async function GET(request: Request) {
     const [total, movements, allFilteredForKpi] = await Promise.all([
       StockMovement.countDocuments(filter),
       StockMovement.find(filter)
-        .populate("productId", "name sku category sellerName price")
+        .populate("productId", "name sku category productType sellerName price")
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit),
       StockMovement.find(filter).select("movementType quantity totalValue unitPrice").lean(),
     ]);
+
+    const legacyIssueMovements = movements.filter((movement) => !movement.productType && (movement.reason === "EMPLOYEE_ISSUE" || movement.reason === "EMPLOYEE_RETURN"));
+    const issueIds = legacyIssueMovements.map((movement) => movement.referenceId).filter((id) => id && isValidObjectId(id));
+    const issueNumbers = legacyIssueMovements.map((movement) => movement.referenceNumber?.replace(/^(?:ISSUE|RETURN)\s*#\s*/i, "")).filter(Boolean);
+    const relatedIssues = legacyIssueMovements.length ? await EmployeeIssue.find({ $or: [{ _id: { $in: issueIds } }, { issueNumber: { $in: issueNumbers } }] }).lean() : [];
+    const displayedMovements = movements.map((movement) => {
+      const catalogType = movement.productId && typeof movement.productId === "object" && "productType" in movement.productId ? movement.productId.productType : undefined;
+      return { ...movement.toObject(), productType: movementProductType(movement, relatedIssues, catalogType) };
+    });
 
     let totalInwardUnits = 0;
     let totalInwardValue = 0;
@@ -314,7 +325,7 @@ export async function GET(request: Request) {
 
     return Response.json({
       success: true,
-      data: movements,
+      data: displayedMovements,
       metrics: {
         totalInwardUnits,
         totalInwardValue,
@@ -381,11 +392,13 @@ export async function POST(request: Request) {
 
     const numQty = Number(quantity);
     const numPrice = Number(unitPrice) || 0;
+    const product = await Product.findById(productId);
 
     const movement = await StockMovement.create({
       productId,
       productName,
       sku,
+      productType: product?.productType,
       warehouseId,
       warehouseName,
       rackId,

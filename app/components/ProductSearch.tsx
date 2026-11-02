@@ -1,4 +1,5 @@
 "use client";
+import ProductTypeBadge from "./ProductTypeBadge";
 
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Search, X, Package, Layers, MapPin } from "lucide-react";
@@ -12,6 +13,7 @@ type SearchResult = {
     name: string;
     sku: string;
     category?: string;
+    productType?: "REUSABLE" | "NON_REUSABLE";
     sellerName?: string;
     price?: number;
   };
@@ -47,11 +49,14 @@ export default function ProductSearch() {
   const [selectedStatus, setSelectedStatus] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [page, setPage] = useState(1);
   const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
 
   const desktopScrollRef = useRef<HTMLDivElement>(null);
   const mobileScrollRef = useRef<HTMLDivElement>(null);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const loadingMoreRef = useRef(false);
 
   // Fetch categories once
   useEffect(() => {
@@ -76,8 +81,11 @@ export default function ProductSearch() {
   }, [query]);
 
   // Initial fetch on filter change (resets to page 1)
-  const fetchInitial = useCallback(async () => {
+  const fetchInitial = useCallback(async (signal: AbortSignal) => {
     setLoading(true);
+    setLoadingMore(false);
+    loadingMoreRef.current = false;
+    setErrorMessage("");
     setPage(1);
     try {
       const params = new URLSearchParams();
@@ -94,8 +102,14 @@ export default function ProductSearch() {
         params.set("category", selectedCategory);
       }
 
-      const res = await fetch(`/api/inventory?${params.toString()}`);
-      const result = await res.json();
+      const res = await fetch(`/api/inventory?${params.toString()}`, { signal });
+      const result = await res.json().catch(() => {
+        throw new Error("Unable to load inventory. Check the server connection and try again.");
+      });
+      if (signal.aborted) return;
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || "Failed to load inventory. Please try again.");
+      }
 
       if (result.success) {
         setInventory(result.data || []);
@@ -109,24 +123,35 @@ export default function ProductSearch() {
         setTotalCount(0);
       }
     } catch (error) {
+      if (signal.aborted) return;
       console.error("Failed to fetch initial inventory:", error);
       setInventory([]);
+      setTotalCount(0);
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load inventory. Please try again.");
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setLoading(false);
     }
   }, [debouncedQuery, selectedStatus, selectedCategory]);
 
   useEffect(() => {
-    void fetchInitial();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    // Reset the pending state when synchronizing the results with a new filter.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchInitial(controller.signal);
+    return () => controller.abort();
   }, [fetchInitial]);
 
   // Fetch next chunk for lazy load on scroll
   const fetchNextChunk = useCallback(async () => {
-    if (loading || loadingMore) return;
+    const signal = requestControllerRef.current?.signal;
+    if (!signal || signal.aborted || loading || loadingMoreRef.current) return;
     if (inventory.length >= totalCount) return;
 
     const nextPage = page + 1;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
+    setErrorMessage("");
     try {
       const params = new URLSearchParams();
       params.set("page", String(nextPage));
@@ -142,8 +167,14 @@ export default function ProductSearch() {
         params.set("category", selectedCategory);
       }
 
-      const res = await fetch(`/api/inventory?${params.toString()}`);
-      const result = await res.json();
+      const res = await fetch(`/api/inventory?${params.toString()}`, { signal });
+      const result = await res.json().catch(() => {
+        throw new Error("Unable to load more inventory. Check the server connection and try again.");
+      });
+      if (signal.aborted) return;
+      if (!res.ok || !result.success) {
+        throw new Error(result.message || "Failed to load more items. Please try again.");
+      }
 
       if (result.success && Array.isArray(result.data)) {
         setInventory((prev) => {
@@ -156,11 +187,16 @@ export default function ProductSearch() {
         setPage(nextPage);
       }
     } catch (error) {
+      if (signal.aborted) return;
       console.error("Failed to load more inventory items:", error);
+      setErrorMessage(error instanceof Error ? error.message : "Failed to load more items. Please try again.");
     } finally {
-      setLoadingMore(false);
+      if (!signal.aborted) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
     }
-  }, [loading, loadingMore, inventory.length, totalCount, page, debouncedQuery, selectedStatus, selectedCategory]);
+  }, [loading, inventory.length, totalCount, page, debouncedQuery, selectedStatus, selectedCategory]);
 
   // Handle scroll on container to lazy-load when nearing bottom
   function handleContainerScroll(e: React.UIEvent<HTMLDivElement>) {
@@ -195,7 +231,7 @@ export default function ProductSearch() {
   }, [categories]);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+    <div className="rounded-xl border border-blue-200 bg-white shadow-sm overflow-hidden">
       {/* Header */}
       <div className="p-4 md:p-6 border-b border-slate-100 space-y-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -203,7 +239,7 @@ export default function ProductSearch() {
             <div className="flex items-center gap-2">
               <Package className="h-5 w-5 text-blue-600" />
               <h2 className="text-lg font-bold text-slate-800">
-                Warehouse Inventory Directory
+                Product Search
               </h2>
             </div>
             <p className="mt-1 text-xs text-slate-500">
@@ -233,7 +269,8 @@ export default function ProductSearch() {
           <div className="relative flex-1">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
-              type="text"
+              type="search"
+              aria-label="Search products by name, SKU, seller, warehouse, or rack"
               placeholder="Search by product name, SKU, seller, warehouse, or rack..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -275,6 +312,25 @@ export default function ProductSearch() {
           </div>
         </div>
       </div>
+
+      {errorMessage && (
+        <div role="alert" className="flex items-center justify-between gap-3 border-b border-red-100 bg-red-50 p-4 text-sm text-red-700">
+          <p>{errorMessage}</p>
+          <button
+            type="button"
+            disabled={loading || loadingMore}
+            onClick={() => {
+              const signal = requestControllerRef.current?.signal;
+              if (!signal || signal.aborted) return;
+              if (inventory.length > 0) void fetchNextChunk();
+              else void fetchInitial(signal);
+            }}
+            className="shrink-0 rounded-lg border border-red-200 px-3 py-1.5 font-semibold hover:bg-red-100"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Loading Skeleton */}
       {loading && (
@@ -320,6 +376,7 @@ export default function ProductSearch() {
                     >
                       {item.productId?.name || "Unknown Product"}
                     </button>
+                    <ProductTypeBadge productType={item.productId?.productType} />
                     <div className="flex items-center gap-2 text-xs text-slate-400 mt-0.5">
                       <span>SKU: {item.productId?.sku || "-"}</span>
                       {item.productId?.sellerName && (
@@ -403,6 +460,7 @@ export default function ProductSearch() {
                   >
                     {item.productId?.name || "Unknown"}
                   </button>
+                  <ProductTypeBadge productType={item.productId?.productType} />
                   <p className="text-xs text-slate-400">SKU: {item.productId?.sku || "-"}</p>
                 </div>
                 <span
@@ -442,7 +500,7 @@ export default function ProductSearch() {
       )}
 
       {/* No Results */}
-      {!loading && inventory.length === 0 && (
+      {!loading && !errorMessage && inventory.length === 0 && (
         <div className="p-12 text-center text-sm text-slate-400">
           <p className="font-medium text-slate-600">No inventory records found</p>
           <p className="text-xs text-slate-400 mt-1">
@@ -462,10 +520,10 @@ export default function ProductSearch() {
               Loading more items...
             </div>
           ) : inventory.length < totalCount ? (
-            <p className="text-xs font-medium text-slate-500">
+            <button type="button" onClick={() => void fetchNextChunk()} className="text-xs font-medium text-blue-600 hover:underline">
               Showing <span className="font-bold text-slate-700">{inventory.length}</span> of{" "}
-              <span className="font-bold text-slate-700">{totalCount}</span> items • Scroll down to load more
-            </p>
+              <span className="font-bold text-slate-700">{totalCount}</span> items • Load more
+            </button>
           ) : (
             <p className="text-xs font-semibold text-slate-400">
               All {totalCount} items loaded
@@ -479,6 +537,10 @@ export default function ProductSearch() {
         <ProductHistoryModal
           productId={selectedProductId}
           onClose={() => setSelectedProductId(null)}
+          onInventoryChanged={() => {
+            const signal = requestControllerRef.current?.signal;
+            if (signal && !signal.aborted) void fetchInitial(signal);
+          }}
         />
       )}
     </div>

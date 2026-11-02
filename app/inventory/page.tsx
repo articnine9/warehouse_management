@@ -1,4 +1,6 @@
 "use client";
+import ProductTypeBadge from "@/app/components/ProductTypeBadge";
+import { productTypeLabel } from "@/lib/productType";
 
 import { FormEvent, useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
@@ -16,6 +18,7 @@ type Product = {
   name: string;
   sku: string;
   category?: string;
+  productType?: "REUSABLE" | "NON_REUSABLE";
   price?: number;
 };
 type Warehouse = { _id: string; name: string; code: string };
@@ -170,7 +173,7 @@ function InventoryContent() {
     return products.map((p) => ({
       value: p._id,
       label: p.name,
-      subLabel: `SKU: ${p.sku}`,
+      subLabel: `SKU: ${p.sku} · ${productTypeLabel(p.productType)}`,
       badge: p.price != null ? `₹${p.price.toLocaleString("en-IN")}` : undefined,
     }));
   }, [products]);
@@ -195,19 +198,25 @@ function InventoryContent() {
   }, [warehouses]);
 
   const rackOptions: SelectOption[] = useMemo(() => {
-    return filteredRacks.map((r) => ({
-      value: r._id,
-      label: r.name,
-      subLabel: r.code,
-    }));
+    return filteredRacks.map((r) => {
+      const zoneName = typeof r.zoneId === "object" && r.zoneId ? r.zoneId.name : null;
+      return {
+        value: r._id,
+        label: r.name,
+        subLabel: zoneName ? `${r.code} • Zone: ${zoneName}` : r.code,
+      };
+    });
   }, [filteredRacks]);
 
   const editRackOptions: SelectOption[] = useMemo(() => {
-    return editFilteredRacks.map((r) => ({
-      value: r._id,
-      label: r.name,
-      subLabel: r.code,
-    }));
+    return editFilteredRacks.map((r) => {
+      const zoneName = typeof r.zoneId === "object" && r.zoneId ? r.zoneId.name : null;
+      return {
+        value: r._id,
+        label: r.name,
+        subLabel: zoneName ? `${r.code} • Zone: ${zoneName}` : r.code,
+      };
+    });
   }, [editFilteredRacks]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -571,6 +580,7 @@ function InventoryContent() {
                       >
                         {item.productId?.name || "Unknown"}
                       </button>
+                      <ProductTypeBadge productType={item.productId?.productType} />
                       <span className="text-xs text-slate-400">({item.productId?.sku || "-"})</span>
                     </td>
                     <td className="px-5 py-3 text-slate-600">{item.warehouseId?.name || "-"}</td>
@@ -639,6 +649,7 @@ function InventoryContent() {
                       </button>
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">{item.productId?.sku || "-"}</p>
+                    <ProductTypeBadge productType={item.productId?.productType} />
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusBadge(item.status)}`}>
                     {item.status.replace("_", " ")}
@@ -900,7 +911,7 @@ function InventoryContent() {
                     {viewingStockItem.productId?.name}
                   </p>
                   <p className="text-slate-600">
-                    SKU Code: <b className="text-slate-800">{viewingStockItem.productId?.sku}</b>
+                    SKU Code: <b className="text-slate-800">{viewingStockItem.productId?.sku}</b> <ProductTypeBadge productType={viewingStockItem.productId?.productType} />
                   </p>
                   <p className="text-slate-600">
                     Category: <b className="text-slate-800">{viewingStockItem.productId?.category || "General"}</b>
@@ -961,6 +972,7 @@ function InventoryContent() {
         <ProductHistoryModal
           productId={historyProductId}
           onClose={() => setHistoryProductId(null)}
+          onInventoryChanged={() => void fetchInventory()}
         />
       )}
 

@@ -1,11 +1,5 @@
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGODB_URI;
-
-if (!MONGODB_URI) {
-  throw new Error("Please define MONGODB_URI in .env.local");
-}
-
 interface MongooseCache {
   conn: typeof mongoose | null;
   promise: Promise<typeof mongoose> | null;
@@ -23,6 +17,12 @@ if (!cached) {
 }
 
 export async function connectDB() {
+  // Validate at request time so route handlers can return their normal JSON error.
+  const mongodbUri = process.env.MONGODB_URI?.trim();
+  if (!mongodbUri) {
+    throw new Error("Database is not configured. Set MONGODB_URI in .env.local and restart the development server.");
+  }
+
   if (cached!.conn) {
     return cached!.conn;
   }
@@ -32,7 +32,7 @@ export async function connectDB() {
       bufferCommands: false,
     };
 
-    cached!.promise = mongoose.connect(MONGODB_URI as string, opts).then((mongooseInstance) => {
+    cached!.promise = mongoose.connect(mongodbUri, opts).then((mongooseInstance) => {
       console.log("MongoDB connected successfully");
       return mongooseInstance;
     });
@@ -47,4 +47,4 @@ export async function connectDB() {
   }
 
   return cached!.conn;
-}
+}

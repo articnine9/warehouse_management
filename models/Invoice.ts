@@ -5,6 +5,7 @@ export interface IInvoiceItem {
   productId: mongoose.Types.ObjectId;
   productName: string;
   sku: string;
+  productType?: "REUSABLE" | "NON_REUSABLE";
   warehouseId: mongoose.Types.ObjectId;
   warehouseName: string;
   rackId: mongoose.Types.ObjectId;
@@ -52,6 +53,10 @@ const invoiceItemSchema = new Schema<IInvoiceItem>(
       type: String,
       required: true,
       trim: true,
+    },
+    productType: {
+      type: String,
+      enum: ["REUSABLE", "NON_REUSABLE"],
     },
     warehouseId: {
       type: Schema.Types.ObjectId,

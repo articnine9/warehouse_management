@@ -3,8 +3,10 @@ import mongoose, { Schema, Model } from "mongoose";
 export interface IProduct {
     name: string;
     sku: string;
-    category?: string;
+    category: string;
     categoryId?: mongoose.Types.ObjectId;
+    productType?: "REUSABLE" | "NON_REUSABLE";
+    returnDueDays?: number;
     serviceIntervalMonths?: number;
     warrantyMonths?: number;
     serialNumber?: string;
@@ -34,6 +36,7 @@ const productSchema = new Schema<IProduct>(
 
         category: {
             type: String,
+            required: true,
             trim: true,
         },
 
@@ -41,6 +44,18 @@ const productSchema = new Schema<IProduct>(
             type: Schema.Types.ObjectId,
             ref: "Category",
             index: true,
+        },
+
+        productType: {
+            type: String,
+            enum: ["REUSABLE", "NON_REUSABLE"],
+            default: "NON_REUSABLE",
+        },
+
+        returnDueDays: {
+            type: Number,
+            default: 30,
+            min: 0,
         },
 
         serviceIntervalMonths: {

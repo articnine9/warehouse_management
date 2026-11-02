@@ -210,7 +210,10 @@ export default function RacksPage() {
     let result = racks;
     // Filter by zone
     if (filterZoneId) {
-      result = result.filter((r) => r.zoneId?._id === filterZoneId);
+      result = result.filter((r) => {
+        const zId = typeof r.zoneId === "object" && r.zoneId ? r.zoneId._id : r.zoneId;
+        return String(zId) === String(filterZoneId);
+      });
     }
     // Filter by search query
     if (searchQuery.trim()) {
@@ -232,13 +235,23 @@ export default function RacksPage() {
     setCurrentPage(1);
   }, [searchQuery, pageSize, filterZoneId]);
 
+  const uniqueFilterZones = useMemo(() => {
+    const seen = new Set<string>();
+    return zones.filter((z) => {
+      const name = z.name.trim().toLowerCase();
+      if (seen.has(name)) return false;
+      seen.add(name);
+      return true;
+    });
+  }, [zones]);
+
   const zoneOptions: SelectOption[] = useMemo(() => {
-    return zones.map((z) => ({
+    return uniqueFilterZones.map((z) => ({
       value: z._id,
       label: z.name,
       subLabel: z.code || undefined,
     }));
-  }, [zones]);
+  }, [uniqueFilterZones]);
 
   const editZoneOptions: SelectOption[] = useMemo(() => {
     const list = editWarehouseId
@@ -315,14 +328,14 @@ export default function RacksPage() {
 
             <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
               {/* Zone filter */}
-              {zones.length > 0 && (
+              {uniqueFilterZones.length > 0 && (
                 <select
                   value={filterZoneId}
                   onChange={(e) => setFilterZoneId(e.target.value)}
                   className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-violet-500 w-full sm:w-auto"
                 >
                   <option value="">All Zones</option>
-                  {zones.map((z) => (
+                  {uniqueFilterZones.map((z) => (
                     <option key={z._id} value={z._id}>
                       {z.name}{z.code ? ` (${z.code})` : ""}
                     </option>

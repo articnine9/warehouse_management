@@ -1,4 +1,5 @@
 "use client";
+import ProductTypeBadge from "@/app/components/ProductTypeBadge";
 
 import { useEffect, useState, useMemo } from "react";
 import ProtectedPage from "@/app/components/ProtectedPage";
@@ -7,6 +8,7 @@ import { History, Trash2, Loader2 } from "lucide-react";
 import { useAuth } from "@/app/components/AuthProvider";
 
 type HistoryEntry = {
+  productType?: "REUSABLE" | "NON_REUSABLE";
   _id: string;
   productId: string;
   action: "CREATED" | "UPDATED" | "DELETED";
@@ -186,6 +188,7 @@ export default function ProductHistoryPage() {
                         </td>
                         <td className="px-5 py-3 font-mono text-xs text-slate-600">
                           {entry.productId}
+                          <ProductTypeBadge productType={entry.productType} />
                         </td>
                         <td className="px-5 py-3 text-slate-600">
                           {entry.changedBy?.name || "-"}
@@ -269,6 +272,7 @@ export default function ProductHistoryPage() {
                     </div>
                     <div className="mt-2 text-xs text-slate-600">
                       <p>Product ID: {entry.productId}</p>
+                      <ProductTypeBadge productType={entry.productType} />
                       <p>By: {entry.changedBy?.name || "-"}</p>
                     </div>
                     {entry.changedFields && entry.changedFields.length > 0 && (

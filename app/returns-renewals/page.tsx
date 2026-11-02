@@ -1,4 +1,5 @@
 "use client";
+import ProductTypeBadge from "@/app/components/ProductTypeBadge";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
@@ -1139,6 +1140,7 @@ export default function ReturnsRenewalsPage() {
                                 <p className="font-bold text-slate-900 text-xs sm:text-sm">
                                   {item.productName}
                                 </p>
+                                <ProductTypeBadge productType="REUSABLE" />
                                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                   <span className="font-mono text-[11px] font-semibold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
                                     SKU: {item.sku}

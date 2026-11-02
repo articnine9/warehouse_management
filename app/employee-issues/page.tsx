@@ -618,6 +618,25 @@ export default function EmployeeIssuesPage() {
     setLineItems((prev) => prev.filter((_, idx) => idx !== index));
   }
 
+  function toggleLineItemProductType(index: number) {
+    setLineItems((prev) =>
+      prev.map((it, idx) => {
+        if (idx !== index) return it;
+        const willBeReusable = it.productType !== "REUSABLE";
+        const returnDueDays = willBeReusable ? 30 : 0;
+        const returnDueDate = willBeReusable
+          ? new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10)
+          : undefined;
+        return {
+          ...it,
+          productType: willBeReusable ? "REUSABLE" : "NON_REUSABLE",
+          returnDueDays,
+          returnDueDate,
+        };
+      })
+    );
+  }
+
   async function handleSubmitIssue(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!selectedEmployeeId) {
@@ -1101,15 +1120,22 @@ export default function EmployeeIssuesPage() {
                           <span className="block text-[10px] text-slate-400">SKU: {item.sku}</span>
                         </td>
                         <td className="px-4 py-2.5">
-                          {item.productType === "REUSABLE" ? (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
-                              <RotateCcw className="h-2.5 w-2.5" /> Returnable ({item.returnDueDays || 30}d)
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">
-                              Non-Returnable
-                            </span>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => toggleLineItemProductType(index)}
+                            className="cursor-pointer group text-left"
+                            title="Click to toggle Returnable / Non-Returnable"
+                          >
+                            {item.productType === "REUSABLE" ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[10px] font-bold text-indigo-700 group-hover:bg-indigo-100 transition shadow-2xs">
+                                <RotateCcw className="h-2.5 w-2.5" /> Returnable ({item.returnDueDays || 30}d)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-700 group-hover:bg-slate-200 transition shadow-2xs">
+                                <Box className="h-2.5 w-2.5 text-slate-400" /> Non-Returnable
+                              </span>
+                            )}
+                          </button>
                         </td>
                         <td className="px-4 py-2.5 text-slate-600">{item.serialNumber || "-"}</td>
                         <td className="px-4 py-2.5 font-bold text-slate-800">{item.quantity}</td>

@@ -1,6 +1,8 @@
 import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
 import ProductHistory from "@/models/ProductHistory";
+import Product from "@/models/Product";
+import { resolveProductType } from "@/lib/productType";
 
 export async function GET(request: Request) {
   try {
@@ -38,9 +40,13 @@ export async function GET(request: Request) {
         .limit(limit),
     ]);
 
+    const products = await Product.find({ _id: { $in: history.map((entry) => entry.productId) } }).select("_id productType").lean();
+    const types = new Map(products.map((product) => [String(product._id), product.productType]));
+    const entries = history.map((entry) => ({ ...entry.toObject(), productType: resolveProductType(entry.newValues?.productType, undefined, entry.oldValues?.productType) || resolveProductType(types.get(String(entry.productId))) }));
+
     return Response.json({
       success: true,
-      data: history,
+      data: entries,
       pagination: {
         total,
         page,

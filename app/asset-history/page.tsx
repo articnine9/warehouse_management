@@ -16,6 +16,7 @@ import {
   Eye,
   Info,
   Box,
+  CheckCircle2,
   Trash2,
   Loader2,
 } from "lucide-react";
@@ -199,6 +200,7 @@ export default function AssetHistoryPage() {
     let totalInService = 0;
     let totalReturned = 0;
     let totalReusable = 0;
+    let totalNonReusable = 0;
     let totalOverdue = 0;
     let totalValue = 0;
     let totalUnits = 0;
@@ -230,6 +232,8 @@ export default function AssetHistoryPage() {
               totalOverdue += q;
             }
           }
+        } else if (!isReusable && status !== "RETURNED") {
+          totalNonReusable += q;
         }
       }
     }
@@ -241,6 +245,7 @@ export default function AssetHistoryPage() {
       totalInService,
       totalReturned,
       totalReusable,
+      totalNonReusable,
       totalOverdue,
       totalValue,
     };
@@ -413,12 +418,9 @@ export default function AssetHistoryPage() {
             <p className="text-[10px] text-slate-400 mt-0.5">Holding items</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase">In Maintenance</p>
-            <p className="mt-1 text-2xl font-bold text-amber-600">{stats.totalInService}</p>
-            <p className="text-[10px] text-slate-400 mt-0.5">Service active</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase">Returnable on Loan</p>
+            <p className="text-[11px] font-semibold text-slate-500 uppercase flex items-center gap-1">
+              <RotateCcw className="h-3 w-3 text-indigo-600" /> Returnable on Loan
+            </p>
             <p className="mt-1 text-2xl font-bold text-indigo-600">{stats.totalReusable}</p>
             <p className="text-[10px] text-slate-400 mt-0.5">
               {stats.totalOverdue > 0 ? (
@@ -427,6 +429,13 @@ export default function AssetHistoryPage() {
                 "Due dates tracked"
               )}
             </p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase flex items-center gap-1">
+              <Box className="h-3 w-3 text-slate-500" /> Non-Returnable
+            </p>
+            <p className="mt-1 text-2xl font-bold text-slate-700">{stats.totalNonReusable}</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Consumable materials</p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
             <p className="text-[11px] font-semibold text-slate-500 uppercase">Returned to Rack</p>
@@ -662,6 +671,15 @@ export default function AssetHistoryPage() {
                       year: "numeric",
                     });
 
+                    const returnableSummaryItems = summaryItems.filter(
+                      (it) => it.productType === "REUSABLE" || Boolean(it.returnDueDate)
+                    );
+                    const nonReturnableSummaryItems = summaryItems.filter(
+                      (it) => it.productType !== "REUSABLE" && !it.returnDueDate
+                    );
+                    const hasReturnable = returnableSummaryItems.length > 0;
+                    const hasNonReturnable = nonReturnableSummaryItems.length > 0;
+
                     // Return due date calculation (based on active matching items)
                     const activeReturnables = summaryItems.filter(
                       (it) =>
@@ -839,6 +857,29 @@ export default function AssetHistoryPage() {
                               {summaryItems.map((it) => it.productName).slice(0, 2).join(", ")}
                               {summaryItems.length > 2 && ` +${summaryItems.length - 2} more`}
                             </p>
+
+                            {hasReturnable && hasNonReturnable ? (
+                              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-700">
+                                  <RotateCcw className="h-2.5 w-2.5" /> Returnable ({returnableSummaryItems.length})
+                                </span>
+                                <span className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold bg-slate-100 border border-slate-200 text-slate-700">
+                                  <Box className="h-2.5 w-2.5 text-slate-500" /> Non-Returnable ({nonReturnableSummaryItems.length})
+                                </span>
+                              </div>
+                            ) : hasReturnable ? (
+                              <div className="mt-1">
+                                <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-700">
+                                  <RotateCcw className="h-2.5 w-2.5" /> Returnable Asset
+                                </span>
+                              </div>
+                            ) : (
+                              <div className="mt-1">
+                                <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold bg-slate-100 border border-slate-200 text-slate-700">
+                                  <Box className="h-2.5 w-2.5 text-slate-500" /> Non-Returnable
+                                </span>
+                              </div>
+                            )}
                           </td>
 
                           {/* Custody Status */}
@@ -885,10 +926,15 @@ export default function AssetHistoryPage() {
                           {/* Return / Renew Due Column */}
                           <td className="px-5 py-3.5">
                             {allReturned ? (
-                              <span className="text-slate-400 text-xs">All Items Returned</span>
+                              <span className="text-slate-400 text-xs flex items-center gap-1">
+                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> All Items Returned
+                              </span>
                             ) : earliestReturnItem && earliestReturnItem.returnDueDate ? (
                               <div>
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.2 text-[9px] font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                                    <RotateCcw className="h-2.5 w-2.5" /> Due
+                                  </span>
                                   <span className="font-bold text-xs text-slate-800">
                                     {new Date(earliestReturnItem.returnDueDate).toLocaleDateString(
                                       "en-IN",
@@ -907,7 +953,7 @@ export default function AssetHistoryPage() {
                                 </div>
                                 {returnDaysLeft !== null && (
                                   <span
-                                    className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold mt-0.5 ${
+                                    className={`inline-block rounded-md px-1.5 py-0.5 text-[10px] font-extrabold mt-1 ${
                                       returnDaysLeft < 0
                                         ? "bg-red-100 text-red-700"
                                         : returnDaysLeft === 0
@@ -924,7 +970,14 @@ export default function AssetHistoryPage() {
                                 )}
                               </div>
                             ) : (
-                              <span className="text-slate-400 text-xs">Standard Items</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                  <Box className="h-3 w-3 text-slate-400" /> Non-Returnable
+                                </span>
+                                <span className="text-[10px] text-slate-400 hidden xl:inline">
+                                  No return required
+                                </span>
+                              </div>
                             )}
                           </td>
 
@@ -1152,18 +1205,20 @@ export default function AssetHistoryPage() {
                                             <td className="px-3 py-2.5">
                                               {isReusable ? (
                                                 <div>
-                                                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-indigo-700">
+                                                  <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold bg-indigo-50 border border-indigo-200 text-indigo-700">
                                                     <RotateCcw className="h-3 w-3" /> Returnable
                                                   </span>
                                                   {item.returnDueDate && (
-                                                    <div className="text-[10px] text-slate-500 mt-0.5">
-                                                      Due:{" "}
-                                                      {new Date(
-                                                        item.returnDueDate
-                                                      ).toLocaleDateString("en-IN")}
+                                                    <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1 flex-wrap">
+                                                      <span>
+                                                        Due:{" "}
+                                                        {new Date(
+                                                          item.returnDueDate
+                                                        ).toLocaleDateString("en-IN")}
+                                                      </span>
                                                       {itemDaysLeft !== null && (
                                                         <span
-                                                          className={`ml-1 font-bold ${
+                                                          className={`font-bold ${
                                                             itemDaysLeft < 0
                                                               ? "text-red-600"
                                                               : itemDaysLeft <= 7
@@ -1182,8 +1237,8 @@ export default function AssetHistoryPage() {
                                                   )}
                                                 </div>
                                               ) : (
-                                                <span className="text-[11px] text-slate-500">
-                                                  Non-Returnable
+                                                <span className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-bold bg-slate-100 border border-slate-200 text-slate-700">
+                                                  <Box className="h-3 w-3 text-slate-400" /> Non-Returnable
                                                 </span>
                                               )}
                                             </td>
@@ -1417,8 +1472,9 @@ export default function AssetHistoryPage() {
                                 <span>
                                   Qty: <b>{item.quantity}</b> • {item.warehouseName}
                                 </span>
-                                {isReusable && (
-                                  <span className="text-indigo-700 font-semibold">
+                                {isReusable ? (
+                                  <span className="text-indigo-700 font-bold inline-flex items-center gap-1">
+                                    <RotateCcw className="h-2.5 w-2.5" />
                                     Returnable{" "}
                                     {item.returnDueDate
                                       ? `(${new Date(item.returnDueDate).toLocaleDateString(
@@ -1426,6 +1482,10 @@ export default function AssetHistoryPage() {
                                           { day: "2-digit", month: "short" }
                                         )})`
                                       : ""}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-600 font-semibold inline-flex items-center gap-1">
+                                    <Box className="h-2.5 w-2.5 text-slate-400" /> Non-Returnable
                                   </span>
                                 )}
                               </div>

@@ -1,5 +1,6 @@
 import { connectDB } from "@/lib/mongodb";
-import { requireSessionUser } from "@/lib/auth";
+import { getUserWarehouseId, requireSessionUser } from "@/lib/auth";
+import { isValidObjectId } from "mongoose";
 import Product from "@/models/Product";
 import ProductHistory from "@/models/ProductHistory";
 import Inventory from "@/models/Inventory";
@@ -7,6 +8,68 @@ import Warehouse from "@/models/Warehouse";
 import Rack from "@/models/Rack";
 import StockMovement from "@/models/StockMovement";
 import Category from "@/models/Category";
+import Zone from "@/models/Zone";
+
+export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    await connectDB();
+    const user = await requireSessionUser();
+    if (user.role !== "ADMIN" && user.role !== "STAFF") {
+      return Response.json({ success: false, message: "Unauthorized to move products" }, { status: 403 });
+    }
+    const { id } = await params;
+    const { inventoryId, zoneId, rackId, sourceRackId } = await request.json();
+    if (![id, inventoryId, zoneId, rackId, sourceRackId].every((value) => typeof value === "string" && isValidObjectId(value))) {
+      return Response.json({ success: false, message: "Select a valid source location, destination Zone and Rack" }, { status: 400 });
+    }
+    const inventory = await Inventory.findOne({ _id: inventoryId, productId: id });
+    if (!inventory) {
+      return Response.json({ success: false, message: "Assigned location not found for this product" }, { status: 404 });
+    }
+    if (user.role === "STAFF" && !getUserWarehouseId(user).map(String).includes(String(inventory.warehouseId))) {
+      return Response.json({ success: false, message: "You can only move products in your assigned warehouses" }, { status: 403 });
+    }
+    if (String(inventory.rackId) !== sourceRackId) {
+      return Response.json({ success: false, message: "This product's location has changed. Refresh the product list and try again." }, { status: 409 });
+    }
+    if (sourceRackId === rackId) {
+      return Response.json({ success: false, message: "Select a different destination rack" }, { status: 400 });
+    }
+    const rack = await Rack.findOne({ _id: rackId, warehouseId: inventory.warehouseId, zoneId });
+    const zone = await Zone.findOne({ _id: zoneId, warehouseId: inventory.warehouseId });
+    if (!rack || !zone) {
+      return Response.json({ success: false, message: "Destination rack must belong to the selected Zone and current warehouse" }, { status: 400 });
+    }
+    const occupied = await Inventory.findOne({ productId: id, warehouseId: inventory.warehouseId, rackId });
+    if (occupied) {
+      return Response.json({ success: false, message: "This product is already assigned to that rack. Select a different destination." }, { status: 409 });
+    }
+    // Only change the rack; quantities and product details are never written by Move.
+    const moved = await Inventory.findOneAndUpdate(
+      { _id: inventoryId, productId: id, warehouseId: inventory.warehouseId, rackId: sourceRackId },
+      { $set: { rackId } },
+      { new: true, runValidators: true }
+    );
+    if (!moved) {
+      return Response.json({ success: false, message: "This product's location has changed. Refresh the product list and try again." }, { status: 409 });
+    }
+    await ProductHistory.create({
+      productId: id,
+      action: "UPDATED",
+      changedBy: user.id,
+      changedFields: ["locations"],
+      oldValues: { locations: [{ inventoryId, warehouseId: String(inventory.warehouseId), rackId: sourceRackId, quantity: moved.quantity }] },
+      newValues: { locations: [{ inventoryId, warehouseId: String(moved.warehouseId), zoneId, rackId, quantity: moved.quantity }] },
+    });
+    return Response.json({ success: true, data: moved, message: "Product moved successfully" });
+  } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return Response.json({ success: false, message: "Not authenticated" }, { status: 401 });
+    }
+    console.error("Move product error:", error);
+    return Response.json({ success: false, message: "Unable to move product. Please try again." }, { status: 500 });
+  }
+}
 
 export async function PUT(
   request: Request,
@@ -26,6 +89,10 @@ export async function PUT(
 
     const body = await request.json();
 
+    if (body.productType !== undefined && body.productType !== "REUSABLE" && body.productType !== "NON_REUSABLE") {
+      return Response.json({ success: false, message: "Select Returnable or Non-Returnable as the product type" }, { status: 400 });
+    }
+
     const oldProduct = await Product.findById(id).lean();
     if (!oldProduct) {
       return Response.json(
@@ -41,11 +108,64 @@ export async function PUT(
       return JSON.stringify(oldVal) !== JSON.stringify(newVal);
     });
 
-    if (body.category !== undefined && !String(body.category || "").trim()) {
+    if (!String(body.category !== undefined ? body.category || "" : oldProduct.category || "").trim()) {
       return Response.json(
         { success: false, message: "Category cannot be empty" },
         { status: 400 }
       );
+    }
+
+    // Validate all destinations before changing either product details or stock.
+    const oldLocations: Record<string, unknown>[] = [];
+    if (body.locations !== undefined && !Array.isArray(body.locations)) {
+      return Response.json({ success: false, message: "Locations must be a list" }, { status: 400 });
+    }
+    if (Array.isArray(body.locations)) {
+      const destinations = new Set<string>();
+      const inventoryIds = new Set<string>();
+      const allowedWarehouses = getUserWarehouseId(user).map(String);
+      for (const loc of body.locations) {
+        if (!loc || !isValidObjectId(loc.warehouseId) || !isValidObjectId(loc.rackId) ||
+            (loc.inventoryId && !isValidObjectId(loc.inventoryId)) ||
+            !Number.isFinite(Number(loc.quantity)) || Number(loc.quantity) < 0) {
+          return Response.json({ success: false, message: "Each location needs a valid warehouse, rack and non-negative quantity" }, { status: 400 });
+        }
+        const destination = `${loc.warehouseId}/${loc.rackId}`;
+        if (destinations.has(destination) || (loc.inventoryId && inventoryIds.has(loc.inventoryId))) {
+          return Response.json({ success: false, message: "Each assigned location must use a different rack" }, { status: 400 });
+        }
+        destinations.add(destination);
+        if (loc.inventoryId) inventoryIds.add(loc.inventoryId);
+        if (user.role === "STAFF" && !allowedWarehouses.includes(String(loc.warehouseId))) {
+          return Response.json({ success: false, message: "You can only relocate stock within your assigned warehouses" }, { status: 403 });
+        }
+        const rack = await Rack.findOne({ _id: loc.rackId, warehouseId: loc.warehouseId });
+        if (!rack) {
+          return Response.json({ success: false, message: "Selected rack does not belong to the selected warehouse" }, { status: 400 });
+        }
+        if (loc.zoneId) {
+          if (!isValidObjectId(loc.zoneId) || String(rack.zoneId) !== String(loc.zoneId) ||
+              !await Zone.findOne({ _id: loc.zoneId, warehouseId: loc.warehouseId })) {
+            return Response.json({ success: false, message: "Selected rack does not belong to the selected zone" }, { status: 400 });
+          }
+        }
+        if (loc.inventoryId) {
+          const inventory = await Inventory.findOne({ _id: loc.inventoryId, productId: id });
+          if (!inventory) {
+            return Response.json({ success: false, message: "Assigned inventory does not belong to this product" }, { status: 400 });
+          }
+          if (user.role === "STAFF" && !allowedWarehouses.includes(String(inventory.warehouseId))) {
+            return Response.json({ success: false, message: "You cannot relocate stock from an unassigned warehouse" }, { status: 403 });
+          }
+          oldLocations.push({ inventoryId: String(inventory._id), warehouseId: String(inventory.warehouseId), rackId: String(inventory.rackId), quantity: inventory.quantity });
+          if (String(inventory.rackId) !== String(loc.rackId) || String(inventory.warehouseId) !== String(loc.warehouseId)) {
+            const occupied = await Inventory.findOne({ productId: id, warehouseId: loc.warehouseId, rackId: loc.rackId, _id: { $ne: inventory._id } });
+            if (occupied) {
+              return Response.json({ success: false, message: "This product already has stock assigned to the destination rack. Choose a different rack." }, { status: 400 });
+            }
+          }
+        }
+      }
     }
 
     let categoryId = body.categoryId;
@@ -63,16 +183,17 @@ export async function PUT(
         name: body.name,
         sku: body.sku,
         category: categoryName,
+        productType: body.productType !== undefined ? body.productType : oldProduct.productType,
         categoryId: categoryId || oldProduct.categoryId,
         serviceIntervalMonths: body.serviceIntervalMonths !== undefined ? Number(body.serviceIntervalMonths) : 3,
         warrantyMonths: body.warrantyMonths !== undefined ? Number(body.warrantyMonths) : 12,
         serialNumber: body.serialNumber ? String(body.serialNumber).trim() : undefined,
         sellerName: body.sellerName !== undefined ? String(body.sellerName).trim() : oldProduct.sellerName,
-        price: body.price !== undefined && body.price !== null && body.price !== "" && !isNaN(Number(body.price)) ? Number(body.price) : (oldProduct.price ?? 0),
+        price: body.price === "" || body.price === null ? 0 : body.price !== undefined && !isNaN(Number(body.price)) ? Number(body.price) : (oldProduct.price ?? 0),
         description: body.description,
         status: body.status,
       },
-      { new: true }
+      { new: true, runValidators: true }
     ).populate("categoryId", "name code");
 
     if (!product) {
@@ -80,17 +201,6 @@ export async function PUT(
         { success: false, message: "Product not found" },
         { status: 404 }
       );
-    }
-
-    if (changedFields.length > 0) {
-      await ProductHistory.create({
-        productId: product._id,
-        action: "UPDATED",
-        changedBy: user.id,
-        changedFields,
-        oldValues: oldValues as Record<string, unknown>,
-        newValues: body as Record<string, unknown>,
-      });
     }
 
     // Handle inventory locations update if passed
@@ -127,6 +237,7 @@ export async function PUT(
                 productName: product.name,
                 sku: product.sku,
                 category: product.category,
+                productType: product.productType,
                 warehouseId: oldInv.warehouseId,
                 warehouseName: wh?.name || "Warehouse",
                 rackId: oldInv.rackId,
@@ -174,6 +285,7 @@ export async function PUT(
             productName: product.name,
             sku: product.sku,
             category: product.category,
+            productType: product.productType,
             warehouseId: loc.warehouseId,
             warehouseName: wh?.name || "Warehouse",
             rackId: loc.rackId,
@@ -191,6 +303,17 @@ export async function PUT(
           });
         }
       }
+    }
+
+    if (changedFields.length > 0) {
+      await ProductHistory.create({
+        productId: product._id,
+        action: "UPDATED",
+        changedBy: user.id,
+        changedFields,
+        oldValues: { ...oldValues, ...(body.locations ? { locations: oldLocations } : {}) },
+        newValues: body as Record<string, unknown>,
+      });
     }
 
     return Response.json({ success: true, data: product });

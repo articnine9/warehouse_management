@@ -9,6 +9,8 @@ import Warehouse from "@/models/Warehouse";
 import Zone from "@/models/Zone";
 import Rack from "@/models/Rack";
 import Employee from "@/models/Employee";
+import { movementProductType } from "@/lib/movementProductType";
+import { resolveProductType } from "@/lib/productType";
 
 export async function GET(
   request: Request,
@@ -175,7 +177,7 @@ export async function GET(
             unitPrice: item.unitPrice,
             totalValue: item.totalValue,
             serialNumber: item.serialNumber,
-            productType: item.productType || "REUSABLE",
+            productType: resolveProductType(item.productType, item.returnDueDate),
             warehouseId: item.warehouseId?.toString(),
             warehouseName: item.warehouseName,
             rackId: item.rackId?.toString(),
@@ -278,6 +280,7 @@ export async function GET(
 
     // 5. Build Unified Chronological Lifecycle Events (From Product Creation & 1st Inward to Today)
     type LifecycleEvent = {
+      productType?: "REUSABLE" | "NON_REUSABLE";
       id: string;
       date: string;
       eventType:
@@ -335,6 +338,7 @@ export async function GET(
             id: `mov-${m._id || m.id}`,
             date: new Date(m.createdAt).toISOString(),
             eventType: "INITIAL_STOCK",
+            productType: movementProductType(m, issues, product.productType),
             isInitialStock: true,
             title: "1st Stock Inward Arrival (Initial Stock Added)",
             subtitle: `Origin Stock Entry • Received from ${m.entityName || product.sellerName || "Supplier"}`,
@@ -353,6 +357,7 @@ export async function GET(
             id: `mov-${m._id || m.id}`,
             date: new Date(m.createdAt).toISOString(),
             eventType: "INWARD",
+            productType: movementProductType(m, issues, product.productType),
             title: "Stock Restocked / Added",
             subtitle: m.referenceNumber ? `Ref: ${m.referenceNumber}` : "Warehouse Restock",
             quantity: m.quantity,
@@ -371,6 +376,7 @@ export async function GET(
           id: `mov-${m._id || m.id}`,
           date: new Date(m.createdAt).toISOString(),
           eventType: "INVOICE_SALE",
+          productType: movementProductType(m, issues, product.productType),
           title: "Sold via Customer Invoice",
           subtitle: m.referenceNumber ? `Inv #${m.referenceNumber}` : undefined,
           quantity: m.quantity,
@@ -396,6 +402,7 @@ export async function GET(
             id: `iss-${iss._id}-${itemIdx}`,
             date: new Date(iss.createdAt).toISOString(),
             eventType: "EMPLOYEE_ISSUE",
+            productType: resolveProductType(item.productType, item.returnDueDate),
             title: `Issued to Employee: ${iss.employeeName}`,
             subtitle: `Voucher #${iss.issueNumber} • Dept: ${iss.employeeDepartment || "General"}`,
             quantity: item.quantity,
@@ -415,6 +422,7 @@ export async function GET(
               id: `ret-${iss._id}-${itemIdx}`,
               date: retDate,
               eventType: "EMPLOYEE_RETURN",
+              productType: resolveProductType(item.productType, item.returnDueDate),
               title: `Returned to Warehouse by ${iss.employeeName}`,
               subtitle: `Returned from Voucher #${iss.issueNumber}`,
               quantity: item.quantity,
@@ -436,6 +444,7 @@ export async function GET(
                 id: `srv-${iss._id}-${itemIdx}-${sIdx}`,
                 date: new Date(s.completedAt).toISOString(),
                 eventType: "SERVICE",
+                productType: resolveProductType(item.productType, item.returnDueDate),
                 title: `Service Maintenance #${s.serviceNumber}`,
                 subtitle: `Holder: ${iss.employeeName}`,
                 quantity: item.quantity,
@@ -465,6 +474,8 @@ export async function GET(
           warrantyMonths: product.warrantyMonths || 0,
           serviceIntervalMonths: product.serviceIntervalMonths || 0,
           sellerName: product.sellerName,
+          productType: resolveProductType(product.productType),
+          returnDueDays: product.returnDueDays || 30,
           createdAt: product.createdAt,
         },
         summary: {
@@ -490,6 +501,7 @@ export async function GET(
           id: m._id.toString(),
           movementType: m.movementType,
           reason: m.reason,
+          productType: movementProductType(m, issues, product.productType),
           quantity: m.quantity,
           unitPrice: m.unitPrice,
           totalValue: m.totalValue,

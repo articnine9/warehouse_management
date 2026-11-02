@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Calendar,
   Building2,
+  Box,
   Phone,
   Mail,
   PackageCheck,
@@ -882,9 +883,13 @@ export default function EmployeeDetailPage({
                                 </Link>
                                 <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-slate-400">
                                   <span>SKU: {item.sku}</span>
-                                  {isReusable && (
-                                    <span className="rounded bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 text-[9px] font-bold text-indigo-700">
-                                      Returnable
+                                  {isReusable ? (
+                                    <span className="rounded bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 text-[9px] font-bold text-indigo-700 flex items-center gap-1">
+                                      <RotateCcw className="h-2.5 w-2.5" /> Returnable
+                                    </span>
+                                  ) : (
+                                    <span className="rounded bg-slate-100 border border-slate-200 px-1.5 py-0.2 text-[9px] font-bold text-slate-700 flex items-center gap-1">
+                                      <Box className="h-2.5 w-2.5 text-slate-400" /> Non-Returnable
                                     </span>
                                   )}
                                 </div>
@@ -955,7 +960,9 @@ export default function EmployeeDetailPage({
                                     )}
                                   </div>
                                 ) : (
-                                  <span className="text-slate-400">Standard / Permanent</span>
+                                  <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                    <Box className="h-2.5 w-2.5 text-slate-400" /> Non-Returnable
+                                  </span>
                                 )}
                               </td>
 

@@ -79,6 +79,7 @@ export async function PUT(
             productName: p.name,
             sku: p.sku,
             category: p.category,
+            productType: p.productType,
             warehouseId: w?._id,
             warehouseName: w?.name,
             rackId: r?._id,

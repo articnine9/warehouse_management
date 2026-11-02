@@ -2,7 +2,15 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+Before starting, configure the existing MongoDB database in `.env.local` at the project root:
+
+```dotenv
+MONGODB_URI="<your existing MongoDB Atlas connection string, including the database name>"
+```
+
+Use the connection string for the warehouse database that already contains your data. An empty `.env.local` will prevent authentication, inventory, and dashboard APIs from connecting. Keep this file private; it is ignored by Git. Restart the development server after restoring the connection string.
+
+Then run:
 
 ```bash
 npm run dev

@@ -80,18 +80,52 @@ export async function POST(request: Request) {
       );
     }
 
+    const trimmedName = body.name ? String(body.name).trim() : "";
+    const trimmedCode = body.code ? String(body.code).trim().toUpperCase() : "";
+
+    if (!trimmedName) {
+      return Response.json(
+        { success: false, message: "Rack name is required" },
+        { status: 400 }
+      );
+    }
+
+    const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existingRack = await Rack.findOne({
+      warehouseId: body.warehouseId,
+      zoneId: body.zoneId,
+      name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+    })
+      .populate("warehouseId", "name code")
+      .populate("zoneId", "name code");
+
+    if (existingRack) {
+      return Response.json(
+        {
+          success: true,
+          data: existingRack,
+          message: "Rack already exists in this zone, reused existing rack",
+        },
+        { status: 200 }
+      );
+    }
+
     const rack = await Rack.create({
-      name: body.name,
-      code: body.code,
+      name: trimmedName,
+      code: trimmedCode || trimmedName.toUpperCase(),
       warehouseId: body.warehouseId,
       zoneId: body.zoneId,
       status: body.status ?? "ACTIVE",
     });
 
+    const populatedRack = await Rack.findById(rack._id)
+      .populate("warehouseId", "name code")
+      .populate("zoneId", "name code");
+
     return Response.json(
       {
         success: true,
-        data: rack,
+        data: populatedRack || rack,
       },
       { status: 201 }
     );

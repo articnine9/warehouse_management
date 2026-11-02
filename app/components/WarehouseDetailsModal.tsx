@@ -1,4 +1,5 @@
 "use client";
+import ProductTypeBadge from "./ProductTypeBadge";
 
 import { useEffect, useState } from "react";
 import {
@@ -58,6 +59,7 @@ export type WarehouseDetailsData = {
       sku: string;
       price?: number;
       category?: string;
+      productType?: "REUSABLE" | "NON_REUSABLE";
       unit?: string;
     };
     rackId: {
@@ -672,6 +674,7 @@ export default function WarehouseDetailsModal({
                               </p>
                               <p className="font-mono text-[10px] text-slate-400">
                                 SKU: {inv.productId?.sku}
+                                <ProductTypeBadge productType={inv.productId?.productType} />
                               </p>
                             </td>
                             <td className="p-3">

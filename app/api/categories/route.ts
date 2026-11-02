@@ -1,6 +1,11 @@
 import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
 import Category from "@/models/Category";
+import Product from "@/models/Product";
+
+function escapeRegex(text: string) {
+  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+}
 
 export async function GET() {
   try {
@@ -8,12 +13,28 @@ export async function GET() {
 
     const categories = await Category.find().sort({
       name: 1,
-    });
+    }).lean();
+
+    const categoriesWithCounts = await Promise.all(
+      categories.map(async (cat) => {
+        const count = await Product.countDocuments({
+          $or: [
+            { categoryId: cat._id },
+            { category: cat.name },
+            { category: { $regex: `^${escapeRegex(cat.name)}$`, $options: "i" } },
+          ],
+        });
+        return {
+          ...cat,
+          productCount: count,
+        };
+      })
+    );
 
     return Response.json({
       success: true,
-      data: categories,
-      count: categories.length,
+      data: categoriesWithCounts,
+      count: categoriesWithCounts.length,
     });
   } catch (error) {
     console.error("GET categories error:", error);

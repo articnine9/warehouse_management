@@ -1,4 +1,6 @@
 "use client";
+import ProductTypeBadge from "@/app/components/ProductTypeBadge";
+import { productTypeLabel } from "@/lib/productType";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import ProtectedPage from "@/app/components/ProtectedPage";
@@ -31,6 +33,7 @@ type StockMovementItem = {
     price?: number;
   };
   productName: string;
+  productType?: "REUSABLE" | "NON_REUSABLE";
   sku: string;
   category?: string;
   warehouseName?: string;
@@ -255,6 +258,7 @@ export default function StockMovementsPage() {
       "Product Name",
       "SKU",
       "Category",
+      "Product Type",
       "Quantity",
       "Unit Price (INR)",
       "Total Value (INR)",
@@ -272,6 +276,7 @@ export default function StockMovementsPage() {
       `"${(m.productName || "").replace(/"/g, '""')}"`,
       m.sku || "",
       m.category || "",
+      productTypeLabel(m.productType),
       m.quantity,
       m.unitPrice || 0,
       m.totalValue || 0,
@@ -665,6 +670,7 @@ export default function StockMovementsPage() {
 
                       <td className="px-5 py-3">
                         <p className="font-semibold text-slate-800">{m.productName}</p>
+                        <ProductTypeBadge productType={m.productType} />
                         {m.category && (
                           <span className="text-[11px] text-slate-400 font-medium">{m.category}</span>
                         )}
@@ -742,6 +748,7 @@ export default function StockMovementsPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="font-bold text-slate-800">{m.productName}</p>
+                      <ProductTypeBadge productType={m.productType} />
                       <p className="text-xs font-mono text-slate-500">SKU: {m.sku}</p>
                     </div>
                     <div className="text-right">

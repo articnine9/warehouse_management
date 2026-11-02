@@ -20,6 +20,7 @@ export async function GET(request: Request) {
         const warehouseParam = searchParams.get("warehouseId");
         const statusParam = searchParams.get("status");
         const queryParam = searchParams.get("q") || searchParams.get("search");
+        const categoryParam = searchParams.get("category");
 
         // Build filter
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,9 +42,14 @@ export async function GET(request: Request) {
             }
         }
 
-        // If search query is provided, find matching product IDs or rack IDs
+        if (categoryParam && categoryParam !== "ALL") {
+            const products = await Product.find({ category: categoryParam }).select("_id");
+            filter.productId = { $in: products.map((product) => product._id) };
+        }
+
+        // Treat the query as literal text, including punctuation in names and SKUs.
         if (queryParam?.trim()) {
-            const regex = new RegExp(queryParam.trim(), "i");
+            const regex = new RegExp(queryParam.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
             const [matchingProducts, matchingRacks, matchingWarehouses] = await Promise.all([
                 Product.find({ $or: [{ name: regex }, { sku: regex }, { sellerName: regex }, { category: regex }] }).select("_id"),
                 Rack.find({ $or: [{ name: regex }, { code: regex }] }).select("_id"),
@@ -73,10 +79,10 @@ export async function GET(request: Request) {
             const [total, inventory] = await Promise.all([
                 Inventory.countDocuments(filter),
                 Inventory.find(filter)
-                    .populate("productId", "name sku price sellerName category serviceIntervalMonths warrantyMonths serialNumber")
+                    .populate("productId", "name sku productType returnDueDays price sellerName category serviceIntervalMonths warrantyMonths serialNumber")
                     .populate("warehouseId", "name code")
                     .populate("rackId", "name code")
-                    .sort({ createdAt: -1 })
+                    .sort({ createdAt: -1, _id: -1 })
                     .skip(skip)
                     .limit(limit),
             ]);
@@ -95,7 +101,7 @@ export async function GET(request: Request) {
 
         // Return all records (used for selection dropdowns / backward compatibility)
         const inventory = await Inventory.find(filter)
-            .populate("productId", "name sku price sellerName category serviceIntervalMonths warrantyMonths serialNumber")
+            .populate("productId", "name sku productType returnDueDays price sellerName category serviceIntervalMonths warrantyMonths serialNumber")
             .populate("warehouseId", "name code")
             .populate("rackId", "name code")
             .sort({
@@ -248,6 +254,7 @@ export async function POST(request: Request) {
                     productName: p.name,
                     sku: p.sku,
                     category: p.category,
+                    productType: p.productType,
                     warehouseId: w?._id,
                     warehouseName: w?.name,
                     rackId: r?._id,

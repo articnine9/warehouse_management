@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   Calendar,
   Building2,
+  Box,
   Package,
   RotateCcw,
   Wrench,
@@ -31,6 +32,8 @@ import {
 } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
+import ProductMoveAction from "@/app/components/ProductMoveAction";
+import ProductTypeBadge from "@/app/components/ProductTypeBadge";
 
 interface ProductHistoryData {
   product: {
@@ -42,6 +45,7 @@ interface ProductHistoryData {
     description?: string;
     warrantyMonths?: number;
     serviceIntervalMonths?: number;
+    productType?: "REUSABLE" | "NON_REUSABLE";
     sellerName?: string;
     createdAt?: string;
   };
@@ -56,12 +60,13 @@ interface ProductHistoryData {
   inventoryLocations: Array<{
     id: string;
     warehouse: { _id: string; name: string; code: string; address?: string };
-    rack: { _id: string; name: string; code: string };
+    rack: { _id: string; name: string; code: string; zoneId?: { _id: string; name: string; code?: string } | string };
     quantity: number;
     status: string;
     updatedAt: string;
   }>;
   employeeHolders: Array<{
+    productType?: string;
     issueId: string;
     issueNumber: string;
     issueDate: string;
@@ -97,6 +102,7 @@ interface ProductHistoryData {
     isOrigin?: boolean;
   };
   lifecycleEvents: Array<{
+    productType?: "REUSABLE" | "NON_REUSABLE";
     id: string;
     date: string;
     eventType:
@@ -122,6 +128,7 @@ interface ProductHistoryData {
     badgeColor?: string;
   }>;
   movements: Array<{
+    productType?: "REUSABLE" | "NON_REUSABLE";
     id: string;
     movementType: "INWARD" | "OUTWARD";
     reason: string;
@@ -153,6 +160,8 @@ export default function ProductDetailPage({
   const [data, setData] = useState<ProductHistoryData | null>(() => cached || null);
   const [loading, setLoading] = useState(() => !cached);
   const [error, setError] = useState<string | null>(null);
+  const [moveRefresh, setMoveRefresh] = useState(0);
+  const [moveSuccess, setMoveSuccess] = useState(false);
 
   // Tabs
   const [activeTab, setActiveTab] = useState<
@@ -195,7 +204,7 @@ export default function ProductDetailPage({
     }
 
     void fetchProductData();
-  }, [id]);
+  }, [id, moveRefresh]);
 
   useEffect(() => {
     setPage(1);
@@ -387,7 +396,19 @@ export default function ProductDetailPage({
             <span className="text-xs font-bold text-slate-500">Product Lifecycle & History</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {data && !loading && (
+              <ProductMoveAction
+                key={data.product.id}
+                product={data.product}
+                inventoryLocations={data.inventoryLocations}
+                onSuccess={() => {
+                  productDetailCache.delete(id);
+                  setMoveSuccess(true);
+                  setMoveRefresh((value) => value + 1);
+                }}
+              />
+            )}
             <button
               type="button"
               onClick={() => window.print()}
@@ -405,6 +426,8 @@ export default function ProductDetailPage({
             </button>
           </div>
         </div>
+
+        {moveSuccess && <p role="status" className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">Product moved successfully.</p>}
 
         {loading && (
           <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-xs">
@@ -447,6 +470,7 @@ export default function ProductDetailPage({
                       <span className="rounded-lg bg-slate-100 px-2.5 py-0.5 text-xs font-mono font-bold text-slate-700 border border-slate-200">
                         SKU: {data.product.sku}
                       </span>
+                      <ProductTypeBadge productType={data.product.productType} />
                     </div>
 
                     {/* Arrival Date & Inward Banner */}
@@ -469,6 +493,15 @@ export default function ProductDetailPage({
                       {data.product.price !== undefined && (
                         <div className="flex items-center gap-1">
                           <span>Unit Price: <b className="text-slate-800">₹{data.product.price.toLocaleString("en-IN")}</b></span>
+                        </div>
+                      )}
+
+                      {data.inventoryLocations && data.inventoryLocations.length > 0 && (
+                        <div className="flex items-center gap-1.5 font-bold text-blue-900 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200">
+                          <Warehouse className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                          <span>
+                            Location: <b>{data.inventoryLocations[0].warehouse?.name || "Warehouse"}</b> • <span className="text-indigo-700">{typeof data.inventoryLocations[0].rack?.zoneId === "object" ? data.inventoryLocations[0].rack.zoneId.name : (data.inventoryLocations[0].rack?.zoneId || "Zone")}</span> • <span className="font-mono text-blue-800">{data.inventoryLocations[0].rack?.name || "Rack"}</span>
+                          </span>
                         </div>
                       )}
                     </div>
@@ -565,6 +598,78 @@ export default function ProductDetailPage({
                         @ ₹{(arrivalInfo.unitPrice || data.product.price || 0).toLocaleString("en-IN")}/unit
                       </span>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 🏢 LIVE WAREHOUSE STORAGE & SHELVES 🏢 */}
+              {data.inventoryLocations && data.inventoryLocations.length > 0 && (
+                <div className="mt-4 rounded-2xl border border-blue-200 bg-gradient-to-r from-blue-50/60 to-indigo-50/40 p-4 sm:p-5 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap border-b border-blue-100 pb-2.5">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-blue-600 text-white shadow-2xs">
+                        <Warehouse className="h-4.5 w-4.5" />
+                      </span>
+                      <div>
+                        <h3 className="text-sm font-black uppercase tracking-wide text-blue-950">
+                          Active Warehouse Storage & Shelves
+                        </h3>
+                        <p className="text-xs text-blue-700 font-medium">Physical warehouse facility, zone room & rack allocations</p>
+                      </div>
+                    </div>
+
+                    <span className="rounded-xl bg-white/95 border border-blue-200 px-3 py-1.5 text-xs font-black text-blue-900 shadow-2xs">
+                      {data.summary.totalInStock} Total In Stock ({data.inventoryLocations.length} {data.inventoryLocations.length === 1 ? "rack" : "racks"})
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                    {data.inventoryLocations.map((loc) => {
+                      const zoneName = typeof loc.rack?.zoneId === "object" ? loc.rack?.zoneId?.name : (loc.rack?.zoneId || null);
+                      const isZero = (loc.quantity || 0) === 0;
+
+                      return (
+                        <div
+                          key={loc.id}
+                          className="rounded-2xl border-2 border-slate-200/80 bg-white p-4 shadow-2xs space-y-3 hover:border-blue-400 transition"
+                        >
+                          <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Building2 className="h-4 w-4 text-blue-600 shrink-0" />
+                              <span className="font-black text-slate-900 text-sm truncate" title={loc.warehouse?.name}>
+                                {loc.warehouse?.name || "Main Warehouse"}
+                              </span>
+                              {loc.warehouse?.code && (
+                                <span className="font-mono text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
+                                  {loc.warehouse.code}
+                                </span>
+                              )}
+                            </div>
+                            <span className={`px-2.5 py-0.5 rounded-full text-xs font-black border ${
+                              isZero ? "bg-slate-100 text-slate-500 border-slate-200" : "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            }`}>
+                              {loc.quantity} {loc.quantity === 1 ? "unit" : "units"}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 text-xs">
+                            <div className="p-2.5 rounded-xl bg-indigo-50/70 border border-indigo-200">
+                              <span className="text-[10px] font-black uppercase text-indigo-700 block">Zone / Room</span>
+                              <p className="text-sm font-black text-indigo-950 truncate mt-0.5" title={zoneName || "No Zone"}>
+                                {zoneName || "Unassigned"}
+                              </p>
+                            </div>
+
+                            <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200">
+                              <span className="text-[10px] font-black uppercase text-blue-700 block">Rack / Shelf</span>
+                              <p className="text-sm font-black text-blue-950 font-mono truncate mt-0.5" title={loc.rack?.name || "No Rack"}>
+                                {loc.rack?.name || "Unassigned"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -854,6 +959,7 @@ export default function ProductDetailPage({
                                 <div>
                                   <div className="flex items-center gap-2 flex-wrap">
                                     <h4 className="font-extrabold text-slate-800 text-sm">{ev.title}</h4>
+                                    {ev.eventType !== "PRODUCT_CREATED" && <ProductTypeBadge productType={ev.productType} />}
                                     {isInitialStock ? (
                                       <span className="rounded-full bg-emerald-600 text-white px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide inline-flex items-center gap-1">
                                         <Sparkles className="h-2.5 w-2.5" />
@@ -962,6 +1068,7 @@ export default function ProductDetailPage({
                                   title="View complete employee asset history"
                                 >
                                   <span>{h.employeeName}</span>
+                                  <ProductTypeBadge productType={h.productType} returnDueDate={h.returnDueDate} />
                                   <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-100 text-blue-600 transition" />
                                 </Link>
                                 <span className="text-[11px] text-slate-400 block">
@@ -1060,7 +1167,8 @@ export default function ProductDetailPage({
                     <thead className="bg-slate-50 text-[11px] font-semibold uppercase text-slate-500 border-b border-slate-200">
                       <tr>
                         <th className="px-5 py-3">Warehouse</th>
-                        <th className="px-5 py-3">Rack & Bin</th>
+                        <th className="px-5 py-3">Zone / Room</th>
+                        <th className="px-5 py-3">Rack Location</th>
                         <th className="px-5 py-3">Available Quantity</th>
                         <th className="px-5 py-3">Status</th>
                         <th className="px-5 py-3">Last Updated</th>
@@ -1069,46 +1177,70 @@ export default function ProductDetailPage({
                     <tbody className="divide-y divide-slate-100">
                       {data.inventoryLocations.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-8 text-center text-slate-400">
+                          <td colSpan={6} className="p-8 text-center text-slate-400">
                             No warehouse stock allocations found for this product.
                           </td>
                         </tr>
                       ) : (
-                        data.inventoryLocations.map((loc) => (
-                          <tr key={loc.id} className="hover:bg-slate-50/70 transition">
-                            <td className="px-5 py-3.5">
-                              <p className="font-bold text-slate-800">{loc.warehouse?.name || "Warehouse"}</p>
-                              <span className="text-[11px] text-slate-400">{loc.warehouse?.code}</span>
-                            </td>
-                            <td className="px-5 py-3.5">
-                              <p className="font-semibold text-slate-700">{loc.rack?.name || "Rack"}</p>
-                              <span className="text-[11px] text-slate-400">{loc.rack?.code}</span>
-                            </td>
-                            <td className="px-5 py-3.5 font-bold text-emerald-700 text-sm">
-                              {loc.quantity} units
-                            </td>
-                            <td className="px-5 py-3.5">
-                              <span
-                                className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                                  loc.quantity > 5
-                                    ? "bg-emerald-50 text-emerald-700"
-                                    : loc.quantity > 0
-                                    ? "bg-amber-50 text-amber-700"
-                                    : "bg-red-50 text-red-700"
-                                }`}
-                              >
-                                {loc.status || (loc.quantity > 0 ? "IN_STOCK" : "OUT_OF_STOCK")}
-                              </span>
-                            </td>
-                            <td className="px-5 py-3.5 text-slate-500">
-                              {new Date(loc.updatedAt).toLocaleDateString("en-IN", {
-                                day: "2-digit",
-                                month: "short",
-                                year: "numeric",
-                              })}
-                            </td>
-                          </tr>
-                        ))
+                        data.inventoryLocations.map((loc) => {
+                          const zoneName = typeof loc.rack?.zoneId === "object" ? loc.rack?.zoneId?.name : (loc.rack?.zoneId || null);
+
+                          return (
+                            <tr key={loc.id} className="hover:bg-slate-50/70 transition">
+                              <td className="px-5 py-3.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 text-blue-700 shrink-0">
+                                    <Building2 className="h-3.5 w-3.5" />
+                                  </span>
+                                  <div>
+                                    <p className="font-bold text-slate-900">{loc.warehouse?.name || "Warehouse"}</p>
+                                    <span className="font-mono text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded border border-slate-200">
+                                      {loc.warehouse?.code}
+                                    </span>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-50 border border-indigo-200 text-indigo-900">
+                                  <Layers className="h-3.5 w-3.5 text-indigo-600" />
+                                  {zoneName || <span className="text-slate-400 italic font-normal">Unassigned</span>}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black font-mono bg-blue-50 border border-blue-200 text-slate-900">
+                                  <Box className="h-3.5 w-3.5 text-blue-600" />
+                                  {loc.rack?.name || "Unassigned"}
+                                  {loc.rack?.code && loc.rack?.code !== loc.rack?.name && (
+                                    <span className="text-[10px] text-slate-400 font-sans font-medium">({loc.rack.code})</span>
+                                  )}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 font-bold text-emerald-700 text-sm">
+                                {loc.quantity} units
+                              </td>
+                              <td className="px-5 py-3.5">
+                                <span
+                                  className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                                    loc.quantity > 5
+                                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                      : loc.quantity > 0
+                                      ? "bg-amber-50 text-amber-700 border border-amber-200"
+                                      : "bg-red-50 text-red-700 border border-red-200"
+                                  }`}
+                                >
+                                  {loc.status || (loc.quantity > 0 ? "IN_STOCK" : "OUT_OF_STOCK")}
+                                </span>
+                              </td>
+                              <td className="px-5 py-3.5 text-slate-500">
+                                {new Date(loc.updatedAt).toLocaleDateString("en-IN", {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                })}
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
@@ -1160,6 +1292,7 @@ export default function ProductDetailPage({
                             </td>
                             <td className="px-5 py-3.5 font-semibold text-slate-700">
                               {m.reason.replace("_", " ")}
+                              <ProductTypeBadge productType={m.productType} />
                             </td>
                             <td className="px-5 py-3.5 font-bold text-slate-800">
                               {m.quantity} units

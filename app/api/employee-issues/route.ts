@@ -377,6 +377,7 @@ export async function POST(request: Request) {
           warehouseName: item.warehouseName,
           rackId: item.rackId,
           rackName: item.rackName,
+          productType: item.productType,
           movementType: "OUTWARD",
           reason: "EMPLOYEE_ISSUE",
           quantity: item.quantity,

@@ -1,7 +1,8 @@
 "use client";
+import ProductTypeBadge from "@/app/components/ProductTypeBadge";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { FolderTree, History, Warehouse as WarehouseIcon, Plus, Layers, Box, Trash2, X, AlertTriangle } from "lucide-react";
+import { FolderTree, History, Warehouse as WarehouseIcon, Plus, Layers, Box, Trash2, X, AlertTriangle, ArrowRightLeft } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import { useAuth } from "@/app/components/AuthProvider";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
@@ -11,6 +12,7 @@ import WarningPopup from "@/app/components/WarningPopup";
 import AddProductModal from "@/app/components/AddProductModal";
 import AddCategoryModal from "@/app/components/AddCategoryModal";
 import ProductHistoryModal from "@/app/components/ProductHistoryModal";
+import MoveProductModal from "@/app/components/MoveProductModal";
 import {
   CUSTOM_INTERVAL_VALUE,
   normalizeIntervalMonths,
@@ -32,6 +34,8 @@ type Product = {
   name: string;
   sku: string;
   category?: string;
+  categoryId?: string | { _id: string; name: string };
+  productType?: "REUSABLE" | "NON_REUSABLE";
   serviceIntervalMonths?: number;
   warrantyMonths?: number;
   serialNumber?: string;
@@ -95,6 +99,7 @@ export default function ProductsPage() {
   const [editName, setEditName] = useState("");
   const [editSku, setEditSku] = useState("");
   const [editCategory, setEditCategory] = useState("");
+  const [editProductType, setEditProductType] = useState<"REUSABLE" | "NON_REUSABLE" | "">("");
   const [editServiceInterval, setEditServiceInterval] = useState("3");
   const [editCustomServiceInterval, setEditCustomServiceInterval] = useState("");
   const [editWarrantyMonths, setEditWarrantyMonths] = useState("12");
@@ -118,6 +123,8 @@ export default function ProductsPage() {
   const [warningOpen, setWarningOpen] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
   const [historyProductId, setHistoryProductId] = useState<string | null>(null);
+  const [moveProduct, setMoveProduct] = useState<Product | null>(null);
+  const [moveSuccess, setMoveSuccess] = useState("");
 
   async function fetchProducts() {
     try {
@@ -251,9 +258,19 @@ export default function ProductsPage() {
         });
       }
     }
+    // Deduplicate zones by name
+    const seenZoneNames = new Set<string>();
+    const uniqueList: typeof list = [];
+    for (const z of list) {
+      const key = z.name.trim().toLowerCase();
+      if (!seenZoneNames.has(key)) {
+        seenZoneNames.add(key);
+        uniqueList.push(z);
+      }
+    }
     return [
       { value: "ALL", label: "All Zones" },
-      ...list.map((z) => ({
+      ...uniqueList.map((z) => ({
         value: z.name,
         label: z.name,
         subLabel: z.code,
@@ -283,15 +300,12 @@ export default function ProductsPage() {
   }, [newLocWarehouseId, availableZonesForNewLoc, newLocZoneId]);
 
   const availableRacksForNewLoc = useMemo(() => {
-    if (!newLocWarehouseId) return [];
+    if (!newLocWarehouseId || !newLocZoneId) return [];
     return racks.filter((r) => {
       const whId = typeof r.warehouseId === "object" ? (r.warehouseId as any)?._id : r.warehouseId;
       if (String(whId) !== String(newLocWarehouseId)) return false;
-      if (newLocZoneId) {
-        const zId = typeof r.zoneId === "object" ? (r.zoneId as any)?._id : r.zoneId;
-        return String(zId) === String(newLocZoneId);
-      }
-      return true;
+      const zId = typeof r.zoneId === "object" ? (r.zoneId as any)?._id : r.zoneId;
+      return String(zId) === String(newLocZoneId);
     });
   }, [racks, newLocWarehouseId, newLocZoneId]);
 
@@ -381,6 +395,7 @@ export default function ProductsPage() {
     setEditName(product.name);
     setEditSku(product.sku);
     setEditCategory(product.category || "");
+    setEditProductType(product.productType || "");
     const interval = product.serviceIntervalMonths ?? 3;
     const isPreset = [1, 3, 6, 12, 0].includes(interval);
     setEditServiceInterval(isPreset ? String(interval) : CUSTOM_INTERVAL_VALUE);
@@ -415,13 +430,14 @@ export default function ProductsPage() {
   async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!editId) return;
-    setEditLoading(true);
 
     if (!editCategory || editCategory.trim() === "") {
       setWarningMessage("Please select or enter a product category.");
       setWarningOpen(true);
       return;
     }
+
+    setEditLoading(true);
 
     const intervalVal = normalizeIntervalMonths(
       editServiceInterval === CUSTOM_INTERVAL_VALUE ? editCustomServiceInterval : editServiceInterval
@@ -438,11 +454,12 @@ export default function ProductsPage() {
           name: editName,
           sku: editSku,
           category: editCategory.trim(),
+          productType: editProductType || undefined,
           categoryId: editCategoryId,
           serviceIntervalMonths: intervalVal,
           warrantyMonths: Math.max(0, Number(editWarrantyMonths) || 0),
           serialNumber: editSerialNumber.trim() || undefined,
-          sellerName: editSellerName.trim() || undefined,
+          sellerName: editSellerName.trim(),
           price: editPrice !== "" && !isNaN(Number(editPrice)) ? Number(editPrice) : 0,
           description: editDescription,
           status: editStatus,
@@ -518,9 +535,18 @@ export default function ProductsPage() {
 
   const filteredProducts = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
+    const selectedCatObj = categories.find(
+      (c) => c.name.toLowerCase() === selectedCategoryFilter.toLowerCase()
+    );
+
     return enrichedProducts.filter((p) => {
+      const pCatId = typeof p.categoryId === "object" ? p.categoryId?._id : p.categoryId;
       const matchesCategory =
-        selectedCategoryFilter === "ALL" || p.category === selectedCategoryFilter;
+        selectedCategoryFilter === "ALL" ||
+        (selectedCatObj
+          ? (pCatId && String(pCatId) === String(selectedCatObj._id)) ||
+            Boolean(p.category && p.category.toLowerCase() === selectedCatObj.name.toLowerCase())
+          : Boolean(p.category && p.category.toLowerCase() === selectedCategoryFilter.toLowerCase()));
 
       const matchesWarehouse =
         selectedWarehouseFilter === "ALL" ||
@@ -620,7 +646,13 @@ export default function ProductsPage() {
           </div>
 
           {categories.map((cat, idx) => {
-            const count = products.filter((p) => p.category === cat.name).length;
+            const count = products.filter((p) => {
+              const pCatId = typeof p.categoryId === "object" ? p.categoryId?._id : p.categoryId;
+              return (
+                (pCatId && String(pCatId) === String(cat._id)) ||
+                Boolean(p.category && p.category.toLowerCase() === cat.name.toLowerCase())
+              );
+            }).length;
             const isSelected = selectedCategoryFilter === cat.name;
 
             const palettes = [
@@ -801,6 +833,7 @@ export default function ProductsPage() {
                         >
                           {product.name}
                         </button>
+                        <ProductTypeBadge productType={product.productType} />
                       </td>
                       <td className="px-5 py-3 font-mono text-xs text-slate-600">{product.sku}</td>
                       <td className="px-5 py-3">
@@ -814,52 +847,63 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-5 py-3">
                         {product.locations && product.locations.length > 0 ? (
-                          <div className="space-y-1.5 py-0.5">
-                            {/* All warehouse location entries */}
-                            <div className="space-y-1">
-                              {product.locations.map((loc, locIdx) => (
-                                <div
-                                  key={`${loc.warehouseId}-${loc.rackId}-${locIdx}`}
-                                  className="flex items-center gap-1.5 flex-wrap"
-                                >
-                                  {loc.warehouseName === "Unassigned" || loc.warehouseName === "Warehouse" ? (
-                                    <span
-                                      className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-300/80 px-2 py-0.5 text-xs font-semibold text-amber-800"
-                                      title="Warehouse was deleted or unassigned"
-                                    >
-                                      <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
-                                      Unassigned Warehouse
-                                    </span>
+                          (() => {
+                            const displayedLocations = product.locations.filter((loc) => {
+                              if (selectedWarehouseFilter !== "ALL" && loc.warehouseName.toLowerCase() !== selectedWarehouseFilter.toLowerCase()) return false;
+                              if (selectedZoneFilter !== "ALL" && loc.zoneName?.toLowerCase() !== selectedZoneFilter.toLowerCase()) return false;
+                              return true;
+                            });
+                            return (
+                              <div className="space-y-1.5 py-0.5">
+                                {/* All warehouse location entries */}
+                                <div className="space-y-1">
+                                  {displayedLocations.length === 0 ? (
+                                    <span className="text-xs text-slate-400 italic">No racks in selected zone</span>
                                   ) : (
-                                    <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200/70 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                                      <WarehouseIcon className="h-3 w-3 text-blue-600 shrink-0" />
-                                      {loc.warehouseName}
-                                    </span>
+                                    displayedLocations.map((loc, locIdx) => (
+                                      <div
+                                        key={`${loc.warehouseId}-${loc.rackId}-${locIdx}`}
+                                        className="flex items-center gap-1.5 flex-wrap"
+                                      >
+                                        {loc.warehouseName === "Unassigned" || loc.warehouseName === "Warehouse" ? (
+                                          <span
+                                            className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-300/80 px-2 py-0.5 text-xs font-semibold text-amber-800"
+                                            title="Warehouse was deleted or unassigned"
+                                          >
+                                            <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                                            Unassigned Warehouse
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center gap-1 rounded-md bg-blue-50 border border-blue-200/70 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                                            <WarehouseIcon className="h-3 w-3 text-blue-600 shrink-0" />
+                                            {loc.warehouseName}
+                                          </span>
+                                        )}
+                                        {loc.zoneName && (
+                                          <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                                            <Layers className="h-3 w-3 text-indigo-600 shrink-0" />
+                                            Zone: {loc.zoneName}
+                                          </span>
+                                        )}
+                                        {loc.rackName === "Unassigned" || loc.rackName === "Rack" ? (
+                                          <span
+                                            className="inline-flex items-center rounded-md bg-amber-50 border border-amber-200/70 px-1.5 py-0.5 text-[11px] font-mono text-amber-800"
+                                            title="Rack was deleted or unassigned"
+                                          >
+                                            Rack: Unassigned
+                                          </span>
+                                        ) : (
+                                          <span className="inline-flex items-center rounded-md bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 text-[11px] font-mono text-slate-700">
+                                            Rack: {loc.rackName}
+                                          </span>
+                                        )}
+                                        <span className="inline-flex items-center font-bold text-xs text-slate-800">
+                                          • {loc.quantity} {loc.quantity === 1 ? "unit" : "units"}
+                                        </span>
+                                      </div>
+                                    ))
                                   )}
-                                  {loc.zoneName && (
-                                    <span className="inline-flex items-center gap-1 rounded-md bg-indigo-50 border border-indigo-200/70 px-2 py-0.5 text-xs font-semibold text-indigo-700">
-                                      <Layers className="h-3 w-3 text-indigo-600 shrink-0" />
-                                      Zone: {loc.zoneName}
-                                    </span>
-                                  )}
-                                  {loc.rackName === "Unassigned" || loc.rackName === "Rack" ? (
-                                    <span
-                                      className="inline-flex items-center rounded-md bg-amber-50 border border-amber-200/70 px-1.5 py-0.5 text-[11px] font-mono text-amber-800"
-                                      title="Rack was deleted or unassigned"
-                                    >
-                                      Rack: Unassigned
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center rounded-md bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 text-[11px] font-mono text-slate-700">
-                                      Rack: {loc.rackName}
-                                    </span>
-                                  )}
-                                  <span className="inline-flex items-center font-bold text-xs text-slate-800">
-                                    • {loc.quantity} {loc.quantity === 1 ? "unit" : "units"}
-                                  </span>
                                 </div>
-                              ))}
-                            </div>
 
                             {/* Stock summary across all warehouses */}
                             <div className="flex items-center gap-2 pt-1 border-t border-slate-100 flex-wrap">
@@ -881,6 +925,8 @@ export default function ProductsPage() {
                               )}
                             </div>
                           </div>
+                        );
+                      })()
                         ) : (
                           <div className="space-y-0.5">
                             <span className="text-xs text-slate-400 italic block">No rack assigned</span>
@@ -914,6 +960,14 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => { setMoveSuccess(""); setMoveProduct(product); }}
+                            disabled={!product.locations?.some((location) => location.inventoryId)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                          >
+                            <ArrowRightLeft className="h-3.5 w-3.5" /> Move
+                          </button>
                           <button
                             onClick={() => openEdit(product)}
                             className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
@@ -956,6 +1010,7 @@ export default function ProductsPage() {
                         {product.name}
                       </button>
                       <p className="mt-0.5 text-xs font-mono text-slate-500">SKU: {product.sku}</p>
+                      <ProductTypeBadge productType={product.productType} />
                     </div>
                     <span
                       className={`ml-2 shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -999,41 +1054,53 @@ export default function ProductsPage() {
                     </div>
 
                     {product.locations && product.locations.length > 0 ? (
-                      <div className="space-y-1">
-                        {product.locations.map((loc, lIdx) => (
-                          <div
-                            key={lIdx}
-                            className="flex items-center justify-between bg-white rounded-md border border-slate-200/70 px-2 py-1 gap-2 flex-wrap"
-                          >
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              {loc.warehouseName === "Unassigned" || loc.warehouseName === "Warehouse" ? (
-                                <span className="font-semibold text-amber-800 flex items-center gap-1 text-xs bg-amber-50 border border-amber-300/80 px-1.5 py-0.5 rounded-md">
-                                  <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
-                                  Unassigned WH
+                      (() => {
+                        const displayedLocations = product.locations.filter((loc) => {
+                          if (selectedWarehouseFilter !== "ALL" && loc.warehouseName.toLowerCase() !== selectedWarehouseFilter.toLowerCase()) return false;
+                          if (selectedZoneFilter !== "ALL" && loc.zoneName?.toLowerCase() !== selectedZoneFilter.toLowerCase()) return false;
+                          return true;
+                        });
+                        if (displayedLocations.length === 0) {
+                          return <span className="text-xs text-slate-400 italic">No racks in selected zone</span>;
+                        }
+                        return (
+                          <div className="space-y-1">
+                            {displayedLocations.map((loc, lIdx) => (
+                              <div
+                                key={lIdx}
+                                className="flex items-center justify-between bg-white rounded-md border border-slate-200/70 px-2 py-1 gap-2 flex-wrap"
+                              >
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {loc.warehouseName === "Unassigned" || loc.warehouseName === "Warehouse" ? (
+                                    <span className="font-semibold text-amber-800 flex items-center gap-1 text-xs bg-amber-50 border border-amber-300/80 px-1.5 py-0.5 rounded-md">
+                                      <AlertTriangle className="h-3 w-3 text-amber-600 shrink-0" />
+                                      Unassigned WH
+                                    </span>
+                                  ) : (
+                                    <span className="font-semibold text-blue-700 flex items-center gap-1 text-xs">
+                                      <WarehouseIcon className="h-3 w-3 shrink-0" />
+                                      {loc.warehouseName}
+                                    </span>
+                                  )}
+                                  {loc.zoneName && (
+                                    <span className="inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                                      <Layers className="h-2.5 w-2.5 text-indigo-600 shrink-0" />
+                                      Zone: {loc.zoneName}
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-slate-600 text-xs shrink-0">
+                                  {loc.rackName === "Unassigned" || loc.rackName === "Rack" ? (
+                                    <span className="text-amber-800 font-medium">Rack: <b>Unassigned</b></span>
+                                  ) : (
+                                    <>Rack: <b className="font-mono text-slate-800">{loc.rackName}</b></>
+                                  )} • <b className="text-slate-800">{loc.quantity} units</b>
                                 </span>
-                              ) : (
-                                <span className="font-semibold text-blue-700 flex items-center gap-1 text-xs">
-                                  <WarehouseIcon className="h-3 w-3 shrink-0" />
-                                  {loc.warehouseName}
-                                </span>
-                              )}
-                              {loc.zoneName && (
-                                <span className="inline-flex items-center gap-1 rounded bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">
-                                  <Layers className="h-2.5 w-2.5 text-indigo-600 shrink-0" />
-                                  Zone: {loc.zoneName}
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-slate-600 text-xs shrink-0">
-                              {loc.rackName === "Unassigned" || loc.rackName === "Rack" ? (
-                                <span className="text-amber-800 font-medium">Rack: <b>Unassigned</b></span>
-                              ) : (
-                                <>Rack: <b className="font-mono text-slate-800">{loc.rackName}</b></>
-                              )} • <b className="text-slate-800">{loc.quantity} units</b>
-                            </span>
+                              </div>
+                            ))}
                           </div>
-                        ))}
-                      </div>
+                        );
+                      })()
                     ) : (
                       <div className="flex justify-end">
                         <Link
@@ -1047,6 +1114,14 @@ export default function ProductsPage() {
                   </div>
 
                   <div className="mt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setMoveSuccess(""); setMoveProduct(product); }}
+                      disabled={!product.locations?.some((location) => location.inventoryId)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                    >
+                      <ArrowRightLeft className="h-3.5 w-3.5" /> Move
+                    </button>
                     <button
                       onClick={() => openEdit(product)}
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
@@ -1205,6 +1280,14 @@ export default function ProductsPage() {
                         </div>
                       </div>
 
+                      <label className="block text-xs font-bold text-slate-700">
+                        Product Type
+                        <select value={editProductType} onChange={(event) => setEditProductType(event.target.value as "REUSABLE" | "NON_REUSABLE" | "")} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-sm">
+                          <option value="">Type not recorded</option>
+                          <option value="REUSABLE">Returnable</option>
+                          <option value="NON_REUSABLE">Non-Returnable</option>
+                        </select>
+                      </label>
                       {/* Seller & Price */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
@@ -1316,7 +1399,7 @@ export default function ProductsPage() {
                             {editLocations.map((loc, idx) => (
                               <div
                                 key={idx}
-                                className={`flex items-center justify-between gap-3 rounded-xl border p-3 transition shadow-2xs ${
+                                className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3 transition shadow-2xs ${
                                   loc.quantity === 0
                                     ? "bg-rose-50/60 border-rose-200"
                                     : "bg-white border-slate-200/90 hover:border-slate-300"
@@ -1586,6 +1669,23 @@ export default function ProductsPage() {
         )}
       </div>
 
+      {moveSuccess && <div role="status" className="fixed bottom-5 right-5 z-40 flex max-w-sm items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-lg">{moveSuccess}<button type="button" aria-label="Dismiss move confirmation" onClick={() => setMoveSuccess("")}><X className="h-4 w-4" /></button></div>}
+
+      {moveProduct && (
+        <MoveProductModal
+          key={moveProduct._id}
+          product={moveProduct}
+          zones={zones}
+          racks={racks}
+          onClose={() => setMoveProduct(null)}
+          onSuccess={() => {
+            setMoveSuccess(`${moveProduct.name} moved successfully.`);
+            setMoveProduct(null);
+            void fetchProducts();
+          }}
+        />
+      )}
+
       <WarningPopup
         open={warningOpen}
         message={warningMessage}
@@ -1607,6 +1707,7 @@ export default function ProductsPage() {
           productId={historyProductId}
           onClose={() => setHistoryProductId(null)}
           backLabel="Back to Products"
+          onInventoryChanged={() => void fetchProducts()}
         />
       )}
     </ProtectedPage>

@@ -84,6 +84,23 @@ export async function POST(request: Request) {
       );
     }
 
+    const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const existingZone = await Zone.findOne({
+      warehouseId: body.warehouseId,
+      name: { $regex: new RegExp(`^${escapedName}$`, "i") },
+    }).populate("warehouseId", "name code");
+
+    if (existingZone) {
+      return Response.json(
+        {
+          success: true,
+          data: existingZone,
+          message: "Zone already exists in this warehouse, reused existing zone",
+        },
+        { status: 200 }
+      );
+    }
+
     const zone = await Zone.create({
       name: trimmedName,
       code: body.code ? String(body.code).trim().toUpperCase() : "",
@@ -91,10 +108,12 @@ export async function POST(request: Request) {
       status: body.status ?? "ACTIVE",
     });
 
+    const populatedZone = await Zone.findById(zone._id).populate("warehouseId", "name code");
+
     return Response.json(
       {
         success: true,
-        data: zone,
+        data: populatedZone || zone,
       },
       { status: 201 }
     );

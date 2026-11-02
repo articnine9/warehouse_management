@@ -14,6 +14,7 @@ type Category = {
   code: string;
   description?: string;
   status: "ACTIVE" | "INACTIVE";
+  productCount?: number;
 };
 
 export default function CategoriesPage() {
@@ -67,6 +68,17 @@ export default function CategoriesPage() {
     setEditCode(category.code);
     setEditDescription(category.description || "");
     setEditStatus(category.status);
+  }
+
+  function requestDelete(category: Category) {
+    if ((category.productCount ?? 0) > 0) {
+      setWarningMessage(
+        `Cannot delete category "${category.name}" because it currently contains ${category.productCount} product(s). Please reassign them first.`
+      );
+      setWarningOpen(true);
+      return;
+    }
+    setDeleteId(category._id);
   }
 
   async function handleEditSubmit(event: FormEvent<HTMLFormElement>) {
@@ -216,6 +228,7 @@ export default function CategoriesPage() {
                   <tr>
                     <th className="px-5 py-3">Name</th>
                     <th className="px-5 py-3">Code</th>
+                    <th className="px-5 py-3">Products</th>
                     <th className="px-5 py-3">Description</th>
                     <th className="px-5 py-3">Status</th>
                     <th className="px-5 py-3">Actions</th>
@@ -225,7 +238,16 @@ export default function CategoriesPage() {
                   {paginatedCategories.map((cat) => (
                     <tr key={cat._id} className="border-t border-slate-100 hover:bg-slate-50/50">
                       <td className="px-5 py-3 font-medium text-slate-800">{cat.name}</td>
-                      <td className="px-5 py-3 text-slate-600">{cat.code}</td>
+                      <td className="px-5 py-3 font-mono text-slate-600">{cat.code}</td>
+                      <td className="px-5 py-3">
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                          (cat.productCount ?? 0) > 0
+                            ? "bg-blue-50 text-blue-700 border border-blue-200/80"
+                            : "bg-slate-100 text-slate-500"
+                        }`}>
+                          {cat.productCount ?? 0} products
+                        </span>
+                      </td>
                       <td className="px-5 py-3 text-slate-500">{cat.description || "-"}</td>
                       <td className="px-5 py-3">
                         <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -246,7 +268,7 @@ export default function CategoriesPage() {
                           </button>
                           {isAdmin && (
                             <button
-                              onClick={() => setDeleteId(cat._id)}
+                              onClick={() => requestDelete(cat)}
                               className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
                             >
                               Delete
@@ -269,7 +291,11 @@ export default function CategoriesPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="font-semibold text-slate-800">{cat.name}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">Code: {cat.code}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-slate-500 font-mono">Code: {cat.code}</span>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-xs font-bold text-blue-700">{cat.productCount ?? 0} products</span>
+                      </div>
                     </div>
                     <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
                       cat.status === "ACTIVE"
@@ -291,7 +317,7 @@ export default function CategoriesPage() {
                     </button>
                     {isAdmin && (
                       <button
-                        onClick={() => setDeleteId(cat._id)}
+                        onClick={() => requestDelete(cat)}
                         className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
                       >
                         Delete
@@ -382,31 +408,34 @@ export default function CategoriesPage() {
         )}
 
         {/* Delete Modal */}
-        {deleteId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-xl">
-              <h3 className="text-lg font-semibold text-red-600">Delete Category</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                Are you sure you want to delete this category? Products in this category will not be deleted.
-              </p>
-              <div className="mt-5 flex gap-3">
-                <button
-                  onClick={handleDelete}
-                  disabled={deleteLoading}
-                  className="flex-1 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
-                >
-                  {deleteLoading ? "Deleting..." : "Delete"}
-                </button>
-                <button
-                  onClick={() => setDeleteId(null)}
-                  className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
-                >
-                  Cancel
-                </button>
+        {deleteId && (() => {
+          const catToDelete = categories.find((c) => c._id === deleteId);
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+              <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-xl">
+                <h3 className="text-lg font-semibold text-red-600">Delete Category</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Are you sure you want to delete <b>{catToDelete?.name || "this category"}</b>?
+                </p>
+                <div className="mt-5 flex gap-3">
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleteLoading}
+                    className="flex-1 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleteLoading ? "Deleting..." : "Delete"}
+                  </button>
+                  <button
+                    onClick={() => setDeleteId(null)}
+                    className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       <WarningPopup

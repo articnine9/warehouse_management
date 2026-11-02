@@ -8,12 +8,10 @@ import Zone from "@/models/Zone";
 import Rack from "@/models/Rack";
 import StockMovement from "@/models/StockMovement";
 import Category from "@/models/Category";
-
 export async function GET(request: Request) {
   try {
     await connectDB();
     await requireSessionUser();
-
     // Ensure models are registered for Mongoose population
     void Warehouse;
     void Zone;
@@ -21,7 +19,6 @@ export async function GET(request: Request) {
     void Product;
     void Inventory;
     void Category;
-
     const { searchParams } = new URL(request.url);
     const checkNameParam = searchParams.get("checkName");
     if (checkNameParam?.trim()) {
@@ -33,7 +30,6 @@ export async function GET(request: Request) {
       })
         .limit(5)
         .sort({ name: 1 });
-
       if (existingProducts.length > 0) {
         const productIds = existingProducts.map((p) => p._id);
         const inventories = await Inventory.find({ productId: { $in: productIds } })
@@ -46,7 +42,6 @@ export async function GET(request: Request) {
               select: "name code",
             },
           });
-
         const enriched = existingProducts.map((p) => {
           const pid = p._id.toString();
           const prodInvs = inventories.filter(
@@ -72,12 +67,12 @@ export async function GET(request: Request) {
             name: p.name,
             sku: p.sku,
             category: p.category,
+            productType: p.productType,
             price: p.price,
             totalStock,
             locations,
           };
         });
-
         return Response.json({
           success: true,
           exists: true,
@@ -86,20 +81,34 @@ export async function GET(request: Request) {
       }
       return Response.json({ success: true, exists: false, products: [] });
     }
-
     const query = searchParams.get("q") || searchParams.get("query") || searchParams.get("search");
     const categoryParam = searchParams.get("category");
     const pageParam = searchParams.get("page");
     const limitParam = searchParams.get("limit");
-
     // Build filter
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filter: Record<string, any> = {};
-
+    const andClauses: any[] = [];
     if (categoryParam && categoryParam !== "ALL") {
-      filter.category = categoryParam;
-    }
+      const trimmedCat = categoryParam.trim();
+      const escapedCat = trimmedCat.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const matchedCat = await Category.findOne({
+        name: { $regex: new RegExp(`^${escapedCat}$`, "i") },
+      });
 
+      if (matchedCat) {
+        andClauses.push({
+          $or: [
+            { categoryId: matchedCat._id },
+            { category: matchedCat.name },
+            { category: { $regex: new RegExp(`^${escapedCat}$`, "i") } },
+          ],
+        });
+      } else {
+        andClauses.push({
+          category: { $regex: new RegExp(`^${escapedCat}$`, "i") },
+        });
+      }
+    }
     if (query?.trim()) {
       const regex = { $regex: query.trim(), $options: "i" };
       const [matchingWarehouses, matchingZones, matchingRacks] = await Promise.all([
@@ -119,7 +128,6 @@ export async function GET(request: Request) {
           ...racksInMatchingZones.map((r) => r._id.toString()),
         ])
       );
-
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let invProductIds: any[] = [];
       if (wIds.length || allRkIds.length) {
@@ -131,16 +139,18 @@ export async function GET(request: Request) {
         }).select("productId");
         invProductIds = invs.map((i) => i.productId);
       }
-
-      filter.$or = [
-        { name: regex },
-        { sku: regex },
-        { sellerName: regex },
-        { category: regex },
-        ...(invProductIds.length ? [{ _id: { $in: invProductIds } }] : []),
-      ];
+      andClauses.push({
+        $or: [
+          { name: regex },
+          { sku: regex },
+          { sellerName: regex },
+          { category: regex },
+          ...(invProductIds.length ? [{ _id: { $in: invProductIds } }] : []),
+        ],
+      });
     }
-
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const filter: Record<string, any> = andClauses.length > 0 ? { $and: andClauses } : {};
     // Helper to enrich products with warehouse, zone & rack inventory details
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const enrichProductsWithStock = async (productList: any[]) => {
@@ -156,7 +166,6 @@ export async function GET(request: Request) {
             select: "name code",
           },
         });
-
       const invMap = new Map<
         string,
         Array<{
@@ -171,7 +180,6 @@ export async function GET(request: Request) {
         }>
       >();
       const stockMap = new Map<string, number>();
-
       for (const inv of inventories) {
         const pid = inv.productId.toString();
         stockMap.set(pid, (stockMap.get(pid) || 0) + (inv.quantity || 0));
@@ -193,7 +201,6 @@ export async function GET(request: Request) {
         });
         invMap.set(pid, list);
       }
-
       return productList.map((p) => {
         const obj = typeof p.toObject === "function" ? p.toObject() : p;
         const pid = obj._id.toString();
@@ -204,12 +211,10 @@ export async function GET(request: Request) {
         };
       });
     };
-
     if (pageParam || limitParam) {
       const page = Math.max(1, parseInt(pageParam || "1", 10));
       const limit = Math.min(100, Math.max(1, parseInt(limitParam || "10", 10)));
       const skip = (page - 1) * limit;
-
       const [total, rawProducts] = await Promise.all([
         Product.countDocuments(filter),
         Product.find(filter)
@@ -218,9 +223,7 @@ export async function GET(request: Request) {
           .skip(skip)
           .limit(limit),
       ]);
-
       const products = await enrichProductsWithStock(rawProducts);
-
       return Response.json({
         success: true,
         data: products,
@@ -232,15 +235,12 @@ export async function GET(request: Request) {
         },
       });
     }
-
     const rawProducts = await Product.find(filter)
       .populate("categoryId", "name code")
       .sort({
         createdAt: -1,
       });
-
     const products = await enrichProductsWithStock(rawProducts);
-
     return Response.json({
       success: true,
       data: products,
@@ -256,9 +256,7 @@ export async function GET(request: Request) {
         { status: 401 }
       );
     }
-
     console.error("GET /api/products error:", error);
-
     return Response.json(
       {
         success: false,
@@ -269,12 +267,10 @@ export async function GET(request: Request) {
     );
   }
 }
-
 export async function POST(request: Request) {
   try {
     await connectDB();
     const user = await requireSessionUser();
-
     if (user.role !== "ADMIN" && user.role !== "STAFF") {
       return Response.json(
         {
@@ -284,9 +280,7 @@ export async function POST(request: Request) {
         { status: 403 }
       );
     }
-
     const body = await request.json();
-
     // Handle restocking existing product directly
     if (body.action === "RESTOCK_EXISTING") {
       const {
@@ -295,7 +289,6 @@ export async function POST(request: Request) {
         rackId,
         quantity,
       } = body;
-
       if (!existingProductId || !warehouseId || !rackId || quantity === undefined) {
         return Response.json(
           {
@@ -305,7 +298,6 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-
       const existingProduct = await Product.findById(existingProductId);
       if (!existingProduct) {
         return Response.json(
@@ -316,12 +308,10 @@ export async function POST(request: Request) {
           { status: 404 }
         );
       }
-
       const rackDoc = await Rack.findOne({
         _id: rackId,
         warehouseId: warehouseId,
       });
-
       if (!rackDoc) {
         return Response.json(
           {
@@ -331,16 +321,13 @@ export async function POST(request: Request) {
           { status: 400 }
         );
       }
-
       const warehouseDoc = await Warehouse.findById(warehouseId);
       const addQty = Math.max(1, Number(quantity) || 1);
-
       let inv = await Inventory.findOne({
         productId: existingProductId,
         warehouseId,
         rackId,
       });
-
       if (inv) {
         inv.quantity = (inv.quantity || 0) + addQty;
         if (inv.quantity === 0) {
@@ -361,7 +348,6 @@ export async function POST(request: Request) {
           status: invStatus,
         });
       }
-
       // Log Stock Movement
       try {
         await StockMovement.create({
@@ -369,6 +355,7 @@ export async function POST(request: Request) {
           productName: existingProduct.name,
           sku: existingProduct.sku,
           category: existingProduct.category,
+          productType: existingProduct.productType,
           warehouseId: warehouseDoc?._id || warehouseId,
           warehouseName: warehouseDoc?.name || "Warehouse",
           rackId: rackDoc._id,
@@ -387,7 +374,6 @@ export async function POST(request: Request) {
       } catch (smErr) {
         console.error("Failed to log stock movement in RESTOCK_EXISTING:", smErr);
       }
-
       return Response.json({
         success: true,
         restocked: true,
@@ -395,7 +381,6 @@ export async function POST(request: Request) {
         message: `Successfully added ${addQty} units to existing product "${existingProduct.name}".`,
       });
     }
-
     const trimmedName = String(body.name || "").trim();
     if (!trimmedName) {
       return Response.json(
@@ -406,17 +391,14 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
     // Check if a product with the same name already exists
     const escapedName = trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const existingSameName = await Product.findOne({
       name: { $regex: new RegExp(`^${escapedName}$`, "i") },
     });
-
     if (existingSameName && !body.allowDuplicate) {
       const inventories = await Inventory.find({ productId: existingSameName._id });
       const totalStock = inventories.reduce((sum, inv) => sum + (inv.quantity || 0), 0);
-
       return Response.json(
         {
           success: false,
@@ -435,13 +417,11 @@ export async function POST(request: Request) {
         { status: 409 }
       );
     }
-
     const {
       warehouseId,
       rackId,
       initialQuantity,
     } = body;
-
     const categoryName = String(body.category || "").trim();
     if (!categoryName) {
       return Response.json(
@@ -452,7 +432,6 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
     if (!warehouseId || !rackId) {
       return Response.json(
         {
@@ -462,12 +441,10 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
     const rackDoc = await Rack.findOne({
       _id: rackId,
       warehouseId: warehouseId,
     });
-
     if (!rackDoc) {
       return Response.json(
         {
@@ -477,9 +454,7 @@ export async function POST(request: Request) {
         { status: 400 }
       );
     }
-
     const warehouseDoc = await Warehouse.findById(warehouseId);
-
     let categoryId = body.categoryId;
     if (!categoryId && categoryName) {
       const catDoc = await Category.findOne({
@@ -487,7 +462,6 @@ export async function POST(request: Request) {
       });
       if (catDoc) categoryId = catDoc._id;
     }
-
     const product = await Product.create({
       name: trimmedName,
       sku: body.sku,
@@ -495,13 +469,14 @@ export async function POST(request: Request) {
       categoryId,
       serviceIntervalMonths: body.serviceIntervalMonths !== undefined ? Number(body.serviceIntervalMonths) : 3,
       warrantyMonths: body.warrantyMonths !== undefined ? Number(body.warrantyMonths) : 12,
+      productType: body.productType === "REUSABLE" ? "REUSABLE" : "NON_REUSABLE",
+      returnDueDays: body.productType === "REUSABLE" ? Math.max(1, Number(body.returnDueDays) || 30) : 30,
       serialNumber: body.serialNumber ? String(body.serialNumber).trim() : undefined,
       sellerName: body.sellerName ? String(body.sellerName).trim() : "",
       price: body.price !== undefined && body.price !== null && body.price !== "" && !isNaN(Number(body.price)) ? Number(body.price) : 0,
       description: body.description,
       status: body.status ?? "ACTIVE",
     });
-
     // Create initial Inventory stock record if warehouse & rack were provided
     if (warehouseId && rackId && rackDoc) {
       const qty = Math.max(0, Number(initialQuantity) || 0);
@@ -513,7 +488,6 @@ export async function POST(request: Request) {
       } else {
         invStatus = "AVAILABLE";
       }
-
       await Inventory.create({
         productId: product._id,
         warehouseId: warehouseId,
@@ -521,7 +495,6 @@ export async function POST(request: Request) {
         quantity: qty,
         status: invStatus,
       });
-
       // Log Inward Stock Movement if quantity > 0
       if (qty > 0) {
         try {
@@ -530,6 +503,7 @@ export async function POST(request: Request) {
             productName: product.name,
             sku: product.sku,
             category: product.category,
+            productType: product.productType,
             warehouseId: warehouseDoc?._id || warehouseId,
             warehouseName: warehouseDoc?.name || "Warehouse",
             rackId: rackDoc._id,
@@ -552,7 +526,6 @@ export async function POST(request: Request) {
         }
       }
     }
-
     await ProductHistory.create({
       productId: product._id,
       action: "CREATED",
@@ -560,7 +533,6 @@ export async function POST(request: Request) {
       changedFields: Object.keys(body),
       newValues: body as Record<string, unknown>,
     });
-
     return Response.json(
       {
         success: true,
@@ -578,9 +550,7 @@ export async function POST(request: Request) {
         { status: 401 }
       );
     }
-
     console.error("POST product error:", error);
-
     // Duplicate key error for SKU
     if (
       typeof error === "object" &&
@@ -596,7 +566,6 @@ export async function POST(request: Request) {
         { status: 409 }
       );
     }
-
     return Response.json(
       {
         success: false,

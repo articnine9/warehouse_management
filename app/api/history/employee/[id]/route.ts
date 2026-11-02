@@ -96,6 +96,8 @@ export async function GET(
     }> = [];
 
     const returnedAssets: Array<{
+      productType?: string;
+      returnDueDate?: string;
       issueId: string;
       issueNumber: string;
       itemIndex: number;
@@ -155,6 +157,8 @@ export async function GET(
         if (isReturned) {
           returnedUnitsCount += item.quantity || 1;
           returnedAssets.push({
+            productType: item.productType,
+            returnDueDate: item.returnDueDate ? new Date(item.returnDueDate).toISOString() : undefined,
             issueId: issue._id.toString(),
             issueNumber: issue.issueNumber,
             itemIndex,

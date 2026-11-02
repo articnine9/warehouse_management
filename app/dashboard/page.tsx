@@ -1,4 +1,5 @@
 "use client";
+import ProductTypeBadge from "@/app/components/ProductTypeBadge";
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import Link from "next/link";
@@ -77,6 +78,7 @@ type ReusableAlert = {
 };
 
 type StockAlert = {
+  productType?: "REUSABLE" | "NON_REUSABLE";
   id: string;
   productId: string;
   warehouseId: string;
@@ -90,6 +92,7 @@ type StockAlert = {
 };
 
 type LowStockItem = {
+  productType?: "REUSABLE" | "NON_REUSABLE";
   id: string;
   productId?: string;
   warehouseId?: string;
@@ -555,6 +558,8 @@ export default function DashboardPage() {
           </div>
         )}
 
+        <ProductSearch />
+
         {/* 🔔 COMPREHENSIVE NOTIFICATION & ALERTS CENTER ON DASHBOARD */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
           {/* Header */}
@@ -769,6 +774,7 @@ export default function DashboardPage() {
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="font-bold text-slate-800 text-sm truncate">
                                 {stock.productName}
+                                <ProductTypeBadge productType={stock.productType} />
                               </p>
                               <span
                                 className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
@@ -864,11 +870,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* ─── 3. SEARCH & LIST TABLES (3rd ORDER) ─── */}
-        <div className="space-y-4">
-          <ProductSearch />
-        </div>
-
         {/* Low stock table — staff view */}
         {summary?.role === "STAFF" && (
           <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -905,6 +906,7 @@ export default function DashboardPage() {
                     <tr key={item.id} className="hover:bg-slate-50/50">
                       <td className="px-5 py-3.5">
                         <p className="font-medium text-slate-800">{item.productName}</p>
+                        <ProductTypeBadge productType={item.productType} />
                         <p className="text-xs text-slate-500">SKU: {item.sku}</p>
                       </td>
                       <td className="px-5 py-3.5 text-slate-600">

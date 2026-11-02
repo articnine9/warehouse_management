@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import ProductTypeBadge from "./ProductTypeBadge";
 import {
   User,
   X,
@@ -70,6 +71,8 @@ interface EmployeeHistoryData {
     issuedAt: string;
   }>;
   returnedAssets: Array<{
+    productType?: string;
+    returnDueDate?: string;
     issueId: string;
     issueNumber: string;
     itemIndex: number;
@@ -356,6 +359,7 @@ export default function EmployeeHistoryModal({
                                 <p className="font-bold text-slate-800">{asset.productName}</p>
                               )}
                               <p className="text-[11px] text-slate-400">SKU: {asset.sku}</p>
+                              <ProductTypeBadge productType={asset.productType} returnDueDate={asset.returnDueDate} />
                             </td>
                             <td className="p-3">
                               <p className="font-bold text-slate-800">{asset.quantity} units</p>
@@ -435,6 +439,7 @@ export default function EmployeeHistoryModal({
                                 <p className="font-bold text-slate-800">{asset.productName}</p>
                               )}
                               <p className="text-[11px] text-slate-400">SKU: {asset.sku}</p>
+                              <ProductTypeBadge productType={asset.productType} returnDueDate={asset.returnDueDate} />
                             </td>
                             <td className="p-3">
                               <p className="font-bold text-slate-800">{asset.quantity} units</p>

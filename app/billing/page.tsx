@@ -1,4 +1,5 @@
 "use client";
+import ProductTypeBadge from "@/app/components/ProductTypeBadge";
 
 import { useEffect, useState, useRef, useMemo } from "react";
 import { X, Search, MapPin, Receipt, Printer, RefreshCw, Trash2, Loader2, AlertTriangle } from "lucide-react";
@@ -14,6 +15,7 @@ type InventoryItem = {
     name: string;
     sku: string;
     category?: string;
+    productType?: "REUSABLE" | "NON_REUSABLE";
     price?: number;
     sellerName?: string;
   };
@@ -32,6 +34,7 @@ type InventoryItem = {
 };
 
 type SelectedLineItem = {
+  productType?: "REUSABLE" | "NON_REUSABLE";
   inventoryId: string;
   productName: string;
   sku: string;
@@ -50,6 +53,7 @@ type Invoice = {
   customerPhone?: string;
   customerAddress?: string;
   items: {
+    productType?: "REUSABLE" | "NON_REUSABLE";
     inventoryId: string;
     productId: string;
     productName: string;
@@ -267,6 +271,7 @@ export default function BillingPage() {
         {
           inventoryId: currentSelectedInv._id,
           productName: currentSelectedInv.productId.name,
+          productType: currentSelectedInv.productId.productType,
           sku: currentSelectedInv.productId.sku,
           warehouseName: currentSelectedInv.warehouseId?.name || "Unassigned",
           rackName: currentSelectedInv.rackId?.name || "No Rack",
@@ -498,6 +503,7 @@ export default function BillingPage() {
                               {inv.productId.name}
                               <span className="ml-1.5 text-xs text-slate-400 font-normal">
                                 ({inv.productId.sku})
+                                <ProductTypeBadge productType={inv.productId.productType} />
                               </span>
                             </p>
                             <p className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
@@ -593,6 +599,7 @@ export default function BillingPage() {
                       <td className="p-3 font-medium text-slate-800">
                         {item.productName}
                         <span className="block text-xs text-slate-400">SKU: {item.sku}</span>
+                        <ProductTypeBadge productType={item.productType} />
                       </td>
                       <td className="p-3 text-xs text-slate-500">{item.warehouseName} &bull; {item.rackName}</td>
                       <td className="p-3 text-right font-medium text-slate-700">₹{item.unitPrice.toLocaleString("en-IN")}</td>
@@ -622,6 +629,7 @@ export default function BillingPage() {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="font-medium text-slate-800 text-sm">{item.productName}</p>
+                      <ProductTypeBadge productType={item.productType} />
                       <p className="text-xs text-slate-400">{item.sku} • {item.warehouseName}</p>
                     </div>
                     <button type="button" onClick={() => handleRemoveLineItem(idx)}
@@ -1026,6 +1034,7 @@ export default function BillingPage() {
                       <td className="p-2 font-medium text-slate-900 border-r border-slate-200">
                         {item.productName}
                         <span className="block text-[10px] text-slate-400">SKU: {item.sku}</span>
+                        <ProductTypeBadge productType={item.productType} />
                       </td>
                       <td className="p-2 text-slate-600 border-r border-slate-200">
                         {item.warehouseName} &bull; {item.rackName}

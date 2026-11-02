@@ -13,6 +13,7 @@ import Rack from "@/models/Rack";
 import User from "@/models/User";
 import Warehouse from "@/models/Warehouse";
 import { getServiceCycleInfo } from "@/lib/serviceCycle";
+import { resolveProductType } from "@/lib/productType";
 
 type ServiceAlert = {
   issueId: string;
@@ -50,6 +51,7 @@ export type ReusableAlert = {
 };
 
 export type StockAlert = {
+  productType?: "REUSABLE" | "NON_REUSABLE";
   id: string;
   productId: string;
   warehouseId: string;
@@ -188,7 +190,7 @@ async function buildStockAlerts(warehouseIds?: unknown[]): Promise<StockAlert[]>
   }
 
   const items = await Inventory.find(filter)
-    .populate("productId", "name sku")
+    .populate("productId", "name sku productType")
     .populate("warehouseId", "name code")
     .populate("rackId", "name code")
     .sort({ quantity: 1 })
@@ -210,6 +212,7 @@ async function buildStockAlerts(warehouseIds?: unknown[]): Promise<StockAlert[]>
 
     return {
       id: item._id.toString(),
+      productType: item.productId && typeof item.productId === "object" && "productType" in item.productId ? resolveProductType(item.productId.productType) : undefined,
       productId: pId,
       warehouseId: wId,
       rackId: rId,
@@ -362,7 +365,7 @@ export async function GET() {
         warehouseId: { $in: warehouseIds },
         status: { $in: ["LOW_STOCK", "OUT_OF_STOCK"] },
       })
-        .populate("productId", "name sku")
+        .populate("productId", "name sku productType")
         .populate("rackId", "name code")
         .sort({ quantity: 1 })
         .limit(5),
@@ -385,6 +388,7 @@ export async function GET() {
           { label: "Out of Stock", value: outOfStockCount },
         ],
         lowStockItems: lowStockItems.map((item) => ({
+          productType: item.productId && typeof item.productId === "object" && "productType" in item.productId ? resolveProductType(item.productId.productType) : undefined,
           id: item._id.toString(),
           productName:
             typeof item.productId === "object" && item.productId

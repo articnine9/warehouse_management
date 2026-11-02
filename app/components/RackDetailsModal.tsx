@@ -15,6 +15,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
+import ProductTypeBadge from "./ProductTypeBadge";
 import { useAuth } from "@/app/components/AuthProvider";
 
 export type RackDetailsData = {
@@ -44,6 +45,7 @@ export type RackDetailsData = {
       sku: string;
       price?: number;
       category?: string;
+      productType?: "REUSABLE" | "NON_REUSABLE";
       unit?: string;
     };
     warehouseId: {
@@ -381,6 +383,7 @@ export default function RackDetailsModal({
                             </p>
                             <p className="font-mono text-[10px] text-slate-400">
                               SKU: {inv.productId?.sku}
+                              <ProductTypeBadge productType={inv.productId?.productType} />
                             </p>
                           </td>
                           <td className="p-3 text-slate-600">

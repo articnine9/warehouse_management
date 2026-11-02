@@ -19,6 +19,7 @@ export interface IStockMovement {
   warehouseName?: string;
   rackId?: mongoose.Types.ObjectId;
   rackName?: string;
+  productType?: "REUSABLE" | "NON_REUSABLE";
   movementType: MovementType;
   reason: MovementReason;
   quantity: number;
@@ -74,6 +75,10 @@ const stockMovementSchema = new Schema<IStockMovement>(
     rackName: {
       type: String,
       trim: true,
+    },
+    productType: {
+      type: String,
+      enum: ["REUSABLE", "NON_REUSABLE"],
     },
     movementType: {
       type: String,

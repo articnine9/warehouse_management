@@ -1,4 +1,5 @@
 "use client";
+import { productTypeLabel } from "@/lib/productType";
 
 import { FormEvent, useState, useEffect, useMemo, useCallback } from "react";
 import { X, ClipboardList, Loader2 } from "lucide-react";
@@ -10,6 +11,7 @@ import AddZoneModal from "@/app/components/AddZoneModal";
 import AddRackModal from "@/app/components/AddRackModal";
 
 type ProductItem = {
+  productType?: "REUSABLE" | "NON_REUSABLE";
   _id: string;
   name: string;
   sku: string;
@@ -135,7 +137,7 @@ export default function AddInventoryModal({
     return products.map((p) => ({
       value: p._id,
       label: p.name,
-      subLabel: `SKU: ${p.sku}`,
+      subLabel: `SKU: ${p.sku} · ${productTypeLabel(p.productType)}`,
       badge: p.price != null ? `₹${p.price.toLocaleString("en-IN")}` : undefined,
     }));
   }, [products]);
@@ -171,15 +173,12 @@ export default function AddInventoryModal({
   }, [warehouseId, filteredZones, zoneId]);
 
   const filteredRacks = useMemo(() => {
-    if (!warehouseId) return [];
+    if (!warehouseId || !zoneId) return [];
     return racks.filter((rack) => {
       const wId = typeof rack.warehouseId === "object" && rack.warehouseId ? rack.warehouseId._id : rack.warehouseId;
       if (String(wId) !== String(warehouseId)) return false;
-      if (zoneId) {
-        const zId = typeof rack.zoneId === "object" && rack.zoneId ? rack.zoneId._id : rack.zoneId;
-        return String(zId) === String(zoneId);
-      }
-      return true;
+      const zId = typeof rack.zoneId === "object" && rack.zoneId ? rack.zoneId._id : rack.zoneId;
+      return String(zId) === String(zoneId);
     });
   }, [racks, warehouseId, zoneId]);
 
