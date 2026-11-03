@@ -1,8 +1,7 @@
 "use client";
-import ProductTypeBadge from "@/app/components/ProductTypeBadge";
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
-import { FolderTree, History, Warehouse as WarehouseIcon, Plus, Layers, Box, Trash2, X, AlertTriangle, ArrowRightLeft } from "lucide-react";
+import { FolderTree, History, Warehouse as WarehouseIcon, Plus, Layers, Box, Trash2, X, AlertTriangle, ArrowRightLeft, PackageCheck } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import { useAuth } from "@/app/components/AuthProvider";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
@@ -99,7 +98,6 @@ export default function ProductsPage() {
   const [editName, setEditName] = useState("");
   const [editSku, setEditSku] = useState("");
   const [editCategory, setEditCategory] = useState("");
-  const [editProductType, setEditProductType] = useState<"REUSABLE" | "NON_REUSABLE" | "">("");
   const [editServiceInterval, setEditServiceInterval] = useState("3");
   const [editCustomServiceInterval, setEditCustomServiceInterval] = useState("");
   const [editWarrantyMonths, setEditWarrantyMonths] = useState("12");
@@ -395,7 +393,6 @@ export default function ProductsPage() {
     setEditName(product.name);
     setEditSku(product.sku);
     setEditCategory(product.category || "");
-    setEditProductType(product.productType || "");
     const interval = product.serviceIntervalMonths ?? 3;
     const isPreset = [1, 3, 6, 12, 0].includes(interval);
     setEditServiceInterval(isPreset ? String(interval) : CUSTOM_INTERVAL_VALUE);
@@ -454,7 +451,6 @@ export default function ProductsPage() {
           name: editName,
           sku: editSku,
           category: editCategory.trim(),
-          productType: editProductType || undefined,
           categoryId: editCategoryId,
           serviceIntervalMonths: intervalVal,
           warrantyMonths: Math.max(0, Number(editWarrantyMonths) || 0),
@@ -833,7 +829,6 @@ export default function ProductsPage() {
                         >
                           {product.name}
                         </button>
-                        <ProductTypeBadge productType={product.productType} />
                       </td>
                       <td className="px-5 py-3 font-mono text-xs text-slate-600">{product.sku}</td>
                       <td className="px-5 py-3">
@@ -959,25 +954,32 @@ export default function ProductsPage() {
                         </span>
                       </td>
                       <td className="px-5 py-3">
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-1.5">
+                          <Link
+                            href={`/employee-issues?pId=${encodeURIComponent(product._id)}`}
+                            className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 text-xs font-semibold shadow-2xs transition active:scale-95"
+                            title="Issue this product to user"
+                          >
+                            <PackageCheck className="h-3.5 w-3.5" /> Issue
+                          </Link>
                           <button
                             type="button"
                             onClick={() => { setMoveSuccess(""); setMoveProduct(product); }}
                             disabled={!product.locations?.some((location) => location.inventoryId)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
                           >
                             <ArrowRightLeft className="h-3.5 w-3.5" /> Move
                           </button>
                           <button
                             onClick={() => openEdit(product)}
-                            className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+                            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                           >
                             Edit
                           </button>
                           {isAdmin && (
                             <button
                               onClick={() => setDeleteId(product._id)}
-                              className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
+                              className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
                             >
                               Delete
                             </button>
@@ -1010,7 +1012,6 @@ export default function ProductsPage() {
                         {product.name}
                       </button>
                       <p className="mt-0.5 text-xs font-mono text-slate-500">SKU: {product.sku}</p>
-                      <ProductTypeBadge productType={product.productType} />
                     </div>
                     <span
                       className={`ml-2 shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -1113,7 +1114,14 @@ export default function ProductsPage() {
                     )}
                   </div>
 
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                    <Link
+                      href={`/employee-issues?pId=${encodeURIComponent(product._id)}`}
+                      className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-semibold shadow-2xs transition active:scale-95"
+                      title="Issue this product to user"
+                    >
+                      <PackageCheck className="h-3.5 w-3.5" /> Issue
+                    </Link>
                     <button
                       type="button"
                       onClick={() => { setMoveSuccess(""); setMoveProduct(product); }}
@@ -1280,14 +1288,6 @@ export default function ProductsPage() {
                         </div>
                       </div>
 
-                      <label className="block text-xs font-bold text-slate-700">
-                        Product Type
-                        <select value={editProductType} onChange={(event) => setEditProductType(event.target.value as "REUSABLE" | "NON_REUSABLE" | "")} className="mt-1 block w-full rounded-xl border border-slate-200 bg-white p-2.5 text-sm">
-                          <option value="">Type not recorded</option>
-                          <option value="REUSABLE">Returnable</option>
-                          <option value="NON_REUSABLE">Non-Returnable</option>
-                        </select>
-                      </label>
                       {/* Seller & Price */}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>

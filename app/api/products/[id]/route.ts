@@ -89,7 +89,7 @@ export async function PUT(
 
     const body = await request.json();
 
-    if (body.productType !== undefined && body.productType !== "REUSABLE" && body.productType !== "NON_REUSABLE") {
+    if (body.productType !== undefined && body.productType !== null && body.productType !== "" && body.productType !== "REUSABLE" && body.productType !== "NON_REUSABLE") {
       return Response.json({ success: false, message: "Select Returnable or Non-Returnable as the product type" }, { status: 400 });
     }
 

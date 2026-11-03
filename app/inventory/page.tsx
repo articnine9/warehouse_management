@@ -1,10 +1,9 @@
 "use client";
-import ProductTypeBadge from "@/app/components/ProductTypeBadge";
-import { productTypeLabel } from "@/lib/productType";
 
 import { FormEvent, useEffect, useState, useMemo, Suspense } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { AlertTriangle, Pencil, Eye, Trash2, Printer, X, Box, Plus } from "lucide-react";
+import { AlertTriangle, Pencil, Eye, Trash2, Printer, X, Box, Plus, PackageCheck } from "lucide-react";
 import ProtectedPage from "@/app/components/ProtectedPage";
 import { useAuth } from "@/app/components/AuthProvider";
 import SearchableSelect, { SelectOption } from "@/app/components/SearchableSelect";
@@ -173,7 +172,7 @@ function InventoryContent() {
     return products.map((p) => ({
       value: p._id,
       label: p.name,
-      subLabel: `SKU: ${p.sku} · ${productTypeLabel(p.productType)}`,
+      subLabel: `SKU: ${p.sku}`,
       badge: p.price != null ? `₹${p.price.toLocaleString("en-IN")}` : undefined,
     }));
   }, [products]);
@@ -580,7 +579,6 @@ function InventoryContent() {
                       >
                         {item.productId?.name || "Unknown"}
                       </button>
-                      <ProductTypeBadge productType={item.productId?.productType} />
                       <span className="text-xs text-slate-400">({item.productId?.sku || "-"})</span>
                     </td>
                     <td className="px-5 py-3 text-slate-600">{item.warehouseId?.name || "-"}</td>
@@ -596,6 +594,16 @@ function InventoryContent() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5">
+                        {item.productId?._id && (
+                          <Link
+                            href={`/employee-issues?pId=${encodeURIComponent(item.productId._id)}`}
+                            className="flex h-8 items-center gap-1 rounded-lg bg-blue-600 px-2.5 text-xs font-bold text-white shadow-2xs hover:bg-blue-700 transition active:scale-95"
+                            title="Issue this product to user"
+                          >
+                            <PackageCheck className="h-3.5 w-3.5" />
+                            <span className="hidden lg:inline">Issue</span>
+                          </Link>
+                        )}
                         <button
                           type="button"
                           onClick={() => openEdit(item)}
@@ -649,7 +657,6 @@ function InventoryContent() {
                       </button>
                     </div>
                     <p className="mt-0.5 text-xs text-slate-500">{item.productId?.sku || "-"}</p>
-                    <ProductTypeBadge productType={item.productId?.productType} />
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusBadge(item.status)}`}>
                     {item.status.replace("_", " ")}
@@ -662,7 +669,16 @@ function InventoryContent() {
                   </span>
                   <span className="font-semibold text-slate-700">Qty: {item.quantity}</span>
                 </div>
-                <div className="mt-3 flex items-center gap-2">
+                <div className="mt-3 flex items-center gap-2 flex-wrap">
+                  {item.productId?._id && (
+                    <Link
+                      href={`/employee-issues?pId=${encodeURIComponent(item.productId._id)}`}
+                      className="flex-1 rounded-lg bg-blue-600 text-white py-2 text-xs font-semibold hover:bg-blue-700 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
+                      title="Issue this product to user"
+                    >
+                      <PackageCheck className="h-3.5 w-3.5" /> Issue
+                    </Link>
+                  )}
                   <button
                     type="button"
                     onClick={() => openEdit(item)}
@@ -911,7 +927,7 @@ function InventoryContent() {
                     {viewingStockItem.productId?.name}
                   </p>
                   <p className="text-slate-600">
-                    SKU Code: <b className="text-slate-800">{viewingStockItem.productId?.sku}</b> <ProductTypeBadge productType={viewingStockItem.productId?.productType} />
+                    SKU Code: <b className="text-slate-800">{viewingStockItem.productId?.sku}</b>
                   </p>
                   <p className="text-slate-600">
                     Category: <b className="text-slate-800">{viewingStockItem.productId?.category || "General"}</b>

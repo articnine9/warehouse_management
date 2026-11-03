@@ -27,6 +27,7 @@ import {
   History,
   CheckCircle2,
   Users,
+  PackageCheck,
   Sparkles,
   ArrowUpDown,
 } from "lucide-react";
@@ -420,9 +421,10 @@ export default function ProductDetailPage({
             <button
               type="button"
               onClick={() => router.push(`/employee-issues?pId=${encodeURIComponent(id)}`)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 transition active:scale-95"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 px-4 py-2 text-xs font-bold text-white shadow-sm shadow-blue-500/25 transition active:scale-95"
+              title="Issue this product to user"
             >
-              <Users className="h-4 w-4" /> Issue to Employee
+              <PackageCheck className="h-4 w-4" /> Issue Product
             </button>
           </div>
         </div>
@@ -470,7 +472,6 @@ export default function ProductDetailPage({
                       <span className="rounded-lg bg-slate-100 px-2.5 py-0.5 text-xs font-mono font-bold text-slate-700 border border-slate-200">
                         SKU: {data.product.sku}
                       </span>
-                      <ProductTypeBadge productType={data.product.productType} />
                     </div>
 
                     {/* Arrival Date & Inward Banner */}
@@ -508,28 +509,40 @@ export default function ProductDetailPage({
                   </div>
                 </div>
 
-                {/* Right Status Pill: Current Position */}
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex items-center gap-4 min-w-[240px]">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-                    <History className="h-6 w-6" />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">
-                      Current Stock Position
-                    </span>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-lg font-extrabold text-emerald-700">
-                        {data.summary.totalInStock} In-Stock
+                {/* Right Status Pill & Highlighted Issue Product CTA */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex items-center gap-4 min-w-[220px]">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                      <History className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold uppercase text-slate-400 block tracking-wider">
+                        Current Stock Position
                       </span>
-                      <span className="text-slate-300">•</span>
-                      <span className="text-lg font-extrabold text-blue-700">
-                        {data.summary.totalUnitsActiveIssued} Issued
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-lg font-extrabold text-emerald-700">
+                          {data.summary.totalInStock} In-Stock
+                        </span>
+                        <span className="text-slate-300">•</span>
+                        <span className="text-lg font-extrabold text-blue-700">
+                          {data.summary.totalUnitsActiveIssued} Issued
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-slate-500 block">
+                        {data.summary.totalUnitsReturned} units returned to date
                       </span>
                     </div>
-                    <span className="text-[11px] text-slate-500 block">
-                      {data.summary.totalUnitsReturned} units returned to date
-                    </span>
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/employee-issues?pId=${encodeURIComponent(id)}`)}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 px-5 py-3.5 text-sm font-black text-white shadow-md shadow-blue-600/25 hover:shadow-lg hover:shadow-blue-600/35 transition active:scale-95 shrink-0"
+                    title="Issue this product to user"
+                  >
+                    <PackageCheck className="h-5 w-5" />
+                    <span>Issue Product</span>
+                  </button>
                 </div>
               </div>
 

@@ -41,6 +41,7 @@ import {
   BadgeCheck,
   Filter,
   MapPin,
+  PackageCheck,
 } from "lucide-react";
 
 interface ProductHistoryData {
@@ -663,6 +664,17 @@ export default function ProductHistoryModal({
         )}
 
         <div className="flex items-center gap-2.5">
+          {productId && (
+            <Link
+              href={`/employee-issues?pId=${encodeURIComponent(productId)}`}
+              onClick={onClose}
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white px-3.5 py-2 text-xs font-bold transition shadow-sm shadow-blue-500/25 active:scale-95"
+              title="Issue this product to user"
+            >
+              <PackageCheck className="h-3.5 w-3.5" />
+              <span>Issue Product</span>
+            </Link>
+          )}
           {data && !loading && (
             <ProductMoveAction
               key={data.product.id}
@@ -926,7 +938,6 @@ export default function ProductHistoryModal({
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <ProductTypeBadge productType={product.productType} />
                         {product.category && (
                           <span className="rounded-full bg-slate-100 text-slate-600 px-2.5 py-0.5 text-[10px] font-bold">
                             {product.category}
@@ -938,6 +949,21 @@ export default function ProductHistoryModal({
                           </span>
                         )}
                       </div>
+
+                      {/* Prominent Issue Product CTA Button */}
+                      {productId && (
+                        <div className="pt-2">
+                          <Link
+                            href={`/employee-issues?pId=${encodeURIComponent(productId)}`}
+                            onClick={onClose}
+                            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white px-4 py-2.5 text-xs font-black shadow-md shadow-blue-600/20 hover:shadow-lg hover:shadow-blue-600/30 transition active:scale-[0.98]"
+                            title="Issue this product to user"
+                          >
+                            <PackageCheck className="h-4 w-4" />
+                            <span>Issue Product to User</span>
+                          </Link>
+                        </div>
+                      )}
                     </div>
 
                     {/* Specifications 2-column grid */}

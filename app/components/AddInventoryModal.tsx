@@ -1,5 +1,4 @@
 "use client";
-import { productTypeLabel } from "@/lib/productType";
 
 import { FormEvent, useState, useEffect, useMemo, useCallback } from "react";
 import { X, ClipboardList, Loader2 } from "lucide-react";
@@ -137,7 +136,7 @@ export default function AddInventoryModal({
     return products.map((p) => ({
       value: p._id,
       label: p.name,
-      subLabel: `SKU: ${p.sku} · ${productTypeLabel(p.productType)}`,
+      subLabel: `SKU: ${p.sku}`,
       badge: p.price != null ? `₹${p.price.toLocaleString("en-IN")}` : undefined,
     }));
   }, [products]);

@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, Fragment, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   PackageCheck,
   Search,
@@ -89,7 +90,11 @@ function getMatchingItems(
   });
 }
 
-export default function EmployeeIssuesPage() {
+function EmployeeIssuesContent() {
+  const searchParams = useSearchParams();
+  const pIdParam = searchParams.get("pId") || searchParams.get("productId");
+  const lastHandledPidRef = useRef<string | null>(null);
+
   const { user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -496,8 +501,9 @@ export default function EmployeeIssuesPage() {
     setProductSearchQuery(`${inventory.productId?.name || "Product"} (${inventory.productId?.sku || "N/A"})`);
     setProductDropdownOpen(false);
     setItemQuantity(inventory.quantity > 0 ? "1" : "0");
-    const isReusable = inventory.productId?.productType === "REUSABLE";
-    setItemProductType(isReusable ? "REUSABLE" : "NON_REUSABLE");
+    if (inventory.productId?.productType) {
+      setItemProductType(inventory.productId.productType === "REUSABLE" ? "REUSABLE" : "NON_REUSABLE");
+    }
     setItemReturnDueDays(inventory.productId?.returnDays?.toString() || "30");
 
     // Auto-populate service interval, warranty, and serial from Product definition
@@ -516,6 +522,31 @@ export default function EmployeeIssuesPage() {
       }, 50);
     }
   }
+
+  // Auto-select product if routed with ?pId=... or ?productId=...
+  useEffect(() => {
+    if (!pIdParam || !inventoryList.length) return;
+    if (lastHandledPidRef.current === pIdParam) return;
+
+    const match = inventoryList.find((inv) => {
+      const invPid = inv.productId?._id ? String(inv.productId._id) : String(inv.productId || "");
+      return invPid === pIdParam;
+    });
+
+    if (match) {
+      lastHandledPidRef.current = pIdParam;
+      handleSelectInventory(match);
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+      setTimeout(() => {
+        const empInput = document.getElementById("employee-search-input") as HTMLInputElement | null;
+        if (empInput && !selectedEmployeeId) {
+          empInput.focus();
+        }
+      }, 150);
+    }
+  }, [pIdParam, inventoryList, selectedEmployeeId]);
 
   function handleClearProduct() {
     setSelectedInventoryId("");
@@ -775,6 +806,7 @@ export default function EmployeeIssuesPage() {
                 </div>
                 <div className="relative">
                   <input
+                    id="employee-search-input"
                     type="text"
                     placeholder="Type user name, code, department..."
                     value={employeeSearchQuery}
@@ -2329,5 +2361,24 @@ export default function EmployeeIssuesPage() {
         />
       </div>
     </ProtectedPage>
+  );
+}
+
+export default function EmployeeIssuesPage() {
+  return (
+    <Suspense
+      fallback={
+        <ProtectedPage>
+          <div className="min-h-screen bg-slate-50 p-8 flex items-center justify-center">
+            <div className="flex items-center gap-3 text-slate-500">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+              <span className="text-sm font-semibold">Loading user asset management...</span>
+            </div>
+          </div>
+        </ProtectedPage>
+      }
+    >
+      <EmployeeIssuesContent />
+    </Suspense>
   );
 }

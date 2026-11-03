@@ -49,12 +49,12 @@ const productSchema = new Schema<IProduct>(
         productType: {
             type: String,
             enum: ["REUSABLE", "NON_REUSABLE"],
-            default: "NON_REUSABLE",
+            required: false,
         },
 
         returnDueDays: {
             type: Number,
-            default: 30,
+            required: false,
             min: 0,
         },
 
