@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useState } from "react";
 import { X, Building2, Loader2 } from "lucide-react";
@@ -106,7 +108,7 @@ export default function AddDepartmentModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <WriteAccess><form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                 Department Name <span className="text-red-500">*</span>
@@ -175,7 +177,7 @@ export default function AddDepartmentModal({
                 {loading ? "Adding..." : "+ Create Department"}
               </button>
             </div>
-          </form>
+          </form></WriteAccess>
         </div>
       </div>
 

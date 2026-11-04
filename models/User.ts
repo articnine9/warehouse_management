@@ -4,7 +4,7 @@ export interface IUser {
   name: string;
   email: string;
   passwordHash: string;
-  role: "ADMIN" | "STAFF";
+  role: "ADMIN" | "STAFF" | "VIEWER";
   warehouseIds?: mongoose.Types.ObjectId[];
   warehouseId?: mongoose.Types.ObjectId;
   status: "ACTIVE" | "INACTIVE";
@@ -31,7 +31,7 @@ const userSchema = new Schema<IUser>(
     },
     role: {
       type: String,
-      enum: ["ADMIN", "STAFF"],
+      enum: ["ADMIN", "STAFF", "VIEWER"],
       required: true,
     },
     warehouseIds: {

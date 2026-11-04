@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
 import { X, UserCheck, Loader2, Phone, Mail, Building2 } from "lucide-react";
@@ -236,7 +238,7 @@ export default function AddUserModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <WriteAccess><form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
@@ -405,7 +407,7 @@ export default function AddUserModal({
                 {loading ? "Saving..." : "+ Register User"}
               </button>
             </div>
-          </form>
+          </form></WriteAccess>
         </div>
       </div>
 
@@ -416,7 +418,7 @@ export default function AddUserModal({
       />
 
       {/* Sub-modal with higher z-index (z-[70]) */}
-      <AddDepartmentModal
+      <WriteAccess><AddDepartmentModal
         isOpen={isAddDepartmentOpen}
         onClose={() => setIsAddDepartmentOpen(false)}
         zIndex="z-[70]"
@@ -424,7 +426,7 @@ export default function AddUserModal({
           void fetchDepartments();
           setDepartment(newDept.name);
         }}
-      />
+      /></WriteAccess>
     </>
   );
 }

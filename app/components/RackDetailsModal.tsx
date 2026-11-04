@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { useEffect, useState } from "react";
 import {
@@ -250,16 +252,16 @@ export default function RackDetailsModal({
 
           <div className="flex items-center gap-2 shrink-0">
             {data && onEditRack && (
-              <button
+              <WriteAccess><button
                 type="button"
                 onClick={() => onEditRack(data.rack)}
                 className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
               >
                 Edit
-              </button>
+              </button></WriteAccess>
             )}
             {data && isAdmin && (
-              <button
+              <WriteAccess><button
                 type="button"
                 onClick={() => {
                   setDeleteConfirm({
@@ -273,7 +275,7 @@ export default function RackDetailsModal({
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
-              </button>
+              </button></WriteAccess>
             )}
             <button
               type="button"
@@ -412,7 +414,7 @@ export default function RackDetailsModal({
                           </td>
                           {isAdmin && (
                             <td className="p-3 text-right">
-                              <button
+                              <WriteAccess><button
                                 type="button"
                                 onClick={() => {
                                   setDeleteConfirm({
@@ -425,7 +427,7 @@ export default function RackDetailsModal({
                                 title="Delete Inventory"
                               >
                                 <Trash2 className="h-3 w-3" /> Delete
-                              </button>
+                              </button></WriteAccess>
                             </td>
                           )}
                         </tr>
@@ -470,7 +472,7 @@ export default function RackDetailsModal({
               )}
 
               <div className="mt-6 flex justify-end gap-2.5">
-                <button
+                <WriteAccess><button
                   type="button"
                   onClick={() => {
                     setDeleteConfirm(null);
@@ -480,8 +482,8 @@ export default function RackDetailsModal({
                   className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Cancel
-                </button>
-                <button
+                </button></WriteAccess>
+                <WriteAccess><button
                   type="button"
                   onClick={handleDeleteExecute}
                   disabled={deleteLoading}
@@ -489,7 +491,7 @@ export default function RackDetailsModal({
                 >
                   {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {deleteLoading ? "Deleting..." : "Confirm Delete"}
-                </button>
+                </button></WriteAccess>
               </div>
             </div>
           </div>

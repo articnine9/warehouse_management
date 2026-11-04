@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { useEffect, useState, useMemo, use } from "react";
 import Link from "next/link";
@@ -522,13 +524,13 @@ export default function EmployeeDetailPage({
             >
               <Printer className="h-4 w-4 text-slate-500" /> Print Custody Statement
             </button>
-            <button
+            <WriteAccess><button
               type="button"
               onClick={() => router.push(`/employee-issues?empId=${encodeURIComponent(id)}`)}
               className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 transition active:scale-95"
             >
               <PackageCheck className="h-4 w-4" /> Issue New Product
-            </button>
+            </button></WriteAccess>
           </div>
         </div>
 

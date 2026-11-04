@@ -2,13 +2,14 @@ import crypto from "crypto";
 import { cookies } from "next/headers";
 import User from "@/models/User";
 import Warehouse from "@/models/Warehouse";
+import { canWrite, type UserRole } from "./permissions";
 
-const SESSION_COOKIE = "warehouse_session";
+export const SESSION_COOKIE = "warehouse_session";
 const SESSION_DURATION_MS = 1000 * 60 * 60 * 24 * 7;
 
 type SessionPayload = {
   userId: string;
-  role: "ADMIN" | "STAFF";
+  role: UserRole;
   expiresAt: number;
 };
 
@@ -22,7 +23,7 @@ type SafeUserInput = {
   _id: { toString(): string };
   name: string;
   email: string;
-  role: "ADMIN" | "STAFF";
+  role: UserRole;
   status: "ACTIVE" | "INACTIVE";
   warehouseIds?: unknown;
   warehouseId?: unknown;
@@ -92,7 +93,7 @@ export async function verifyPassword(
   });
 }
 
-export function createSessionToken(userId: string, role: "ADMIN" | "STAFF") {
+export function createSessionToken(userId: string, role: UserRole) {
   const payload: SessionPayload = {
     userId,
     role,
@@ -145,7 +146,7 @@ export function parseSessionToken(token?: string | null) {
 
 export async function setSessionCookie(
   userId: string,
-  role: "ADMIN" | "STAFF"
+  role: UserRole
 ) {
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE, createSessionToken(userId, role), {
@@ -198,6 +199,12 @@ export async function requireSessionUser() {
     throw new Error("UNAUTHORIZED");
   }
 
+  return user;
+}
+
+export async function requireWriteUser() {
+  const user = await requireSessionUser();
+  if (!canWrite(user.role)) throw new Error("FORBIDDEN");
   return user;
 }
 

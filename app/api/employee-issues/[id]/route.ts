@@ -1,3 +1,4 @@
+import { requireWriteUser } from "@/lib/auth";
 import { Types } from "mongoose";
 import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
@@ -99,7 +100,7 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    const currentUser = await requireSessionUser();
+    const currentUser = await requireWriteUser();
     const { id } = await params;
 
     void Product;
@@ -360,6 +361,9 @@ export async function PUT(
       itemIndex,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return Response.json({ success: false, message: "This account has view-only access" }, { status: 403 });
+    }
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return Response.json({ success: false, message: "Not authenticated" }, { status: 401 });
     }

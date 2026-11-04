@@ -11,6 +11,7 @@ import EmployeeIssue from "@/models/EmployeeIssue";
 export async function GET() {
   try {
     await connectDB();
+    const user = await requireSessionUser();
 
     const warehouses = await Warehouse.find().sort({
       createdAt: -1,
@@ -58,7 +59,7 @@ export async function GET() {
     });
 
     // Auto-sync warehouse names in background for any renamed warehouse
-    for (const w of warehouses) {
+    for (const w of user.role === "VIEWER" ? [] : warehouses) {
       void StockMovement.updateMany(
         { warehouseId: w._id, warehouseName: { $ne: w.name } },
         { $set: { warehouseName: w.name } }
@@ -81,6 +82,9 @@ export async function GET() {
       count: data.length,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return Response.json({ success: false, message: "Not authenticated" }, { status: 401 });
+    }
     console.error("GET warehouses error:", error);
 
     return Response.json(

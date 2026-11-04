@@ -1,9 +1,12 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Link from "next/link";
 import ProductMoveAction from "./ProductMoveAction";
 import ProductTypeBadge from "./ProductTypeBadge";
+import ProductPdfExportButton from "./ProductPdfExportButton";
 import {
   ArrowLeft,
   X,
@@ -44,7 +47,7 @@ import {
   PackageCheck,
 } from "lucide-react";
 
-interface ProductHistoryData {
+export interface ProductHistoryData {
   product: {
     id: string;
     name: string;
@@ -175,6 +178,9 @@ interface ProductHistoryModalProps {
   onSelectEmployee?: (employeeIdOrName: string) => void;
   backLabel?: string;
   onInventoryChanged?: () => void;
+  /** Render the same page design without interactive controls for PDF capture. */
+  pdfView?: "PRODUCT_HISTORY" | "LOAN_HISTORY";
+  initialData?: ProductHistoryData;
 }
 
 interface LoanHistoryRow {
@@ -207,12 +213,14 @@ export default function ProductHistoryModal({
   onSelectEmployee,
   backLabel = "Back to Inventory",
   onInventoryChanged,
+  pdfView,
+  initialData,
 }: ProductHistoryModalProps) {
-  const [data, setData] = useState<ProductHistoryData | null>(null);
+  const [data, setData] = useState<ProductHistoryData | null>(initialData ?? null);
   const [loading, setLoading] = useState(false);
 
   // ─── TOP-LEVEL MAIN VIEW TAB: PRODUCT_HISTORY vs LOAN_HISTORY ───
-  const [mainViewTab, setMainViewTab] = useState<"PRODUCT_HISTORY" | "LOAN_HISTORY">("PRODUCT_HISTORY");
+  const [mainViewTab, setMainViewTab] = useState<"PRODUCT_HISTORY" | "LOAN_HISTORY">(pdfView ?? "PRODUCT_HISTORY");
 
   // Active Holder Selection (when managing an active loan)
   const [selectedHolderIndex, setSelectedHolderIndex] = useState(0);
@@ -267,12 +275,13 @@ export default function ProductHistoryModal({
   }, [productId]);
 
   useEffect(() => {
+    if (pdfView) return;
     if (productId) {
       fetchProductHistory();
     } else {
       setData(null);
     }
-  }, [productId, fetchProductHistory]);
+  }, [productId, fetchProductHistory, pdfView]);
 
   // Active holders calculation
   const activeHolders = useMemo(() => {
@@ -628,7 +637,7 @@ export default function ProductHistoryModal({
   const isDueSoon = isCurrentlyOnLoan && dueDaysRemaining > 0 && dueDaysRemaining <= 7;
 
   return (
-    <div className="fixed inset-0 z-50 w-screen h-screen bg-slate-100/80 flex flex-col overflow-hidden animate-in fade-in duration-150 backdrop-blur-xs">
+    <div className={pdfView ? "product-pdf-view bg-slate-100" : "fixed inset-0 z-50 w-screen h-screen bg-slate-100/80 flex flex-col overflow-hidden animate-in fade-in duration-150 backdrop-blur-xs"}>
       {/* Toast Feedback */}
       {feedback && (
         <div
@@ -642,7 +651,7 @@ export default function ProductHistoryModal({
       )}
 
       {/* ─── APP BAR HEADER (Back / Product Title / Open Dedicated / Close) ─── */}
-      <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 sm:px-8 py-3.5 shrink-0 shadow-2xs">
+      <div data-pdf-controls className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white/95 backdrop-blur-md px-4 sm:px-8 py-3.5 shrink-0 shadow-2xs">
         <button
           type="button"
           onClick={onClose}
@@ -664,8 +673,9 @@ export default function ProductHistoryModal({
         )}
 
         <div className="flex items-center gap-2.5">
+          <ProductPdfExportButton data={data} disabled={loading} />
           {productId && (
-            <Link
+            <WriteAccess><Link
               href={`/employee-issues?pId=${encodeURIComponent(productId)}`}
               onClick={onClose}
               className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white px-3.5 py-2 text-xs font-bold transition shadow-sm shadow-blue-500/25 active:scale-95"
@@ -673,10 +683,10 @@ export default function ProductHistoryModal({
             >
               <PackageCheck className="h-3.5 w-3.5" />
               <span>Issue Product</span>
-            </Link>
+            </Link></WriteAccess>
           )}
           {data && !loading && (
-            <ProductMoveAction
+            <WriteAccess><ProductMoveAction
               key={data.product.id}
               product={data.product}
               inventoryLocations={data.inventoryLocations}
@@ -685,7 +695,7 @@ export default function ProductHistoryModal({
                 void fetchProductHistory();
                 onInventoryChanged?.();
               }}
-            />
+            /></WriteAccess>
           )}
           <Link
             href={`/product-history/${productId}`}
@@ -707,7 +717,7 @@ export default function ProductHistoryModal({
       </div>
 
       {/* ─── SEGMENTED NAVIGATION TABS (Product & Stock History vs Loan History) ─── */}
-      <div className="bg-white border-b border-slate-200/90 px-4 sm:px-8 shrink-0">
+      <div data-pdf-controls className="bg-white border-b border-slate-200/90 px-4 sm:px-8 shrink-0">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2 py-2 overflow-x-auto scrollbar-none">
             {/* Tab 1: Product & Stock History */}
@@ -803,7 +813,7 @@ export default function ProductHistoryModal({
       </div>
 
       {/* ─── SCROLLABLE MAIN CONTENT BODY ─── */}
-      <div className="flex-1 overflow-y-auto px-4 sm:px-8 py-6">
+      <div className={pdfView ? "px-8 py-6" : "flex-1 overflow-y-auto px-4 sm:px-8 py-6"}>
         <div className="max-w-7xl mx-auto space-y-6">
           {loading ? (
             <div className="py-32 text-center space-y-3">
@@ -952,8 +962,8 @@ export default function ProductHistoryModal({
 
                       {/* Prominent Issue Product CTA Button */}
                       {productId && (
-                        <div className="pt-2">
-                          <Link
+                        <div data-pdf-controls className="pt-2">
+                          <WriteAccess><Link
                             href={`/employee-issues?pId=${encodeURIComponent(productId)}`}
                             onClick={onClose}
                             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 text-white px-4 py-2.5 text-xs font-black shadow-md shadow-blue-600/20 hover:shadow-lg hover:shadow-blue-600/30 transition active:scale-[0.98]"
@@ -961,7 +971,7 @@ export default function ProductHistoryModal({
                           >
                             <PackageCheck className="h-4 w-4" />
                             <span>Issue Product to User</span>
-                          </Link>
+                          </Link></WriteAccess>
                         </div>
                       )}
                     </div>
@@ -1243,7 +1253,7 @@ export default function ProductHistoryModal({
                   </div>
 
                   {/* Filter pills & search */}
-                  <div className="flex items-center gap-2.5 flex-wrap">
+                  <div data-pdf-controls className="flex items-center gap-2.5 flex-wrap">
                     <div className="flex items-center bg-slate-100 p-0.5 rounded-xl border border-slate-200/60 text-xs font-bold">
                       {(["ALL", "INWARD", "OUTWARD"] as const).map((t) => (
                         <button
@@ -1323,7 +1333,7 @@ export default function ProductHistoryModal({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {filteredMovements.slice(0, 50).map((m, idx) => {
+                        {(pdfView ? filteredMovements : filteredMovements.slice(0, 50)).map((m, idx) => {
                           const isInward = m.movementType === "INWARD";
                           const dateObj = new Date(m.createdAt);
                           return (
@@ -1435,8 +1445,8 @@ export default function ProductHistoryModal({
                         <User className="h-4 w-4" />
                       </div>
                       <div>
-                        <h3 className="text-sm font-bold text-slate-800">Current Active Custody & Quick Actions</h3>
-                        <p className="text-[11px] text-slate-500">Manage ongoing loan, extend expected return date, or check item back into stock</p>
+                        <h3 className="text-sm font-bold text-slate-800">{pdfView ? "Current Active Custody" : "Current Active Custody & Quick Actions"}</h3>
+                        <p className="text-[11px] text-slate-500">{pdfView ? "Current employee assignment and expected return" : "Manage ongoing loan, extend expected return date, or check item back into stock"}</p>
                       </div>
                     </div>
 
@@ -1597,7 +1607,7 @@ export default function ProductHistoryModal({
                   </div>
 
                   {/* Actions Section Tabs (Extend / Return / Comments) */}
-                  <div className="rounded-xl border border-slate-200/80 bg-slate-50/40 overflow-hidden">
+                  <WriteAccess><div data-pdf-controls className="rounded-xl border border-slate-200/80 bg-slate-50/40 overflow-hidden">
                     <div className="flex items-center border-b border-slate-200 bg-white px-4 pt-1.5">
                       <button
                         type="button"
@@ -1949,7 +1959,7 @@ export default function ProductHistoryModal({
                         )}
                       </div>
                     )}
-                  </div>
+                  </div></WriteAccess>
                 </div>
               ) : (
                 /* No Active Loan Banner */
@@ -1965,14 +1975,14 @@ export default function ProductHistoryModal({
                       </p>
                     </div>
                   </div>
-                  <Link
+                  <WriteAccess><Link
                     href="/employee-issues"
                     onClick={onClose}
                     className="flex items-center gap-1.5 rounded-xl bg-emerald-600 text-white px-4 py-2 text-xs font-bold hover:bg-emerald-700 transition shadow-xs"
                   >
                     <span>Issue to Employee</span>
                     <ChevronRight className="h-3.5 w-3.5" />
-                  </Link>
+                  </Link></WriteAccess>
                 </div>
               )}
 
@@ -2008,7 +2018,7 @@ export default function ProductHistoryModal({
                 </div>
 
                 {/* Filter & Search Bar */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1 border-t border-slate-100">
+                <div data-pdf-controls className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-1 border-t border-slate-100">
                   {/* Status Pills */}
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <button

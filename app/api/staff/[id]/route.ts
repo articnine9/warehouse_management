@@ -2,6 +2,7 @@ import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser, hashPassword, toSafeUser } from "@/lib/auth";
 import User from "@/models/User";
 import Warehouse from "@/models/Warehouse";
+import { isUserRole } from "@/lib/permissions";
 
 export async function PUT(
   request: Request,
@@ -30,7 +31,10 @@ export async function PUT(
     const body = await request.json();
     const name = body.name?.trim();
     const email = body.email?.trim().toLowerCase();
-    const role = body.role === "ADMIN" ? "ADMIN" : "STAFF";
+    const role = body.role ?? staffMember.role;
+    if (!isUserRole(role)) {
+      return Response.json({ success: false, message: "Select Admin, Staff or Viewer as the role" }, { status: 400 });
+    }
     const warehouseIds = Array.isArray(body.warehouseIds)
       ? body.warehouseIds.map((id: string) => id.trim()).filter(Boolean)
       : body.warehouseId
@@ -100,7 +104,7 @@ export async function PUT(
 
     return Response.json({
       success: true,
-      message: "Staff member updated successfully",
+      message: "Login account updated successfully",
       data: toSafeUser(updatedUser!),
     });
   } catch (error) {

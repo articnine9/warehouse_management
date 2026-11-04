@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 import ProductTypeBadge from "@/app/components/ProductTypeBadge";
 
 import { useEffect, useState, useRef, useMemo } from "react";
@@ -374,7 +376,7 @@ export default function BillingPage() {
       </div>
 
       {/* Main Billing Form Grid (Hidden on Print) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 print:hidden">
+      <WriteAccess><div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6 print:hidden">
         {/* Left 2 Cols: Customer & Product Items */}
         <div className="lg:col-span-2 space-y-4 md:space-y-6">
           {/* Customer Details */}
@@ -696,7 +698,7 @@ export default function BillingPage() {
             </button>
           </div>
         </div>
-      </div>
+      </div></WriteAccess>
 
       {/* Invoice History Section (Hidden on Print) */}
       {(() => {
@@ -799,7 +801,7 @@ export default function BillingPage() {
                               <Printer className="h-3.5 w-3.5" /> Print
                             </button>
                             {isAdmin && (
-                              <button
+                              <WriteAccess><button
                                 type="button"
                                 onClick={() => {
                                   setDeleteInvoiceId(inv._id);
@@ -809,7 +811,7 @@ export default function BillingPage() {
                                 title="Delete Invoice"
                               >
                                 <Trash2 className="h-3.5 w-3.5" /> Delete
-                              </button>
+                              </button></WriteAccess>
                             )}
                           </div>
                         </td>
@@ -857,7 +859,7 @@ export default function BillingPage() {
                         <Printer className="h-3.5 w-3.5" /> View / Print
                       </button>
                       {isAdmin && (
-                        <button
+                        <WriteAccess><button
                           type="button"
                           onClick={() => {
                             setDeleteInvoiceId(inv._id);
@@ -866,7 +868,7 @@ export default function BillingPage() {
                           className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer"
                         >
                           <Trash2 className="h-3.5 w-3.5" /> Delete
-                        </button>
+                        </button></WriteAccess>
                       )}
                     </div>
                   </div>
@@ -916,15 +918,15 @@ export default function BillingPage() {
             </p>
 
             <div className="mt-6 flex justify-end gap-3">
-              <button
+              <WriteAccess><button
                 type="button"
                 onClick={() => setDeleteInvoiceId(null)}
                 disabled={deleteLoading}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
               >
                 Cancel
-              </button>
-              <button
+              </button></WriteAccess>
+              <WriteAccess><button
                 type="button"
                 onClick={handleDeleteInvoice}
                 disabled={deleteLoading}
@@ -932,7 +934,7 @@ export default function BillingPage() {
               >
                 {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {deleteLoading ? "Deleting..." : "Delete & Restore Stock"}
-              </button>
+              </button></WriteAccess>
             </div>
           </div>
         </div>

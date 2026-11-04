@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { useEffect, useState, useMemo, use } from "react";
 import Link from "next/link";
@@ -35,6 +37,7 @@ import ProtectedPage from "@/app/components/ProtectedPage";
 import Pagination from "@/app/components/Pagination";
 import ProductMoveAction from "@/app/components/ProductMoveAction";
 import ProductTypeBadge from "@/app/components/ProductTypeBadge";
+import ProductPdfExportButton from "@/app/components/ProductPdfExportButton";
 
 interface ProductHistoryData {
   product: {
@@ -398,8 +401,9 @@ export default function ProductDetailPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <ProductPdfExportButton data={data} disabled={loading || Boolean(error)} />
             {data && !loading && (
-              <ProductMoveAction
+              <WriteAccess><ProductMoveAction
                 key={data.product.id}
                 product={data.product}
                 inventoryLocations={data.inventoryLocations}
@@ -408,7 +412,7 @@ export default function ProductDetailPage({
                   setMoveSuccess(true);
                   setMoveRefresh((value) => value + 1);
                 }}
-              />
+              /></WriteAccess>
             )}
             <button
               type="button"
@@ -418,14 +422,14 @@ export default function ProductDetailPage({
             >
               <Printer className="h-4 w-4 text-slate-500" /> Print Lifecycle Report
             </button>
-            <button
+            <WriteAccess><button
               type="button"
               onClick={() => router.push(`/employee-issues?pId=${encodeURIComponent(id)}`)}
               className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 px-4 py-2 text-xs font-bold text-white shadow-sm shadow-blue-500/25 transition active:scale-95"
               title="Issue this product to user"
             >
               <PackageCheck className="h-4 w-4" /> Issue Product
-            </button>
+            </button></WriteAccess>
           </div>
         </div>
 
@@ -534,7 +538,7 @@ export default function ProductDetailPage({
                     </div>
                   </div>
 
-                  <button
+                  <WriteAccess><button
                     type="button"
                     onClick={() => router.push(`/employee-issues?pId=${encodeURIComponent(id)}`)}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 px-5 py-3.5 text-sm font-black text-white shadow-md shadow-blue-600/25 hover:shadow-lg hover:shadow-blue-600/35 transition active:scale-95 shrink-0"
@@ -542,7 +546,7 @@ export default function ProductDetailPage({
                   >
                     <PackageCheck className="h-5 w-5" />
                     <span>Issue Product</span>
-                  </button>
+                  </button></WriteAccess>
                 </div>
               </div>
 

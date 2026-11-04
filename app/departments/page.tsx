@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
 import { Plus, Building2, Pencil, Trash2, Search, Loader2 } from "lucide-react";
@@ -174,13 +176,13 @@ export default function DepartmentsPage() {
               Manage workforce departments and company divisions ({departments.length} total)
             </p>
           </div>
-          <button
+          <WriteAccess><button
             type="button"
             onClick={() => setIsAddModalOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition self-start sm:self-auto"
           >
             <Plus className="h-4 w-4" /> Add Department
-          </button>
+          </button></WriteAccess>
         </div>
 
         {/* Metric Cards */}
@@ -291,16 +293,16 @@ export default function DepartmentsPage() {
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         <div className="inline-flex items-center gap-1.5">
-                          <button
+                          <WriteAccess><button
                             type="button"
                             onClick={() => openEdit(dept)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition"
                             title="Edit Department"
                           >
                             <Pencil className="h-3.5 w-3.5" />
-                          </button>
+                          </button></WriteAccess>
                           {isAdmin && (
-                            <button
+                            <WriteAccess><button
                               type="button"
                               onClick={() => {
                                 setDeleteId(dept._id);
@@ -310,7 +312,7 @@ export default function DepartmentsPage() {
                               title="Delete Department"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            </button></WriteAccess>
                           )}
                         </div>
                       </td>
@@ -339,11 +341,11 @@ export default function DepartmentsPage() {
         </div>
 
         {/* Add Modal */}
-        <AddDepartmentModal
+        <WriteAccess><AddDepartmentModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
           onSuccess={() => void fetchDepartments()}
-        />
+        /></WriteAccess>
 
         {/* Edit Modal */}
         {editId && (
@@ -352,7 +354,7 @@ export default function DepartmentsPage() {
               <h3 className="text-base font-bold text-slate-800 pb-3 border-b border-slate-100">
                 Edit Department
               </h3>
-              <form onSubmit={handleEditSubmit} className="mt-4 space-y-4">
+              <WriteAccess><form onSubmit={handleEditSubmit} className="mt-4 space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                     Department Name <span className="text-red-500">*</span>
@@ -417,7 +419,7 @@ export default function DepartmentsPage() {
                     {editLoading ? "Saving..." : "Save Changes"}
                   </button>
                 </div>
-              </form>
+              </form></WriteAccess>
             </div>
           </div>
         )}
@@ -432,14 +434,14 @@ export default function DepartmentsPage() {
                 <strong className="text-slate-800">&ldquo;{deleteName}&rdquo;</strong>? This action cannot be undone.
               </p>
               <div className="flex items-center justify-end gap-2.5 mt-5">
-                <button
+                <WriteAccess><button
                   type="button"
                   onClick={() => setDeleteId(null)}
                   className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
                 >
                   Cancel
-                </button>
-                <button
+                </button></WriteAccess>
+                <WriteAccess><button
                   type="button"
                   onClick={handleDeleteConfirm}
                   disabled={deleteLoading}
@@ -447,7 +449,7 @@ export default function DepartmentsPage() {
                 >
                   {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {deleteLoading ? "Deleting..." : "Delete"}
-                </button>
+                </button></WriteAccess>
               </div>
             </div>
           </div>

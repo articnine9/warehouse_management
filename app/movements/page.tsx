@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 import ProductTypeBadge from "@/app/components/ProductTypeBadge";
 import { productTypeLabel } from "@/lib/productType";
 
@@ -329,7 +331,7 @@ export default function StockMovementsPage() {
   }, [period, singleDate, startDate, endDate]);
 
   return (
-    <ProtectedPage allowedRoles={["ADMIN", "STAFF"]}>
+    <ProtectedPage allowedRoles={["ADMIN", "STAFF", "VIEWER"]}>
       <div className="min-h-screen bg-slate-50 p-3 md:p-4 lg:p-5 space-y-6">
         {/* Header */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -720,14 +722,14 @@ export default function StockMovementsPage() {
 
                       {isAdmin && (
                         <td className="px-5 py-3 text-right whitespace-nowrap">
-                          <button
+                          <WriteAccess><button
                             type="button"
                             onClick={() => setDeleteId(m._id)}
                             className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer transition shadow-2xs"
                             title="Delete Movement Record"
                           >
                             <Trash2 className="h-3 w-3" /> Delete
-                          </button>
+                          </button></WriteAccess>
                         </td>
                       )}
                     </tr>
@@ -807,13 +809,13 @@ export default function StockMovementsPage() {
 
                     {isAdmin && (
                       <div className="pt-2 border-t border-slate-100 flex justify-end">
-                        <button
+                        <WriteAccess><button
                           type="button"
                           onClick={() => setDeleteId(m._id)}
                           className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer transition"
                         >
                           <Trash2 className="h-3.5 w-3.5" /> Delete
-                        </button>
+                        </button></WriteAccess>
                       </div>
                     )}
                   </div>
@@ -863,15 +865,15 @@ export default function StockMovementsPage() {
                 </p>
 
                 <div className="mt-6 flex justify-end gap-3">
-                  <button
+                  <WriteAccess><button
                     type="button"
                     onClick={() => setDeleteId(null)}
                     disabled={deleteLoading}
                     className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </button></WriteAccess>
+                  <WriteAccess><button
                     type="button"
                     onClick={handleDeleteMovement}
                     disabled={deleteLoading}
@@ -879,7 +881,7 @@ export default function StockMovementsPage() {
                   >
                     {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                     {deleteLoading ? "Deleting..." : "Confirm Delete"}
-                  </button>
+                  </button></WriteAccess>
                 </div>
               </div>
             </div>

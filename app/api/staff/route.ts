@@ -6,6 +6,7 @@ import Product from "@/models/Product";
 import Rack from "@/models/Rack";
 import Warehouse from "@/models/Warehouse";
 import Category from "@/models/Category";
+import { isUserRole } from "@/lib/permissions";
 
 export async function GET() {
   try {
@@ -14,7 +15,7 @@ export async function GET() {
     const currentUser = await requireSessionUser();
 
     if (currentUser.role === "ADMIN") {
-      const staff = await User.find({ role: "STAFF" })
+      const staff = await User.find({ role: { $in: ["STAFF", "VIEWER"] } })
         .select("-passwordHash")
         .populate("warehouseIds", "name code address")
         .sort({ createdAt: -1 });
@@ -24,6 +25,10 @@ export async function GET() {
         role: "ADMIN",
         data: staff.map((member) => toSafeUser(member)),
       });
+    }
+
+    if (currentUser.role === "VIEWER") {
+      return Response.json({ success: false, message: "Only administrators can manage login accounts" }, { status: 403 });
     }
 
     // For STAFF users - get their assigned warehouse inventory with full details
@@ -171,7 +176,10 @@ export async function POST(request: Request) {
     const name = body.name?.trim();
     const email = body.email?.trim().toLowerCase();
     const password = body.password?.trim();
-    const role = body.role === "ADMIN" ? "ADMIN" : "STAFF";
+    const role = body.role ?? "STAFF";
+    if (!isUserRole(role)) {
+      return Response.json({ success: false, message: "Select Admin, Staff or Viewer as the role" }, { status: 400 });
+    }
     const warehouseIds = Array.isArray(body.warehouseIds)
       ? body.warehouseIds.map((id: string) => id.trim()).filter(Boolean)
       : body.warehouseId
@@ -225,8 +233,8 @@ export async function POST(request: Request) {
       email,
       passwordHash,
       role,
-      warehouseIds: warehouseIds.length > 0 ? warehouseIds : undefined,
-      warehouseId: warehouseIds.length > 0 ? warehouseIds[0] : undefined,
+      warehouseIds: role === "STAFF" ? warehouseIds : [],
+      warehouseId: role === "STAFF" ? warehouseIds[0] : undefined,
       status: "ACTIVE",
     });
 
@@ -236,7 +244,7 @@ export async function POST(request: Request) {
 
     return Response.json({
       success: true,
-      message: "Staff account created successfully",
+      message: "Login account created successfully",
       data: toSafeUser(populatedUser!),
     });
   } catch (error) {

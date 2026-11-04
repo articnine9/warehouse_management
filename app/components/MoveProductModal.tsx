@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useId, useState } from "react";
 import { ArrowRightLeft, Loader2, X } from "lucide-react";
@@ -24,7 +26,7 @@ type Props = {
 };
 
 export default function MoveProductModal({ product, zones, racks, onClose, onSuccess, zIndex = "z-50" }: Props) {
-  const locations = (product.locations || []).filter((location) => location.inventoryId);
+  const locations = (product.locations || []).filter((location) => location.inventoryId && location.warehouseId);
   const [inventoryId, setInventoryId] = useState(locations[0]?.inventoryId || "");
   const [zoneId, setZoneId] = useState("");
   const [rackId, setRackId] = useState("");
@@ -74,11 +76,11 @@ export default function MoveProductModal({ product, zones, racks, onClose, onSuc
         </div>
         {locations.length === 0 ? (
           <div className="mt-5 space-y-4">
-            <p className="text-sm text-slate-600">Assign this product to a rack in Inventory before moving it.</p>
+            <p className="text-sm text-slate-600">Assign this product to a warehouse in Inventory before moving it.</p>
             <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm">Close</button>
           </div>
         ) : (
-          <form onSubmit={handleMove} className="mt-5 space-y-4">
+          <WriteAccess><form onSubmit={handleMove} className="mt-5 space-y-4">
             <label className="block text-sm font-semibold text-slate-700">
               Move from
               <select autoFocus value={inventoryId} disabled={saving} onChange={(event) => { setInventoryId(event.target.value); setZoneId(""); setRackId(""); setError(""); }} className="mt-1 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm" required>
@@ -106,7 +108,7 @@ export default function MoveProductModal({ product, zones, racks, onClose, onSuc
               <button type="button" disabled={saving} onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 disabled:opacity-50">Cancel</button>
               <button type="submit" disabled={saving || !rackId || !zoneId} className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">{saving && <Loader2 className="h-4 w-4 animate-spin" />}{saving ? "Moving..." : "Move Product"}</button>
             </div>
-          </form>
+          </form></WriteAccess>
         )}
       </div>
     </div>

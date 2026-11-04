@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, Fragment, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import Link from "next/link";
@@ -782,7 +784,7 @@ function EmployeeIssuesContent() {
         </div>
 
         {/* Issue Form */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm space-y-5">
+        <WriteAccess><div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm space-y-5">
           <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
             <PackageCheck className="h-5 w-5 text-blue-600" />
             <h2 className="text-lg font-bold text-slate-800">Issue Product to User</h2>
@@ -1218,7 +1220,7 @@ function EmployeeIssuesContent() {
               </button>
             </div>
           </form>
-        </div>
+        </div></WriteAccess>
 
         {/* Issued Products & Custody History Directory */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -1771,14 +1773,14 @@ function EmployeeIssuesContent() {
                                 <Eye className="h-4 w-4" />
                               </button>
                               {isAdmin && (
-                                <button
+                                <WriteAccess><button
                                   type="button"
                                   onClick={() => setDeleteIssueId(issue._id)}
                                   className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-2xs active:scale-95"
                                   title="Delete this issue record"
                                 >
                                   <Trash2 className="h-4 w-4" />
-                                </button>
+                                </button></WriteAccess>
                               )}
                             </div>
                           </td>
@@ -2104,14 +2106,14 @@ function EmployeeIssuesContent() {
                           <Eye className="h-4 w-4" />
                         </button>
                         {isAdmin && (
-                          <button
+                          <WriteAccess><button
                             type="button"
                             onClick={() => setDeleteIssueId(issue._id)}
                             className="p-1.5 rounded-lg border border-slate-200 text-red-500 hover:bg-red-50"
                             title="Delete issue"
                           >
                             <Trash2 className="h-4 w-4" />
-                          </button>
+                          </button></WriteAccess>
                         )}
                       </div>
                     </div>
@@ -2277,21 +2279,21 @@ function EmployeeIssuesContent() {
                 Are you sure you want to delete this issue record? Any unreturned stock will be automatically restored back to the warehouse inventory.
               </p>
               <div className="mt-5 flex gap-3">
-                <button
+                <WriteAccess><button
                   type="button"
                   onClick={handleDeleteIssue}
                   disabled={deleteLoading}
                   className="flex-1 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
                 >
                   {deleteLoading ? "Deleting..." : "Delete & Restore Stock"}
-                </button>
-                <button
+                </button></WriteAccess>
+                <WriteAccess><button
                   type="button"
                   onClick={() => setDeleteIssueId(null)}
                   className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
                   Cancel
-                </button>
+                </button></WriteAccess>
               </div>
             </div>
           </div>
@@ -2299,12 +2301,12 @@ function EmployeeIssuesContent() {
 
         {/* 🛠️ Manage / Service Modal */}
         {activeModalData && (
-          <ServiceCycleModal
+          <WriteAccess><ServiceCycleModal
             issue={activeModalData.issue}
             itemIndex={activeModalData.itemIndex}
             onClose={() => setActiveModalIssue(null)}
             onUpdated={handleIssueUpdated}
-          />
+          /></WriteAccess>
         )}
 
         <WarningPopup
@@ -2351,14 +2353,14 @@ function EmployeeIssuesContent() {
         )}
 
         {/* ➕ Quick Add Employee Modal */}
-        <AddEmployeeModal
+        <WriteAccess><AddEmployeeModal
           isOpen={isAddEmployeeOpen}
           onClose={() => setIsAddEmployeeOpen(false)}
           onSuccess={(newEmp) => {
             void fetchIssues();
             handleSelectEmployee(newEmp);
           }}
-        />
+        /></WriteAccess>
       </div>
     </ProtectedPage>
   );

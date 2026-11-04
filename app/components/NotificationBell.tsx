@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { useEffect, useRef, useState } from "react";
 import {
@@ -18,6 +20,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import WarningPopup from "./WarningPopup";
+import { useCanWrite } from "./AuthProvider";
 
 type ServiceAlert = {
   issueId: string;
@@ -79,6 +82,7 @@ let sharedAlertsCache: SharedAlertsData | null = null;
 let sharedFetchPromise: Promise<SharedAlertsData | null> | null = null;
 
 export default function NotificationBell() {
+  const canWrite = useCanWrite();
   const [serviceAlerts, setServiceAlerts] = useState<ServiceAlert[]>(() => sharedAlertsCache?.serviceAlerts || []);
   const [reusableAlerts, setReusableAlerts] = useState<ReusableAlert[]>(() => sharedAlertsCache?.reusableAlerts || []);
   const [stockAlerts, setStockAlerts] = useState<StockAlert[]>(() => sharedAlertsCache?.stockAlerts || []);
@@ -410,7 +414,7 @@ export default function NotificationBell() {
 
                       {/* Action buttons */}
                       <div className="flex items-center gap-1.5">
-                        <button
+                        <WriteAccess><button
                           type="button"
                           onClick={() => {
                             setSelectedReusableAlert(alert);
@@ -420,15 +424,15 @@ export default function NotificationBell() {
                           className="rounded-md bg-indigo-600 px-2 py-1 text-[10px] font-bold text-white hover:bg-indigo-700 active:scale-95 flex items-center gap-0.5"
                         >
                           <RotateCcw className="h-3 w-3" /> Renew
-                        </button>
-                        <button
+                        </button></WriteAccess>
+                        <WriteAccess><button
                           type="button"
                           disabled={returningItem}
                           onClick={() => handleReturnItem(alert)}
                           className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[10px] font-bold text-slate-700 hover:bg-slate-50 active:scale-95"
                         >
                           Return
-                        </button>
+                        </button></WriteAccess>
                       </div>
                     </div>
                   </div>
@@ -532,13 +536,13 @@ export default function NotificationBell() {
                   <p className="text-xs text-slate-400">Issue #{selectedReusableAlert.issueNumber}</p>
                 </div>
               </div>
-              <button
+              <WriteAccess><button
                 type="button"
                 onClick={() => setSelectedReusableAlert(null)}
                 className="p-1 text-slate-400 hover:text-slate-600"
               >
                 <X className="h-5 w-5" />
-              </button>
+              </button></WriteAccess>
             </div>
 
             <div className="space-y-2 text-xs bg-slate-50 p-3.5 rounded-xl">
@@ -621,7 +625,7 @@ export default function NotificationBell() {
 
             {/* Modal Actions */}
             <div className="flex gap-2 pt-1">
-              <button
+              <WriteAccess><button
                 type="button"
                 disabled={renewing}
                 onClick={handleRenewItem}
@@ -629,21 +633,21 @@ export default function NotificationBell() {
               >
                 <RotateCcw className={`h-3.5 w-3.5 ${renewing ? "animate-spin" : ""}`} />
                 <span>{renewing ? "Renewing..." : `Renew Period for +${renewDays} Days`}</span>
-              </button>
-              <button
+              </button></WriteAccess>
+              <WriteAccess><button
                 type="button"
                 onClick={() => setSelectedReusableAlert(null)}
                 className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
               >
                 Cancel
-              </button>
+              </button></WriteAccess>
             </div>
           </div>
         </div>
       )}
 
       {/* 🛠️ Service Completion Modal */}
-      {selectedServiceAlert && (
+      {selectedServiceAlert && canWrite && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs">
           <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
@@ -654,13 +658,13 @@ export default function NotificationBell() {
                   <p className="text-xs text-slate-400">Issue #{selectedServiceAlert.issueNumber}</p>
                 </div>
               </div>
-              <button
+              <WriteAccess><button
                 type="button"
                 onClick={() => setSelectedServiceAlert(null)}
                 className="p-1 text-slate-400 hover:text-slate-600"
               >
                 <X className="h-5 w-5" />
-              </button>
+              </button></WriteAccess>
             </div>
 
             <div className="space-y-2 text-xs bg-slate-50 p-3.5 rounded-xl">
@@ -712,7 +716,7 @@ export default function NotificationBell() {
             </div>
 
             <div className="flex gap-2 pt-1">
-              <button
+              <WriteAccess><button
                 type="button"
                 disabled={markingService}
                 onClick={handleMarkServiceDone}
@@ -720,14 +724,14 @@ export default function NotificationBell() {
               >
                 <Check className="h-3.5 w-3.5" />
                 <span>{markingService ? "Saving..." : "Complete Service & Schedule Next Cycle"}</span>
-              </button>
-              <button
+              </button></WriteAccess>
+              <WriteAccess><button
                 type="button"
                 onClick={() => setSelectedServiceAlert(null)}
                 className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
               >
                 Cancel
-              </button>
+              </button></WriteAccess>
             </div>
           </div>
         </div>

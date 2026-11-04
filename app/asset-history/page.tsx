@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -401,12 +403,12 @@ export default function AssetHistoryPage() {
             >
               <Printer className="h-4 w-4 text-slate-500" /> Print Custody Report
             </button>
-            <Link
+            <WriteAccess><Link
               href="/employee-issues"
               className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition active:scale-95 print:hidden"
             >
               <PackageCheck className="h-4 w-4" /> + Issue Product to Employee
-            </Link>
+            </Link></WriteAccess>
           </div>
         </div>
 
@@ -1015,14 +1017,14 @@ export default function AssetHistoryPage() {
                                 <Eye className="h-4 w-4" />
                               </button>
                               {isAdmin && (
-                                <button
+                                <WriteAccess><button
                                   type="button"
                                   onClick={() => setDeleteIssueId(issue._id)}
                                   className="flex h-8 w-8 items-center justify-center rounded-lg border border-red-200 bg-white text-red-600 hover:bg-red-50 transition shadow-2xs active:scale-95 cursor-pointer"
                                   title="Delete Issue Record (Restores stock)"
                                 >
                                   <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+                                </button></WriteAccess>
                               )}
                             </div>
                           </td>
@@ -1258,7 +1260,7 @@ export default function AssetHistoryPage() {
                                               </span>
                                             </td>
                                             <td className="px-3 py-2.5 text-center print:hidden">
-                                              <button
+                                              <WriteAccess><button
                                                 type="button"
                                                 onClick={() =>
                                                   setActiveModalIssue({
@@ -1271,7 +1273,7 @@ export default function AssetHistoryPage() {
                                               >
                                                 <Wrench className="h-3 w-3 text-slate-500" />
                                                 <span>Manage</span>
-                                              </button>
+                                              </button></WriteAccess>
                                             </td>
                                           </tr>
                                         );
@@ -1490,7 +1492,7 @@ export default function AssetHistoryPage() {
                                 )}
                               </div>
                               <div className="pt-1 flex justify-end">
-                                <button
+                                <WriteAccess><button
                                   type="button"
                                   onClick={() =>
                                     setActiveModalIssue({
@@ -1501,7 +1503,7 @@ export default function AssetHistoryPage() {
                                   className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-blue-50 hover:text-blue-600"
                                 >
                                   <Wrench className="h-3 w-3" /> Manage / Service
-                                </button>
+                                </button></WriteAccess>
                               </div>
                             </div>
                           );
@@ -1510,13 +1512,13 @@ export default function AssetHistoryPage() {
                     )}
                     {isAdmin && (
                       <div className="pt-2 border-t border-slate-100 flex justify-end">
-                        <button
+                        <WriteAccess><button
                           type="button"
                           onClick={() => setDeleteIssueId(issue._id)}
                           className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 inline-flex items-center gap-1 cursor-pointer transition"
                         >
                           <Trash2 className="h-3.5 w-3.5" /> Delete
-                        </button>
+                        </button></WriteAccess>
                       </div>
                     )}
                   </div>
@@ -1542,12 +1544,12 @@ export default function AssetHistoryPage() {
 
       {/* Service & Manage Cycle Modal */}
       {activeModalData && (
-        <ServiceCycleModal
+        <WriteAccess><ServiceCycleModal
           issue={activeModalData.issue}
           itemIndex={activeModalData.itemIndex}
           onClose={() => setActiveModalIssue(null)}
           onUpdated={handleIssueUpdated}
-        />
+        /></WriteAccess>
       )}
 
       {/* Issue Bill Modal */}
@@ -1607,15 +1609,15 @@ export default function AssetHistoryPage() {
             </p>
 
             <div className="mt-6 flex justify-end gap-3">
-              <button
+              <WriteAccess><button
                 type="button"
                 onClick={() => setDeleteIssueId(null)}
                 disabled={deleteLoading}
                 className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
               >
                 Cancel
-              </button>
-              <button
+              </button></WriteAccess>
+              <WriteAccess><button
                 type="button"
                 onClick={handleDeleteIssue}
                 disabled={deleteLoading}
@@ -1623,7 +1625,7 @@ export default function AssetHistoryPage() {
               >
                 {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {deleteLoading ? "Deleting..." : "Delete & Restore Stock"}
-              </button>
+              </button></WriteAccess>
             </div>
           </div>
         </div>

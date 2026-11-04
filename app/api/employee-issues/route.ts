@@ -1,3 +1,4 @@
+import { requireWriteUser } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
 import { getUserWarehouseId, requireSessionUser } from "@/lib/auth";
 import Employee from "@/models/Employee";
@@ -136,7 +137,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    const currentUser = await requireSessionUser();
+    const currentUser = await requireWriteUser();
 
     void Product;
     void Rack;
@@ -406,6 +407,9 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return Response.json({ success: false, message: "This account has view-only access" }, { status: 403 });
+    }
     if (error instanceof Error && error.message === "UNAUTHORIZED") {
       return Response.json({ success: false, message: "Not authenticated" }, { status: 401 });
     }

@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useState, useMemo, useEffect, useCallback, useId, useRef } from "react";
 import { X, Tag, Warehouse as WarehouseIcon, Loader2, AlertTriangle, PackagePlus, ArrowRight, CheckCircle2, Layers, RotateCcw, Box } from "lucide-react";
@@ -558,7 +560,7 @@ export default function AddProductModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <WriteAccess><form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
@@ -837,12 +839,12 @@ export default function AddProductModal({
                 {loading ? "Adding..." : "+ Create Product"}
               </button>
             </div>
-          </form>
+          </form></WriteAccess>
         </div>
       </div>
 
       {/* Sub-modals with higher z-index */}
-      <AddCategoryModal
+      <WriteAccess><AddCategoryModal
         isOpen={isAddCategoryOpen}
         onClose={() => setIsAddCategoryOpen(false)}
         zIndex="z-[70]"
@@ -850,9 +852,9 @@ export default function AddProductModal({
           if (onCategoriesChanged) onCategoriesChanged();
           setCategory(newCat.name);
         }}
-      />
+      /></WriteAccess>
 
-      <AddWarehouseModal
+      <WriteAccess><AddWarehouseModal
         isOpen={isAddWarehouseOpen}
         onClose={() => setIsAddWarehouseOpen(false)}
         zIndex="z-[70]"
@@ -862,9 +864,9 @@ export default function AddProductModal({
           setZoneId("");
           setRackId("");
         }}
-      />
+      /></WriteAccess>
 
-      <AddZoneModal
+      <WriteAccess><AddZoneModal
         isOpen={isAddZoneOpen}
         onClose={() => setIsAddZoneOpen(false)}
         warehouses={warehouses}
@@ -876,9 +878,9 @@ export default function AddProductModal({
           setZoneId(newZone._id);
           setRackId("");
         }}
-      />
+      /></WriteAccess>
 
-      <AddRackModal
+      <WriteAccess><AddRackModal
         isOpen={isAddRackOpen}
         onClose={() => setIsAddRackOpen(false)}
         warehouses={warehouses}
@@ -892,7 +894,7 @@ export default function AddProductModal({
           if (onRacksChanged) onRacksChanged();
           setRackId(newRk._id);
         }}
-      />
+      /></WriteAccess>
 
       {/* ─── DUPLICATE PRODUCT CONFIRMATION & RESTOCK MODAL ─── */}
       {duplicateModalOpen && existingProduct && (
@@ -972,7 +974,7 @@ export default function AddProductModal({
                   </div>
                 </div>
 
-                <form onSubmit={handleRestockSubmit} className="mt-4 space-y-4">
+                <WriteAccess><form onSubmit={handleRestockSubmit} className="mt-4 space-y-4">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                       Quantity to Add <span className="text-red-500">*</span>
@@ -1073,7 +1075,7 @@ export default function AddProductModal({
                       )}
                     </button>
                   </div>
-                </form>
+                </form></WriteAccess>
               </div>
             )}
           </div>

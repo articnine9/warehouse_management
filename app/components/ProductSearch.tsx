@@ -5,6 +5,18 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { Search, X, Package, Layers, MapPin } from "lucide-react";
 import SearchableSelect, { SelectOption } from "./SearchableSelect";
 import ProductHistoryModal from "./ProductHistoryModal";
+import ProductsExcelExportButton from "./ProductsExcelExportButton";
+
+type StockLocation = {
+  inventoryId?: string;
+  warehouseId: string;
+  warehouseName: string;
+  warehouseCode?: string;
+  rackId: string;
+  rackName: string;
+  rackCode?: string;
+  quantity: number;
+};
 
 type SearchResult = {
   _id: string;
@@ -17,19 +29,24 @@ type SearchResult = {
     sellerName?: string;
     price?: number;
   };
-  warehouseId: {
-    _id?: string;
-    name: string;
-    code: string;
-  };
-  rackId: {
-    _id?: string;
-    name: string;
-    code: string;
-  };
+  locations: StockLocation[];
   quantity: number;
   status: "AVAILABLE" | "LOW_STOCK" | "OUT_OF_STOCK";
 };
+
+type StockProduct = SearchResult["productId"] & {
+  _id: string;
+  totalStock: number;
+  stockStatus: SearchResult["status"];
+  locations: StockLocation[];
+};
+
+function searchResults(products: StockProduct[]): SearchResult[] {
+  return products.map((product) => ({
+    _id: product._id, productId: product, quantity: product.totalStock,
+    status: product.stockStatus, locations: product.locations,
+  }));
+}
 
 type Category = {
   _id: string;
@@ -89,6 +106,7 @@ export default function ProductSearch() {
     setPage(1);
     try {
       const params = new URLSearchParams();
+      params.set("view", "stock");
       params.set("page", "1");
       params.set("limit", String(CHUNK_SIZE));
 
@@ -102,7 +120,7 @@ export default function ProductSearch() {
         params.set("category", selectedCategory);
       }
 
-      const res = await fetch(`/api/inventory?${params.toString()}`, { signal });
+      const res = await fetch(`/api/products?${params.toString()}`, { signal });
       const result = await res.json().catch(() => {
         throw new Error("Unable to load inventory. Check the server connection and try again.");
       });
@@ -112,7 +130,7 @@ export default function ProductSearch() {
       }
 
       if (result.success) {
-        setInventory(result.data || []);
+        setInventory(searchResults(result.data || []));
         if (result.pagination) {
           setTotalCount(result.pagination.total || 0);
         } else {
@@ -154,6 +172,7 @@ export default function ProductSearch() {
     setErrorMessage("");
     try {
       const params = new URLSearchParams();
+      params.set("view", "stock");
       params.set("page", String(nextPage));
       params.set("limit", String(CHUNK_SIZE));
 
@@ -167,7 +186,7 @@ export default function ProductSearch() {
         params.set("category", selectedCategory);
       }
 
-      const res = await fetch(`/api/inventory?${params.toString()}`, { signal });
+      const res = await fetch(`/api/products?${params.toString()}`, { signal });
       const result = await res.json().catch(() => {
         throw new Error("Unable to load more inventory. Check the server connection and try again.");
       });
@@ -179,12 +198,13 @@ export default function ProductSearch() {
       if (result.success && Array.isArray(result.data)) {
         setInventory((prev) => {
           const existingIds = new Set(prev.map((it) => it._id));
-          const filteredNew = (result.data as SearchResult[]).filter(
+          const filteredNew = searchResults(result.data).filter(
             (it) => !existingIds.has(it._id)
           );
           return [...prev, ...filteredNew];
         });
         setPage(nextPage);
+        if (result.pagination) setTotalCount(result.pagination.total || 0);
       }
     } catch (error) {
       if (signal.aborted) return;
@@ -243,11 +263,12 @@ export default function ProductSearch() {
               </h2>
             </div>
             <p className="mt-1 text-xs text-slate-500">
-              Live stock locations, rack allocations & pricing ({totalCount} total records • scroll to load more)
+              Live stock locations, rack allocations & pricing ({totalCount} products • scroll to load more)
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <ProductsExcelExportButton />
             <span className="text-xs font-semibold text-slate-500 uppercase">Category:</span>
             <div className="w-48">
               <SearchableSelect
@@ -339,7 +360,7 @@ export default function ProductSearch() {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
           </svg>
-          Loading inventory records...
+          Loading products...
         </div>
       )}
 
@@ -402,18 +423,29 @@ export default function ProductSearch() {
                       : "-"}
                   </td>
                   <td className="px-5 py-3">
-                    <p className="font-medium text-slate-700">{item.warehouseId?.name || "-"}</p>
-                    {item.warehouseId?.code && (
-                      <span className="text-xs text-slate-400">({item.warehouseId.code})</span>
-                    )}
+                    <div className="space-y-2">
+                      {item.locations.map((location) => (
+                        <div key={location.inventoryId} className="min-h-9">
+                          <p className="font-medium text-slate-700">{location.warehouseName}</p>
+                          {location.warehouseCode && <span className="text-xs text-slate-400">({location.warehouseCode})</span>}
+                        </div>
+                      ))}
+                      {!item.locations.length && <span className="text-slate-400">Unassigned</span>}
+                    </div>
                   </td>
                   <td className="px-5 py-3">
-                    <div className="flex items-center gap-1 text-slate-700 font-medium">
-                      <MapPin className="h-3.5 w-3.5 text-slate-400" />
-                      <span>{item.rackId?.name || "-"}</span>
-                      {item.rackId?.code && (
-                        <span className="text-xs text-slate-400">({item.rackId.code})</span>
-                      )}
+                    <div className="space-y-2">
+                      {item.locations.map((location) => (
+                        <div key={location.inventoryId} className="min-h-9 text-slate-700">
+                          <div className="flex items-center gap-1 font-medium">
+                            <MapPin className="h-3.5 w-3.5 text-slate-400" />
+                            <span>{location.rackName}</span>
+                            {location.rackCode && <span className="text-xs text-slate-400">({location.rackCode})</span>}
+                          </div>
+                          <span className="text-xs text-slate-500">{location.quantity} units at this location</span>
+                        </div>
+                      ))}
+                      {!item.locations.length && <span className="text-slate-400">No stock location</span>}
                     </div>
                   </td>
                   <td className="px-5 py-3 text-center">
@@ -475,9 +507,14 @@ export default function ProductSearch() {
               <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-lg">
                 <div>
                   <span className="text-slate-400 block text-[10px] uppercase">Warehouse & Rack</span>
-                  <span className="font-semibold text-slate-800">
-                    {item.warehouseId?.code || "-"} • {item.rackId?.name || "-"}
-                  </span>
+                  <div className="space-y-1">
+                    {item.locations.map((location) => (
+                      <p key={location.inventoryId} className="font-semibold text-slate-800">
+                        {location.warehouseCode || location.warehouseName} · {location.rackName} · {location.quantity} units
+                      </p>
+                    ))}
+                    {!item.locations.length && <span className="text-slate-400">No stock location</span>}
+                  </div>
                 </div>
                 <div className="text-right">
                   <span className="text-slate-400 block text-[10px] uppercase">Stock Qty</span>
@@ -502,11 +539,11 @@ export default function ProductSearch() {
       {/* No Results */}
       {!loading && !errorMessage && inventory.length === 0 && (
         <div className="p-12 text-center text-sm text-slate-400">
-          <p className="font-medium text-slate-600">No inventory records found</p>
+          <p className="font-medium text-slate-600">No products found</p>
           <p className="text-xs text-slate-400 mt-1">
             {query
               ? `No records matching "${query}"`
-              : "No inventory items have been recorded in this category/status."}
+              : "No products match this category/status."}
           </p>
         </div>
       )}
@@ -522,11 +559,11 @@ export default function ProductSearch() {
           ) : inventory.length < totalCount ? (
             <button type="button" onClick={() => void fetchNextChunk()} className="text-xs font-medium text-blue-600 hover:underline">
               Showing <span className="font-bold text-slate-700">{inventory.length}</span> of{" "}
-              <span className="font-bold text-slate-700">{totalCount}</span> items • Load more
+              <span className="font-bold text-slate-700">{totalCount}</span> products • Load more
             </button>
           ) : (
             <p className="text-xs font-semibold text-slate-400">
-              All {totalCount} items loaded
+              All {totalCount} products loaded
             </p>
           )}
         </div>

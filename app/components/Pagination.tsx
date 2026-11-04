@@ -9,6 +9,7 @@ type PaginationProps = {
   onPageChange: (page: number) => void;
   onPageSizeChange?: (pageSize: number) => void;
   pageSizeOptions?: number[];
+  itemLabel?: string;
   className?: string;
 };
 
@@ -19,6 +20,7 @@ export default function Pagination({
   onPageChange,
   onPageSizeChange,
   pageSizeOptions = [5, 10, 25, 50, 100],
+  itemLabel = "entries",
   className = "",
 }: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / (pageSize || 1)));
@@ -55,7 +57,7 @@ export default function Pagination({
         <span>
           Showing <span className="font-semibold text-slate-900">{startItem}</span> to{" "}
           <span className="font-semibold text-slate-900">{endItem}</span> of{" "}
-          <span className="font-semibold text-slate-900">{totalItems}</span> entries
+          <span className="font-semibold text-slate-900">{totalItems}</span> {itemLabel}
         </span>
 
         {onPageSizeChange && (

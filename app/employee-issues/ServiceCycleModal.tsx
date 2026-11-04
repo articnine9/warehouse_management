@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { useMemo, useState } from "react";
 import {
@@ -288,7 +290,7 @@ export default function ServiceCycleModal({
                   ))}
                 </div>
 
-                <button
+                <WriteAccess><button
                   type="button"
                   disabled={renewing}
                   onClick={handleRenewItem}
@@ -296,7 +298,7 @@ export default function ServiceCycleModal({
                 >
                   <RotateCcw className={`h-3 w-3 ${renewing ? "animate-spin" : ""}`} />
                   <span>{renewing ? "Renewing..." : "Renew Period"}</span>
-                </button>
+                </button></WriteAccess>
               </div>
             )}
           </div>
@@ -592,14 +594,14 @@ export default function ServiceCycleModal({
           )}
 
           <div className="flex gap-3 pt-1">
-            <button
+            <WriteAccess><button
               type="button"
               disabled={saving}
               onClick={handleSave}
               className="flex-1 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50"
             >
               {saving ? "Saving..." : "Save Changes"}
-            </button>
+            </button></WriteAccess>
             <button
               type="button"
               onClick={onClose}

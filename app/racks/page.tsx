@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
 import { Tag, Box, Eye, Warehouse as WarehouseIcon, Layers, Plus } from "lucide-react";
@@ -282,17 +284,17 @@ export default function RacksPage() {
               Manage warehouse storage racks and shelf allocations ({racks.length} total racks)
             </p>
           </div>
-          <button
+          <WriteAccess><button
             type="button"
             onClick={() => setIsAddModalOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition self-start sm:self-auto"
           >
             <Plus className="h-4 w-4" /> Add Rack
-          </button>
+          </button></WriteAccess>
         </div>
 
         {/* Modal for adding rack */}
-        <AddRackModal
+        <WriteAccess><AddRackModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
           warehouses={warehouses}
@@ -300,24 +302,24 @@ export default function RacksPage() {
           onAddNewWarehouse={() => setIsAddWarehouseModalOpen(true)}
           onAddNewZone={() => setIsAddZoneModalOpen(true)}
           onSuccess={() => void fetchRacks()}
-        />
+        /></WriteAccess>
 
         {/* Nested modal for creating warehouse on the fly */}
-        <AddWarehouseModal
+        <WriteAccess><AddWarehouseModal
           isOpen={isAddWarehouseModalOpen}
           onClose={() => setIsAddWarehouseModalOpen(false)}
           zIndex="z-[70]"
           onSuccess={() => void fetchWarehouses()}
-        />
+        /></WriteAccess>
 
         {/* Nested modal for creating zone on the fly */}
-        <AddZoneModal
+        <WriteAccess><AddZoneModal
           isOpen={isAddZoneModalOpen}
           onClose={() => setIsAddZoneModalOpen(false)}
           warehouses={warehouses}
           zIndex="z-[70]"
           onSuccess={() => void fetchZones()}
-        />
+        /></WriteAccess>
 
         {/* Rack list */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -469,7 +471,7 @@ export default function RacksPage() {
                           >
                             <Eye className="h-3.5 w-3.5" /> Details
                           </button>
-                          <button
+                          <WriteAccess><button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
@@ -478,9 +480,9 @@ export default function RacksPage() {
                             className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50 cursor-pointer"
                           >
                             Edit
-                          </button>
+                          </button></WriteAccess>
                           {isAdmin && (
-                            <button
+                            <WriteAccess><button
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -489,7 +491,7 @@ export default function RacksPage() {
                               className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 cursor-pointer"
                             >
                               Delete
-                            </button>
+                            </button></WriteAccess>
                           )}
                         </div>
                       </td>
@@ -568,7 +570,7 @@ export default function RacksPage() {
                     >
                       <Eye className="h-3.5 w-3.5" /> Details
                     </button>
-                    <button
+                    <WriteAccess><button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
@@ -577,9 +579,9 @@ export default function RacksPage() {
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                     >
                       Edit
-                    </button>
+                    </button></WriteAccess>
                     {isAdmin && (
-                      <button
+                      <WriteAccess><button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
@@ -588,7 +590,7 @@ export default function RacksPage() {
                         className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
                       >
                         Delete
-                      </button>
+                      </button></WriteAccess>
                     )}
                   </div>
                 </div>
@@ -619,7 +621,7 @@ export default function RacksPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-xl">
               <h3 className="text-lg font-semibold text-slate-800">Edit Rack</h3>
-              <form onSubmit={handleEditSubmit} className="mt-5 space-y-3">
+              <WriteAccess><form onSubmit={handleEditSubmit} className="mt-5 space-y-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Rack Name</label>
                   <input
@@ -719,7 +721,7 @@ export default function RacksPage() {
                     Cancel
                   </button>
                 </div>
-              </form>
+              </form></WriteAccess>
             </div>
           </div>
         )}
@@ -733,19 +735,19 @@ export default function RacksPage() {
                 Are you sure you want to delete this rack? This action cannot be undone.
               </p>
               <div className="mt-5 flex gap-3">
-                <button
+                <WriteAccess><button
                   onClick={handleDelete}
                   disabled={deleteLoading}
                   className="flex-1 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
                 >
                   {deleteLoading ? "Deleting..." : "Delete"}
-                </button>
-                <button
+                </button></WriteAccess>
+                <WriteAccess><button
                   onClick={() => setDeleteId(null)}
                   className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
                   Cancel
-                </button>
+                </button></WriteAccess>
               </div>
             </div>
           </div>

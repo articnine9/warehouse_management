@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useState, useEffect, useMemo, useCallback } from "react";
 import { X, ClipboardList, Loader2 } from "lucide-react";
@@ -290,7 +292,7 @@ export default function AddInventoryModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <WriteAccess><form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                 Product <span className="text-red-500">*</span>
@@ -406,12 +408,12 @@ export default function AddInventoryModal({
                 {loading ? "Saving..." : isRestock ? "+ Restock Units" : "+ Add Stock Entry"}
               </button>
             </div>
-          </form>
+          </form></WriteAccess>
         </div>
       </div>
 
       {/* Sub modals with higher z-index */}
-      <AddProductModal
+      <WriteAccess><AddProductModal
         isOpen={isAddProductOpen}
         onClose={() => setIsAddProductOpen(false)}
         categories={[]}
@@ -423,9 +425,9 @@ export default function AddInventoryModal({
           if (onProductsChanged) onProductsChanged();
           setProductId(newProd._id);
         }}
-      />
+      /></WriteAccess>
 
-      <AddWarehouseModal
+      <WriteAccess><AddWarehouseModal
         isOpen={isAddWarehouseOpen}
         onClose={() => setIsAddWarehouseOpen(false)}
         zIndex="z-[70]"
@@ -435,9 +437,9 @@ export default function AddInventoryModal({
           setZoneId("");
           setRackId("");
         }}
-      />
+      /></WriteAccess>
 
-      <AddZoneModal
+      <WriteAccess><AddZoneModal
         isOpen={isAddZoneOpen}
         onClose={() => setIsAddZoneOpen(false)}
         warehouses={warehouses}
@@ -449,9 +451,9 @@ export default function AddInventoryModal({
           setZoneId(newZone._id);
           setRackId("");
         }}
-      />
+      /></WriteAccess>
 
-      <AddRackModal
+      <WriteAccess><AddRackModal
         isOpen={isAddRackOpen}
         onClose={() => setIsAddRackOpen(false)}
         warehouses={warehouses}
@@ -465,7 +467,7 @@ export default function AddInventoryModal({
           if (onRacksChanged) onRacksChanged();
           setRackId(newRk._id);
         }}
-      />
+      /></WriteAccess>
 
       <WarningPopup
         open={warningOpen}

@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useState } from "react";
 import { X, Warehouse as WarehouseIcon, Loader2 } from "lucide-react";
@@ -97,7 +99,7 @@ export default function AddWarehouseModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <WriteAccess><form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                 Warehouse Name <span className="text-red-500">*</span>
@@ -156,7 +158,7 @@ export default function AddWarehouseModal({
                 {loading ? "Adding..." : "+ Create Warehouse"}
               </button>
             </div>
-          </form>
+          </form></WriteAccess>
         </div>
       </div>
 

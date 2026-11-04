@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, X, Check, Plus } from "lucide-react";
+import { useCanWrite } from "./AuthProvider";
 
 export type SelectOption = {
   value: string;
@@ -42,6 +43,7 @@ export default function SearchableSelect({
   onAddNew,
   addNewLabel,
 }: SearchableSelectProps) {
+  const canWrite = useCanWrite();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [hasTyped, setHasTyped] = useState(false);
@@ -376,7 +378,7 @@ export default function SearchableSelect({
             className="rounded-xl border border-slate-200 bg-white shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-100"
           >
             {/* Quick Add action inside dropdown */}
-            {onAddNew && !disabled && (
+            {canWrite && onAddNew && !disabled && (
               <div className="p-1 border-b border-slate-100 bg-slate-50/60 shrink-0">
                 <button
                   type="button"

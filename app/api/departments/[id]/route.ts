@@ -1,3 +1,4 @@
+import { requireWriteUser } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
 import Department from "@/models/Department";
@@ -8,7 +9,7 @@ export async function PUT(
 ) {
   try {
     await connectDB();
-    await requireSessionUser();
+    await requireWriteUser();
 
     const { id } = await params;
     const body = await request.json();
@@ -62,6 +63,9 @@ export async function PUT(
       data: updated,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return Response.json({ success: false, message: "This account has view-only access" }, { status: 403 });
+    }
     console.error("PUT /api/departments/[id] error:", error);
     return Response.json(
       {

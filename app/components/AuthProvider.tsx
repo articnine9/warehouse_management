@@ -8,12 +8,13 @@ import {
   useState,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { canWrite } from "@/lib/permissions";
 
 export type SessionUser = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "STAFF";
+  role: "ADMIN" | "STAFF" | "VIEWER";
   status: "ACTIVE" | "INACTIVE";
   warehouse: {
     id: string;
@@ -96,4 +97,9 @@ export function useAuth() {
   }
 
   return context;
+}
+
+// Standalone PDF rendering has no authenticated UI context and needs no actions.
+export function useCanWrite() {
+  return canWrite(useContext(AuthContext)?.user?.role);
 }

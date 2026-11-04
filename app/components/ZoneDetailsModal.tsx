@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { useEffect, useState } from "react";
 import {
@@ -229,16 +231,16 @@ export default function ZoneDetailsModal({
 
           <div className="flex items-center gap-2 shrink-0">
             {data && onEditZone && (
-              <button
+              <WriteAccess><button
                 type="button"
                 onClick={() => onEditZone(data.zone)}
                 className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
               >
                 Edit
-              </button>
+              </button></WriteAccess>
             )}
             {data && isAdmin && (
-              <button
+              <WriteAccess><button
                 type="button"
                 onClick={() => {
                   setDeleteConfirm({
@@ -252,7 +254,7 @@ export default function ZoneDetailsModal({
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
-              </button>
+              </button></WriteAccess>
             )}
             <button
               type="button"
@@ -357,7 +359,7 @@ export default function ZoneDetailsModal({
                         </span>
                         <div className="flex items-center gap-1.5">
                           {isAdmin && (
-                            <button
+                            <WriteAccess><button
                               type="button"
                               onClick={() => {
                                 setDeleteConfirm({
@@ -370,7 +372,7 @@ export default function ZoneDetailsModal({
                               title="Delete Rack"
                             >
                               <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            </button></WriteAccess>
                           )}
                           <span
                             className={`h-2 w-2 rounded-full ${
@@ -445,7 +447,7 @@ export default function ZoneDetailsModal({
               )}
 
               <div className="mt-6 flex justify-end gap-2.5">
-                <button
+                <WriteAccess><button
                   type="button"
                   onClick={() => {
                     setDeleteConfirm(null);
@@ -455,8 +457,8 @@ export default function ZoneDetailsModal({
                   className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Cancel
-                </button>
-                <button
+                </button></WriteAccess>
+                <WriteAccess><button
                   type="button"
                   onClick={handleDeleteExecute}
                   disabled={deleteLoading}
@@ -464,7 +466,7 @@ export default function ZoneDetailsModal({
                 >
                   {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {deleteLoading ? "Deleting..." : "Confirm Delete"}
-                </button>
+                </button></WriteAccess>
               </div>
             </div>
           </div>

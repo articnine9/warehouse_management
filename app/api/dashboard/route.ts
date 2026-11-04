@@ -14,6 +14,7 @@ import User from "@/models/User";
 import Warehouse from "@/models/Warehouse";
 import { getServiceCycleInfo } from "@/lib/serviceCycle";
 import { resolveProductType } from "@/lib/productType";
+import { productStockSummaryPipeline } from "@/lib/productStock";
 
 type ServiceAlert = {
   issueId: string;
@@ -252,15 +253,13 @@ export async function GET() {
 
     const user = await requireSessionUser();
 
-    if (user.role === "ADMIN") {
+    if (user.role === "ADMIN" || user.role === "VIEWER") {
       const [
         warehouseCount,
         categoryCount,
         rackCount,
         productCount,
         inventoryItems,
-        lowStockCount,
-        outOfStockCount,
         staffCount,
         serviceAlerts,
         reusableAlerts,
@@ -270,33 +269,24 @@ export async function GET() {
         Category.countDocuments(),
         Rack.countDocuments(),
         Product.countDocuments(),
-        Inventory.aggregate([
-          {
-            $group: {
-              _id: null,
-              totalQuantity: { $sum: "$quantity" },
-            },
-          },
-        ]),
-        Inventory.countDocuments({
-          status: "LOW_STOCK",
-        }),
-        Inventory.countDocuments({
-          status: "OUT_OF_STOCK",
-        }),
+        Inventory.aggregate(productStockSummaryPipeline()),
         User.countDocuments({ role: "STAFF" }),
         buildServiceAlerts(),
         buildReusableAlerts(),
         buildStockAlerts(),
       ]);
 
+      const lowStockCount = inventoryItems[0]?.lowStockCount ?? 0;
+      const outOfStockCount = (inventoryItems[0]?.outOfStockCount ?? 0) +
+        Math.max(0, productCount - (inventoryItems[0]?.distinctProducts ?? 0));
+
       return Response.json({
         success: true,
-        role: "ADMIN",
+        role: user.role,
         data: {
           user: toSafeUser(user),
           metrics: [
-            { label: "Staff", value: staffCount },
+            ...(user.role === "ADMIN" ? [{ label: "Staff", value: staffCount }] : []),
             { label: "Warehouses", value: warehouseCount },
             { label: "Racks", value: rackCount },
             { label: "Categories", value: categoryCount },
@@ -332,35 +322,12 @@ export async function GET() {
 
     const [
       inventoryItems,
-      lowStockCount,
-      outOfStockCount,
       lowStockItems,
-      distinctProducts,
       serviceAlerts,
       reusableAlerts,
       stockAlerts,
     ] = await Promise.all([
-      Inventory.aggregate([
-        {
-          $match: {
-            warehouseId: { $in: warehouseIds },
-          },
-        },
-        {
-          $group: {
-            _id: null,
-            totalQuantity: { $sum: "$quantity" },
-          },
-        },
-      ]),
-      Inventory.countDocuments({
-        warehouseId: { $in: warehouseIds },
-        status: "LOW_STOCK",
-      }),
-      Inventory.countDocuments({
-        warehouseId: { $in: warehouseIds },
-        status: "OUT_OF_STOCK",
-      }),
+      Inventory.aggregate(productStockSummaryPipeline(warehouseIds)),
       Inventory.find({
         warehouseId: { $in: warehouseIds },
         status: { $in: ["LOW_STOCK", "OUT_OF_STOCK"] },
@@ -369,11 +336,13 @@ export async function GET() {
         .populate("rackId", "name code")
         .sort({ quantity: 1 })
         .limit(5),
-      Inventory.distinct("productId", { warehouseId: { $in: warehouseIds } }),
       buildServiceAlerts(warehouseIds),
       buildReusableAlerts(warehouseIds),
       buildStockAlerts(warehouseIds),
     ]);
+
+    const lowStockCount = inventoryItems[0]?.lowStockCount ?? 0;
+    const outOfStockCount = inventoryItems[0]?.outOfStockCount ?? 0;
 
     return Response.json({
       success: true,
@@ -382,7 +351,7 @@ export async function GET() {
         user: toSafeUser(user),
         metrics: [
           { label: "Assigned Warehouse", value: warehouse?.name || "-" },
-          { label: "Products in Warehouse", value: distinctProducts.length },
+          { label: "Products in Warehouse", value: inventoryItems[0]?.distinctProducts ?? 0 },
           { label: "Total Units", value: inventoryItems[0]?.totalQuantity ?? 0 },
           { label: "Low Stock", value: lowStockCount },
           { label: "Out of Stock", value: outOfStockCount },

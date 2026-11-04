@@ -1,3 +1,4 @@
+import { requireWriteUser } from "@/lib/auth";
 import { NextRequest } from "next/server";
 import { connectDB } from "@/lib/mongodb";
 import Inventory from "@/models/Inventory";
@@ -91,6 +92,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await connectDB();
+    await requireWriteUser();
 
     void Product;
     void Warehouse;
@@ -298,6 +300,9 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return Response.json({ success: false, message: "This account has view-only access" }, { status: 403 });
+    }
     console.error("POST /api/billing error:", error);
     return Response.json(
       {

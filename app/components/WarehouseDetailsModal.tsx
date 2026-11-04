@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 import ProductTypeBadge from "./ProductTypeBadge";
 
 import { useEffect, useState } from "react";
@@ -248,7 +250,7 @@ export default function WarehouseDetailsModal({
 
           <div className="flex items-center gap-2 shrink-0">
             {data && onEditWarehouse && (
-              <button
+              <WriteAccess><button
                 type="button"
                 onClick={() => {
                   onEditWarehouse(data.warehouse);
@@ -256,10 +258,10 @@ export default function WarehouseDetailsModal({
                 className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition shadow-2xs cursor-pointer"
               >
                 Edit
-              </button>
+              </button></WriteAccess>
             )}
             {data && isAdmin && (
-              <button
+              <WriteAccess><button
                 type="button"
                 onClick={() => {
                   setDeleteConfirm({
@@ -273,7 +275,7 @@ export default function WarehouseDetailsModal({
               >
                 <Trash2 className="h-3.5 w-3.5" />
                 Delete
-              </button>
+              </button></WriteAccess>
             )}
             <button
               type="button"
@@ -414,7 +416,7 @@ export default function WarehouseDetailsModal({
               </div>
 
               {activeTab === "ZONES" && onAddZone && (
-                <button
+                <WriteAccess><button
                   type="button"
                   onClick={() => {
                     onClose();
@@ -423,11 +425,11 @@ export default function WarehouseDetailsModal({
                   className="hidden sm:inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700 transition shadow-2xs cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add Zone
-                </button>
+                </button></WriteAccess>
               )}
 
               {activeTab === "RACKS" && onAddRack && (
-                <button
+                <WriteAccess><button
                   type="button"
                   onClick={() => {
                     onClose();
@@ -436,7 +438,7 @@ export default function WarehouseDetailsModal({
                   className="hidden sm:inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700 transition shadow-2xs cursor-pointer"
                 >
                   <Plus className="h-3.5 w-3.5" /> Add Rack
-                </button>
+                </button></WriteAccess>
               )}
             </div>
 
@@ -448,7 +450,7 @@ export default function WarehouseDetailsModal({
                     <Layers className="h-8 w-8 text-slate-300 mx-auto" />
                     <p>No zones / rooms configured for this warehouse yet.</p>
                     {onAddZone && (
-                      <button
+                      <WriteAccess><button
                         type="button"
                         onClick={() => {
                           onClose();
@@ -457,7 +459,7 @@ export default function WarehouseDetailsModal({
                         className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-violet-700"
                       >
                         <Plus className="h-3.5 w-3.5" /> Create First Zone
-                      </button>
+                      </button></WriteAccess>
                     )}
                   </div>
                 ) : (
@@ -500,7 +502,7 @@ export default function WarehouseDetailsModal({
                           </span>
                           <div className="flex items-center gap-2">
                             {isAdmin && (
-                              <button
+                              <WriteAccess><button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -515,7 +517,7 @@ export default function WarehouseDetailsModal({
                               >
                                 <Trash2 className="h-3 w-3" />
                                 Delete
-                              </button>
+                              </button></WriteAccess>
                             )}
                             <span className="text-violet-600 font-bold inline-flex items-center gap-0.5 text-[11px] group-hover:translate-x-0.5 transition">
                               View Zone &rarr;
@@ -536,7 +538,7 @@ export default function WarehouseDetailsModal({
                   <div className="p-8 text-center text-xs text-slate-400 border border-dashed rounded-xl space-y-2">
                     <p>No storage racks created for this warehouse yet.</p>
                     {onAddRack && (
-                      <button
+                      <WriteAccess><button
                         type="button"
                         onClick={() => {
                           onClose();
@@ -545,7 +547,7 @@ export default function WarehouseDetailsModal({
                         className="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700"
                       >
                         <Plus className="h-3.5 w-3.5" /> Create First Rack
-                      </button>
+                      </button></WriteAccess>
                     )}
                   </div>
                 ) : (
@@ -610,7 +612,7 @@ export default function WarehouseDetailsModal({
                             <td className="p-3 text-right">
                               <div className="flex items-center justify-end gap-1.5">
                                 {isAdmin && (
-                                  <button
+                                  <WriteAccess><button
                                     type="button"
                                     onClick={() => {
                                       setDeleteConfirm({
@@ -623,7 +625,7 @@ export default function WarehouseDetailsModal({
                                     title="Delete Rack"
                                   >
                                     <Trash2 className="h-3 w-3" /> Delete
-                                  </button>
+                                  </button></WriteAccess>
                                 )}
                                 {onSelectRack && (
                                   <button
@@ -710,7 +712,7 @@ export default function WarehouseDetailsModal({
                             </td>
                             {isAdmin && (
                               <td className="p-3 text-right">
-                                <button
+                                <WriteAccess><button
                                   type="button"
                                   onClick={() => {
                                     setDeleteConfirm({
@@ -723,7 +725,7 @@ export default function WarehouseDetailsModal({
                                   title="Delete Inventory"
                                 >
                                   <Trash2 className="h-3 w-3" /> Delete
-                                </button>
+                                </button></WriteAccess>
                               </td>
                             )}
                           </tr>
@@ -804,7 +806,7 @@ export default function WarehouseDetailsModal({
               )}
 
               <div className="mt-6 flex justify-end gap-2.5">
-                <button
+                <WriteAccess><button
                   type="button"
                   onClick={() => {
                     setDeleteConfirm(null);
@@ -814,8 +816,8 @@ export default function WarehouseDetailsModal({
                   className="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
                 >
                   Cancel
-                </button>
-                <button
+                </button></WriteAccess>
+                <WriteAccess><button
                   type="button"
                   onClick={handleDeleteExecute}
                   disabled={deleteLoading}
@@ -823,7 +825,7 @@ export default function WarehouseDetailsModal({
                 >
                   {deleteLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                   {deleteLoading ? "Deleting..." : "Confirm Delete"}
-                </button>
+                </button></WriteAccess>
               </div>
             </div>
           </div>

@@ -60,6 +60,8 @@ const iconMap: Record<string, React.ReactNode> = {
   "Stock Movements": <ArrowLeftRight className="h-4 w-4" />,
   Staff: <Users className="h-4 w-4" />,
   "Staff Management": <Users className="h-4 w-4" />,
+  "Login Accounts": <Users className="h-4 w-4" />,
+  Browse: <Settings className="h-4 w-4" />,
   "My Warehouse": <Warehouse className="h-4 w-4" />,
   Warehouse: <Warehouse className="h-4 w-4" />,
   Home: <LayoutDashboard className="h-4 w-4" />,
@@ -135,12 +137,12 @@ export default function Sidebar() {
           { name: "Stock Movements", path: "/movements" },
           // { name: "Billing", path: "/billing" },
           // { name: "Search", path: "/search" },
-          { name: "Staff Management", path: "/staff" },
+          { name: "Login Accounts", path: "/staff" },
         ]
       : [
           { name: "Dashboard", path: "/dashboard" },
           {
-            name: "Add & Modify",
+            name: user.role === "VIEWER" ? "Browse" : "Add & Modify",
             children: [
               { name: "Warehouses", path: "/warehouses" },
               { name: "Zones", path: "/zones" },

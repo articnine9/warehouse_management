@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
 import { FolderTree, History, Warehouse as WarehouseIcon, Plus, Layers, Box, Trash2, X, AlertTriangle, ArrowRightLeft, PackageCheck } from "lucide-react";
@@ -11,6 +13,7 @@ import WarningPopup from "@/app/components/WarningPopup";
 import AddProductModal from "@/app/components/AddProductModal";
 import AddCategoryModal from "@/app/components/AddCategoryModal";
 import ProductHistoryModal from "@/app/components/ProductHistoryModal";
+import ProductsExcelExportButton from "@/app/components/ProductsExcelExportButton";
 import MoveProductModal from "@/app/components/MoveProductModal";
 import {
   CUSTOM_INTERVAL_VALUE,
@@ -602,13 +605,14 @@ export default function ProductsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <button
+            <ProductsExcelExportButton />
+            <WriteAccess><button
               type="button"
               onClick={() => setIsAddModalOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition"
             >
               <Plus className="h-4 w-4" /> Add Product
-            </button>
+            </button></WriteAccess>
             <Link
               href="/categories"
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 self-start sm:self-auto"
@@ -723,7 +727,7 @@ export default function ProductsPage() {
         </div>
 
         {/* Add Product Modal */}
-        <AddProductModal
+        <WriteAccess><AddProductModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
           categories={categories}
@@ -735,7 +739,7 @@ export default function ProductsPage() {
           onWarehousesChanged={() => void fetchWarehouses()}
           onZonesChanged={() => void fetchZones()}
           onRacksChanged={() => void fetchRacks()}
-        />
+        /></WriteAccess>
 
         {/* Product list */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -955,34 +959,34 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex items-center gap-1.5">
-                          <Link
+                          <WriteAccess><Link
                             href={`/employee-issues?pId=${encodeURIComponent(product._id)}`}
                             className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-2.5 py-1 text-xs font-semibold shadow-2xs transition active:scale-95"
                             title="Issue this product to user"
                           >
                             <PackageCheck className="h-3.5 w-3.5" /> Issue
-                          </Link>
-                          <button
+                          </Link></WriteAccess>
+                          <WriteAccess><button
                             type="button"
                             onClick={() => { setMoveSuccess(""); setMoveProduct(product); }}
                             disabled={!product.locations?.some((location) => location.inventoryId)}
                             className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
                           >
                             <ArrowRightLeft className="h-3.5 w-3.5" /> Move
-                          </button>
-                          <button
+                          </button></WriteAccess>
+                          <WriteAccess><button
                             onClick={() => openEdit(product)}
                             className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                           >
                             Edit
-                          </button>
+                          </button></WriteAccess>
                           {isAdmin && (
-                            <button
+                            <WriteAccess><button
                               onClick={() => setDeleteId(product._id)}
                               className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
                             >
                               Delete
-                            </button>
+                            </button></WriteAccess>
                           )}
                         </div>
                       </td>
@@ -1115,34 +1119,34 @@ export default function ProductsPage() {
                   </div>
 
                   <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                    <Link
+                    <WriteAccess><Link
                       href={`/employee-issues?pId=${encodeURIComponent(product._id)}`}
                       className="inline-flex items-center gap-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-semibold shadow-2xs transition active:scale-95"
                       title="Issue this product to user"
                     >
                       <PackageCheck className="h-3.5 w-3.5" /> Issue
-                    </Link>
-                    <button
+                    </Link></WriteAccess>
+                    <WriteAccess><button
                       type="button"
                       onClick={() => { setMoveSuccess(""); setMoveProduct(product); }}
                       disabled={!product.locations?.some((location) => location.inventoryId)}
                       className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
                     >
                       <ArrowRightLeft className="h-3.5 w-3.5" /> Move
-                    </button>
-                    <button
+                    </button></WriteAccess>
+                    <WriteAccess><button
                       onClick={() => openEdit(product)}
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                     >
                       Edit
-                    </button>
+                    </button></WriteAccess>
                     {isAdmin && (
-                      <button
+                      <WriteAccess><button
                         onClick={() => setDeleteId(product._id)}
                         className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
                       >
                         Delete
-                      </button>
+                      </button></WriteAccess>
                     )}
                   </div>
                 </div>
@@ -1236,7 +1240,7 @@ export default function ProductsPage() {
               </div>
 
               {/* Form Body with Controlled Scrolling */}
-              <form onSubmit={handleEditSubmit} className="flex-1 overflow-y-auto flex flex-col justify-between">
+              <WriteAccess><form onSubmit={handleEditSubmit} className="flex-1 overflow-y-auto flex flex-col justify-between">
                 <div className="p-4 sm:p-5 space-y-4">
                   {/* ─── TAB 1: PRODUCT DETAILS ─── */}
                   {activeEditTab === "DETAILS" && (
@@ -1633,7 +1637,7 @@ export default function ProductsPage() {
                     </button>
                   </div>
                 </div>
-              </form>
+              </form></WriteAccess>
             </div>
           </div>
         )}
@@ -1650,19 +1654,19 @@ export default function ProductsPage() {
                 undone.
               </p>
               <div className="mt-5 flex gap-3">
-                <button
+                <WriteAccess><button
                   onClick={handleDelete}
                   disabled={deleteLoading}
                   className="flex-1 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
                 >
                   {deleteLoading ? "Deleting..." : "Delete"}
-                </button>
-                <button
+                </button></WriteAccess>
+                <WriteAccess><button
                   onClick={() => setDeleteId(null)}
                   className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                 >
                   Cancel
-                </button>
+                </button></WriteAccess>
               </div>
             </div>
           </div>
@@ -1672,7 +1676,7 @@ export default function ProductsPage() {
       {moveSuccess && <div role="status" className="fixed bottom-5 right-5 z-40 flex max-w-sm items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800 shadow-lg">{moveSuccess}<button type="button" aria-label="Dismiss move confirmation" onClick={() => setMoveSuccess("")}><X className="h-4 w-4" /></button></div>}
 
       {moveProduct && (
-        <MoveProductModal
+        <WriteAccess><MoveProductModal
           key={moveProduct._id}
           product={moveProduct}
           zones={zones}
@@ -1683,7 +1687,7 @@ export default function ProductsPage() {
             setMoveProduct(null);
             void fetchProducts();
           }}
-        />
+        /></WriteAccess>
       )}
 
       <WarningPopup
@@ -1692,7 +1696,7 @@ export default function ProductsPage() {
         onClose={() => setWarningOpen(false)}
       />
 
-      <AddCategoryModal
+      <WriteAccess><AddCategoryModal
         isOpen={isEditCategoryModalOpen}
         onClose={() => setIsEditCategoryModalOpen(false)}
         onSuccess={(newCat) => {
@@ -1700,7 +1704,7 @@ export default function ProductsPage() {
           setEditCategory(newCat.name);
         }}
         zIndex="z-[70]"
-      />
+      /></WriteAccess>
 
       {historyProductId && (
         <ProductHistoryModal

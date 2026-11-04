@@ -10,11 +10,13 @@ const compiled = (file) => ts.transpileModule(readFileSync(new URL(file, import.
 }).outputText;
 const editSource = compiled("../app/api/products/[id]/route.ts");
 const productsSource = compiled("../app/api/products/route.ts");
+const productStock = {};
+new Function("exports", compiled("../lib/productStock.ts"))(productStock);
 
 function setup(options = {}) {
   const writes = [];
   const product = { _id: ids.product, name: "Drill [XL]", sku: "TOOL-1", category: "Tools", sellerName: "Vendor", price: 100 };
-  const inventory = { _id: ids.inventory, productId: ids.product, warehouseId: options.sourceWarehouse || ids.warehouse, rackId: ids.oldRack, quantity: 12, async save() { writes.push(["inventory", { ...this }]); } };
+  const inventory = { _id: ids.inventory, productId: ids.product, warehouseId: options.sourceWarehouse || ids.warehouse, rackId: options.missingRack ? undefined : options.nullRack ? null : ids.oldRack, quantity: 12, async save() { writes.push(["inventory", { ...this }]); } };
   const models = {
     Product: {
       findById: () => ({ lean: async () => product }),
@@ -34,7 +36,7 @@ function setup(options = {}) {
       findOne: async (filter) => filter._id === ids.inventory ? (options.foreignInventory ? null : inventory) : (options.occupied ? inventory : null),
       findById: async () => inventory,
       findOneAndUpdate: async (filter, update) => {
-        assert.equal(filter.rackId, ids.oldRack);
+        assert.equal(filter.rackId, inventory.rackId ?? null);
         assert.equal(filter.productId, ids.product);
         if (options.concurrentMove) return null;
         writes.push(["move", update]);
@@ -46,7 +48,10 @@ function setup(options = {}) {
         return query;
       },
     },
-    Rack: { findOne: async (filter) => options.invalidRack || (filter.zoneId && options.wrongZone) ? null : { _id: ids.rack, name: "Rack B", warehouseId: ids.warehouse, zoneId: options.wrongZone ? ids.category : ids.zone } },
+    Rack: {
+      exists: async () => options.deletedRack ? null : { _id: ids.oldRack },
+      findOne: async (filter) => options.invalidRack || (filter.zoneId && options.wrongZone) ? null : { _id: ids.rack, name: "Rack B", warehouseId: ids.warehouse, zoneId: options.wrongZone ? ids.category : ids.zone },
+    },
     Zone: { findOne: async () => ({ _id: ids.zone }) },
     Warehouse: { findById: async () => ({ _id: ids.warehouse, name: "Main" }) },
     Category: { findOne: async () => ({ _id: ids.category }) },
@@ -54,6 +59,7 @@ function setup(options = {}) {
     StockMovement: { create: async (values) => { writes.push(["movement", values]); } },
   };
   const modules = {
+    "@/lib/productStock": productStock,
     mongoose: { isValidObjectId },
     "@/lib/mongodb": { connectDB: async () => {} },
     "@/lib/auth": {
@@ -196,10 +202,48 @@ test("dedicated Move rejects stale source, unchanged rack and malformed selectio
     [{ rackId: ids.oldRack }, 400],
     [{ rackId: "" }, 400],
     [{ inventoryId: null }, 400],
+    [{ sourceRackId: "" }, 409],
+    [{ sourceRackId: null }, 409],
+    [{ sourceRackId: "invalid" }, 400],
+    [{ sourceRackId: undefined }, 400],
   ]) {
     const { edit, writes } = setup();
     const response = await edit.PATCH(request({ ...moveBody(), ...update }, "PATCH"), context);
     assert.equal(response.status, status);
+    assert.deepEqual(writes, []);
+  }
+});
+
+test("dedicated Move assigns stock from missing, null and deleted racks without changing quantity", async () => {
+  for (const options of [{ missingRack: true }, { nullRack: true }, { deletedRack: true }]) {
+    for (const sourceRackId of ["", null]) {
+      const { edit, writes, inventory } = setup(options);
+      inventory.quantity = 21;
+      const response = await edit.PATCH(request({ ...moveBody(), sourceRackId }, "PATCH"), context);
+      const result = await response.json();
+      assert.equal(response.status, 200, JSON.stringify({ options, result }));
+      assert.equal(result.data.quantity, 21);
+      assert.equal(result.data.rackId, ids.rack);
+      assert.deepEqual(writes.find(([type]) => type === "move")[1], { $set: { rackId: ids.rack } });
+      assert.equal(writes.some(([type]) => type === "product" || type === "movement"), false);
+      const history = writes.find(([type]) => type === "history")[1];
+      assert.equal(history.oldValues.locations[0].rackId, inventory.rackId ?? null);
+      assert.equal(history.newValues.locations[0].quantity, 21);
+    }
+  }
+});
+
+test("unassigned sources still enforce destination, access and concurrent move checks", async () => {
+  for (const [options, status] of [
+    [{ deletedRack: true, invalidRack: true }, 400],
+    [{ nullRack: true, wrongZone: true }, 400],
+    [{ missingRack: true, occupied: true }, 409],
+    [{ deletedRack: true, staff: true, sourceWarehouse: ids.otherWarehouse }, 403],
+    [{ deletedRack: true, concurrentMove: true }, 409],
+  ]) {
+    const { edit, writes } = setup(options);
+    const response = await edit.PATCH(request({ ...moveBody(), sourceRackId: "" }, "PATCH"), context);
+    assert.equal(response.status, status, JSON.stringify(options));
     assert.deepEqual(writes, []);
   }
 });

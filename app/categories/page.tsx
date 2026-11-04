@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useEffect, useState, useMemo } from "react";
 import { Plus } from "lucide-react";
@@ -177,21 +179,21 @@ export default function CategoriesPage() {
               Organize products into categories for easy filtering and tracking ({categories.length} total categories)
             </p>
           </div>
-          <button
+          <WriteAccess><button
             type="button"
             onClick={() => setIsAddModalOpen(true)}
             className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition self-start sm:self-auto"
           >
             <Plus className="h-4 w-4" /> Add Category
-          </button>
+          </button></WriteAccess>
         </div>
 
         {/* Modal for adding category */}
-        <AddCategoryModal
+        <WriteAccess><AddCategoryModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
           onSuccess={() => void fetchCategories()}
-        />
+        /></WriteAccess>
 
         {/* Category List */}
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
@@ -260,19 +262,19 @@ export default function CategoriesPage() {
                       </td>
                       <td className="px-5 py-3">
                         <div className="flex gap-2">
-                          <button
+                          <WriteAccess><button
                             onClick={() => openEdit(cat)}
                             className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                           >
                             Edit
-                          </button>
+                          </button></WriteAccess>
                           {isAdmin && (
-                            <button
+                            <WriteAccess><button
                               onClick={() => requestDelete(cat)}
                               className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50"
                             >
                               Delete
-                            </button>
+                            </button></WriteAccess>
                           )}
                         </div>
                       </td>
@@ -309,19 +311,19 @@ export default function CategoriesPage() {
                     <p className="mt-2 text-xs text-slate-600">{cat.description}</p>
                   )}
                   <div className="mt-3 flex gap-2">
-                    <button
+                    <WriteAccess><button
                       onClick={() => openEdit(cat)}
                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
                     >
                       Edit
-                    </button>
+                    </button></WriteAccess>
                     {isAdmin && (
-                      <button
+                      <WriteAccess><button
                         onClick={() => requestDelete(cat)}
                         className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-medium text-red-600 transition hover:bg-red-50"
                       >
                         Delete
-                      </button>
+                      </button></WriteAccess>
                     )}
                   </div>
                 </div>
@@ -354,7 +356,7 @@ export default function CategoriesPage() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
             <div className="w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-xl">
               <h3 className="text-lg font-semibold text-slate-800">Edit Category</h3>
-              <form onSubmit={handleEditSubmit} className="mt-5 space-y-3">
+              <WriteAccess><form onSubmit={handleEditSubmit} className="mt-5 space-y-3">
                 <input
                   type="text"
                   placeholder="Category name"
@@ -402,7 +404,7 @@ export default function CategoriesPage() {
                     Cancel
                   </button>
                 </div>
-              </form>
+              </form></WriteAccess>
             </div>
           </div>
         )}
@@ -418,19 +420,19 @@ export default function CategoriesPage() {
                   Are you sure you want to delete <b>{catToDelete?.name || "this category"}</b>?
                 </p>
                 <div className="mt-5 flex gap-3">
-                  <button
+                  <WriteAccess><button
                     onClick={handleDelete}
                     disabled={deleteLoading}
                     className="flex-1 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
                   >
                     {deleteLoading ? "Deleting..." : "Delete"}
-                  </button>
-                  <button
+                  </button></WriteAccess>
+                  <WriteAccess><button
                     onClick={() => setDeleteId(null)}
                     className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
                   >
                     Cancel
-                  </button>
+                  </button></WriteAccess>
                 </div>
               </div>
             </div>

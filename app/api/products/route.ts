@@ -1,5 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
-import { requireSessionUser } from "@/lib/auth";
+import { getUserWarehouseId, requireSessionUser } from "@/lib/auth";
+import { productStockStatus } from "@/lib/productStock";
+import type { ProductExportLocation } from "@/lib/productExportTypes";
 import Product from "@/models/Product";
 import ProductHistory from "@/models/ProductHistory";
 import Inventory from "@/models/Inventory";
@@ -11,7 +13,7 @@ import Category from "@/models/Category";
 export async function GET(request: Request) {
   try {
     await connectDB();
-    await requireSessionUser();
+    const user = await requireSessionUser();
     // Ensure models are registered for Mongoose population
     void Warehouse;
     void Zone;
@@ -20,7 +22,9 @@ export async function GET(request: Request) {
     void Inventory;
     void Category;
     const { searchParams } = new URL(request.url);
-    const checkNameParam = searchParams.get("checkName");
+    const exportView = searchParams.get("export") === "excel";
+    const stockView = exportView || searchParams.get("view") === "stock";
+    const checkNameParam = exportView ? null : searchParams.get("checkName");
     if (checkNameParam?.trim()) {
       const trimmed = checkNameParam.trim();
       const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -81,8 +85,8 @@ export async function GET(request: Request) {
       }
       return Response.json({ success: true, exists: false, products: [] });
     }
-    const query = searchParams.get("q") || searchParams.get("query") || searchParams.get("search");
-    const categoryParam = searchParams.get("category");
+    const query = exportView ? null : searchParams.get("q") || searchParams.get("query") || searchParams.get("search");
+    const categoryParam = exportView ? null : searchParams.get("category");
     const pageParam = searchParams.get("page");
     const limitParam = searchParams.get("limit");
     // Build filter
@@ -110,11 +114,11 @@ export async function GET(request: Request) {
       }
     }
     if (query?.trim()) {
-      const regex = { $regex: query.trim(), $options: "i" };
+      const regex = { $regex: query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
       const [matchingWarehouses, matchingZones, matchingRacks] = await Promise.all([
-        Warehouse.find({ name: regex }).select("_id"),
-        Zone.find({ name: regex }).select("_id"),
-        Rack.find({ name: regex }).select("_id"),
+        Warehouse.find({ $or: [{ name: regex }, { code: regex }] }).select("_id"),
+        Zone.find({ $or: [{ name: regex }, { code: regex }] }).select("_id"),
+        Rack.find({ $or: [{ name: regex }, { code: regex }] }).select("_id"),
       ]);
       const wIds = matchingWarehouses.map((w) => w._id);
       const zIds = matchingZones.map((z) => z._id);
@@ -132,6 +136,7 @@ export async function GET(request: Request) {
       let invProductIds: any[] = [];
       if (wIds.length || allRkIds.length) {
         const invs = await Inventory.find({
+          ...(stockView && user.role === "STAFF" ? { warehouseId: { $in: getUserWarehouseId(user) } } : {}),
           $or: [
             ...(wIds.length ? [{ warehouseId: { $in: wIds } }] : []),
             ...(allRkIds.length ? [{ rackId: { $in: allRkIds } }] : []),
@@ -156,29 +161,20 @@ export async function GET(request: Request) {
     const enrichProductsWithStock = async (productList: any[]) => {
       if (!productList.length) return [];
       const productIds = productList.map((p) => p._id);
-      const inventories = await Inventory.find({ productId: { $in: productIds } })
-        .populate("warehouseId", "name code")
+      const inventories = await Inventory.find({
+        productId: { $in: productIds },
+        ...(stockView && user.role === "STAFF" ? { warehouseId: { $in: getUserWarehouseId(user) } } : {}),
+      })
+        .populate("warehouseId", exportView ? "name code address status" : "name code")
         .populate({
           path: "rackId",
-          select: "name code zoneId",
+          select: exportView ? "name code zoneId status" : "name code zoneId",
           populate: {
             path: "zoneId",
-            select: "name code",
+            select: exportView ? "name code status" : "name code",
           },
         });
-      const invMap = new Map<
-        string,
-        Array<{
-          inventoryId?: string;
-          warehouseId: string;
-          warehouseName: string;
-          zoneId?: string;
-          zoneName?: string;
-          rackId: string;
-          rackName: string;
-          quantity: number;
-        }>
-      >();
+      const invMap = new Map<string, ProductExportLocation[]>();
       const stockMap = new Map<string, number>();
       for (const inv of inventories) {
         const pid = inv.productId.toString();
@@ -193,11 +189,24 @@ export async function GET(request: Request) {
           inventoryId: inv._id.toString(),
           warehouseId: w?._id?.toString() || "",
           warehouseName: w?.name || "Unassigned",
+          warehouseCode: w?.code || "",
           zoneId: z?._id?.toString() || (typeof r?.zoneId === "string" ? r.zoneId : ""),
           zoneName: z?.name || "",
           rackId: r?._id?.toString() || "",
           rackName: r?.name || "Unassigned",
+          rackCode: r?.code || "",
           quantity: inv.quantity || 0,
+          ...(exportView ? {
+            warehouseAddress: w?.address || "",
+            warehouseStatus: w?.status || "",
+            zoneCode: z?.code || "",
+            zoneStatus: z?.status || "",
+            rackStatus: r?.status || "",
+            status: productStockStatus(inv.quantity || 0),
+            recordedStatus: inv.status || "",
+            createdAt: inv.createdAt?.toISOString(),
+            updatedAt: inv.updatedAt?.toISOString(),
+          } : {}),
         });
         invMap.set(pid, list);
       }
@@ -207,10 +216,34 @@ export async function GET(request: Request) {
         return {
           ...obj,
           totalStock: stockMap.get(pid) || 0,
+          stockStatus: productStockStatus(stockMap.get(pid) || 0),
           locations: invMap.get(pid) || [],
         };
       });
     };
+    if (exportView) {
+      const rawProducts = await Product.find({}).populate("categoryId", "name code").sort({ name: 1, _id: 1 });
+      const products = (await enrichProductsWithStock(rawProducts)).filter((product) => user.role !== "STAFF" || product.locations.length > 0);
+      return Response.json({ success: true, data: products, count: products.length, export: {
+        generatedAt: new Date().toISOString(),
+        scope: user.role === "STAFF" ? "ASSIGNED_WAREHOUSES" : "ALL_WAREHOUSES",
+      } });
+    }
+    if (stockView) {
+      // Group and filter the complete product before pagination. A product in
+      // multiple racks must never consume several rows or cross page boundaries.
+      const rawProducts = await Product.find(filter).populate("categoryId", "name code").sort({ createdAt: -1, _id: -1 });
+      const status = searchParams.get("status") || "ALL";
+      const products = (await enrichProductsWithStock(rawProducts)).filter((product) =>
+        (user.role !== "STAFF" || product.locations.length > 0) &&
+        (status === "ALL" || (status === "LOW_OUT" ? product.stockStatus !== "AVAILABLE" : product.stockStatus === status))
+      );
+      const page = Math.max(1, Number.parseInt(pageParam || "1", 10) || 1);
+      const limit = Math.min(100, Math.max(1, Number.parseInt(limitParam || "5", 10) || 5));
+      return Response.json({ success: true, data: products.slice((page - 1) * limit, page * limit), pagination: {
+        total: products.length, page, limit, totalPages: Math.ceil(products.length / limit),
+      } });
+    }
     if (pageParam || limitParam) {
       const page = Math.max(1, parseInt(pageParam || "1", 10));
       const limit = Math.min(100, Math.max(1, parseInt(limitParam || "10", 10)));

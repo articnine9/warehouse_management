@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 import ProductTypeBadge from "@/app/components/ProductTypeBadge";
 
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
@@ -106,7 +108,7 @@ type LowStockItem = {
 };
 
 type DashboardSummary = {
-  role: "ADMIN" | "STAFF";
+  role: "ADMIN" | "STAFF" | "VIEWER";
   data: {
     metrics: Metric[];
     lowStockItems?: LowStockItem[];
@@ -485,7 +487,7 @@ export default function DashboardPage() {
               Dashboard
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              {user?.role === "ADMIN"
+              {user?.role !== "STAFF"
                 ? "Monitor warehouses, inventory stock, recurring maintenance alerts, returnable validities, and staff operations."
                 : "Track your assigned warehouse inventory, returnable returns, and equipment maintenance."}
             </p>
@@ -493,21 +495,21 @@ export default function DashboardPage() {
 
           {/* Quick Action Buttons */}
           <div className="flex items-center gap-2.5 flex-wrap">
-            <Link
+            <WriteAccess><Link
               href="/products?action=add"
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-2xs hover:bg-slate-50 hover:border-slate-300 hover:text-emerald-700 transition-all duration-200 cursor-pointer"
             >
               <Plus className="h-4 w-4 text-emerald-600" />
               <span>Add Product</span>
-            </Link>
+            </Link></WriteAccess>
 
-            <Link
+            <WriteAccess><Link
               href="/employee-issues"
               className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 active:scale-95 transition-all duration-200 cursor-pointer"
             >
               <PackageCheck className="h-4 w-4" />
               <span>Issue Product</span>
-            </Link>
+            </Link></WriteAccess>
           </div>
         </div>
 
@@ -624,7 +626,7 @@ export default function DashboardPage() {
                     : "bg-white text-slate-600 hover:bg-indigo-50 border border-slate-200"
                 }`}
               >
-                <RotateCcw className="h-3.5 w-3.5" /> Return / Renew ({reusableAlerts.length})
+                <RotateCcw className="h-3.5 w-3.5" /> {user?.role === "VIEWER" ? "Return History" : "Return / Renew"} ({reusableAlerts.length})
               </button>
               <button
                 type="button"
@@ -726,7 +728,7 @@ export default function DashboardPage() {
 
                         {/* Action Buttons Right */}
                         <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                          <button
+                          <WriteAccess><button
                             type="button"
                             onClick={() => {
                               setSelectedReusableAlert(alert);
@@ -737,14 +739,14 @@ export default function DashboardPage() {
                           >
                             <RefreshCw className="h-3.5 w-3.5" />
                             Renew
-                          </button>
-                          <button
+                          </button></WriteAccess>
+                          <WriteAccess><button
                             type="button"
                             onClick={() => void handleReturnItem(alert)}
                             className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition active:scale-95"
                           >
                             Return
-                          </button>
+                          </button></WriteAccess>
                         </div>
                       </div>
                     );
@@ -954,13 +956,13 @@ export default function DashboardPage() {
                   <RefreshCw className="h-5 w-5 text-indigo-600" />
                   <h3 className="font-bold text-slate-800 text-base">Extend / Renew Validity Period</h3>
                 </div>
-                <button
+                <WriteAccess><button
                   type="button"
                   onClick={() => setSelectedReusableAlert(null)}
                   className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
                 >
                   <X className="h-5 w-5" />
-                </button>
+                </button></WriteAccess>
               </div>
 
               <div className="mt-4 space-y-3.5">
@@ -1020,14 +1022,14 @@ export default function DashboardPage() {
                 </div>
 
                 <div className="flex items-center justify-end gap-2 pt-2">
-                  <button
+                  <WriteAccess><button
                     type="button"
                     onClick={() => setSelectedReusableAlert(null)}
                     className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </button></WriteAccess>
+                  <WriteAccess><button
                     type="button"
                     disabled={renewing}
                     onClick={() => void handleRenewItem()}
@@ -1035,7 +1037,7 @@ export default function DashboardPage() {
                   >
                     <Check className="h-4 w-4" />
                     {renewing ? "Extending..." : "Confirm Extension"}
-                  </button>
+                  </button></WriteAccess>
                 </div>
               </div>
             </div>

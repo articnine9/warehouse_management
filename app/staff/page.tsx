@@ -18,7 +18,7 @@ type StaffMember = {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "STAFF";
+  role: "ADMIN" | "STAFF" | "VIEWER";
   warehouse: { id: string; name: string; code: string; address?: string } | null;
   warehouses?: { id: string; name: string; code: string; address?: string }[];
   status?: "ACTIVE" | "INACTIVE";
@@ -70,7 +70,7 @@ function StaffContent() {
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
   const [addPassword, setAddPassword] = useState("");
-  const [addRole, setAddRole] = useState<"STAFF" | "ADMIN">("STAFF");
+  const [addRole, setAddRole] = useState<"STAFF" | "ADMIN" | "VIEWER">("STAFF");
   const [addWarehouseSelection, setAddWarehouseSelection] = useState<string>("ALL");
   const [addLoading, setAddLoading] = useState(false);
   const [showAddPassword, setShowAddPassword] = useState(false);
@@ -79,7 +79,7 @@ function StaffContent() {
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
-  const [editRole, setEditRole] = useState<"STAFF" | "ADMIN">("STAFF");
+  const [editRole, setEditRole] = useState<"STAFF" | "ADMIN" | "VIEWER">("STAFF");
   const [editWarehouseSelection, setEditWarehouseSelection] = useState<string>("ALL");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [editPassword, setEditPassword] = useState("");
@@ -407,9 +407,9 @@ function StaffContent() {
       {user?.role === "ADMIN" ? (
         <>
           <div>
-            <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Staff Management</h1>
+            <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Staff & Viewer Accounts</h1>
             <p className="mt-1 text-sm text-slate-500">
-              Create, manage, and edit staff accounts and their warehouse assignments ({staff.length} team members)
+              Manage login accounts, roles and warehouse assignments ({staff.length} accounts)
             </p>
           </div>
 
@@ -417,7 +417,7 @@ function StaffContent() {
           <div className="rounded-xl border border-slate-200 bg-white p-4 md:p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-4">
               <UserPlus className="h-5 w-5 text-blue-600" />
-              <h2 className="text-lg font-bold text-slate-800">Add New Staff Member</h2>
+              <h2 className="text-lg font-bold text-slate-800">Add Login Account</h2>
             </div>
 
             <form
@@ -476,11 +476,12 @@ function StaffContent() {
                   <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Role *</label>
                   <select
                     value={addRole}
-                    onChange={(e) => setAddRole(e.target.value as "STAFF" | "ADMIN")}
+                    onChange={(e) => setAddRole(e.target.value as "STAFF" | "ADMIN" | "VIEWER")}
                     className="w-full rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                   >
                     <option value="STAFF">STAFF (Warehouse Access)</option>
                     <option value="ADMIN">ADMIN (Full System Access)</option>
+                    <option value="VIEWER">VIEWER (View Only — All Warehouses)</option>
                   </select>
                 </div>
               </div>
@@ -497,9 +498,9 @@ function StaffContent() {
                     </span>
                   </div>
 
-                  {addRole === "ADMIN" ? (
+                  {addRole !== "STAFF" ? (
                     <p className="text-xs text-slate-500 italic">
-                      Administrators automatically have access to all warehouses.
+                      {addRole === "VIEWER" ? "Viewers can browse all warehouses, stock and history without making changes." : "Administrators automatically have access to all warehouses."}
                     </p>
                   ) : (
                     <div className="flex flex-wrap items-center gap-2 pt-0.5">
@@ -560,7 +561,7 @@ function StaffContent() {
                     disabled={addLoading}
                     className="h-[42px] rounded-lg bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.98] disabled:opacity-50"
                   >
-                    {addLoading ? "Creating Account..." : "+ Add Staff Account"}
+                    {addLoading ? "Creating Account..." : "+ Add Login Account"}
                   </button>
                 </div>
               </div>
@@ -613,7 +614,7 @@ function StaffContent() {
                           </span>
                         </td>
                         <td className="px-5 py-3 text-slate-600">
-                          {member.warehouses && member.warehouses.length > 1 ? (
+                          {member.role === "VIEWER" ? <span className="text-xs font-semibold text-slate-600">All warehouses · View only</span> : member.warehouses && member.warehouses.length > 1 ? (
                             <div className="flex flex-col gap-0.5">
                               <span className="inline-flex w-fit items-center rounded-md bg-purple-50 px-2 py-0.5 text-xs font-semibold text-purple-700 border border-purple-200">
                                 Both Warehouses
@@ -676,7 +677,7 @@ function StaffContent() {
                         {member.role}
                       </span>
                     </div>
-                    {member.warehouses && member.warehouses.length > 1 ? (
+                    {member.role === "VIEWER" ? <p className="mt-2 text-xs text-slate-600">All warehouses · View only</p> : member.warehouses && member.warehouses.length > 1 ? (
                       <p className="mt-2 text-xs text-slate-600">
                         Warehouse: <b className="text-purple-700">Both Warehouses</b>{" "}
                         <span className="text-slate-400">({member.warehouses.map((w) => w.code).join(", ")})</span>
@@ -770,11 +771,12 @@ function StaffContent() {
                       <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Role</label>
                       <select
                         value={editRole}
-                        onChange={(e) => setEditRole(e.target.value as "STAFF" | "ADMIN")}
+                        onChange={(e) => setEditRole(e.target.value as "STAFF" | "ADMIN" | "VIEWER")}
                         className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                       >
                         <option value="STAFF">STAFF</option>
                         <option value="ADMIN">ADMIN</option>
+                        <option value="VIEWER">VIEWER (View Only)</option>
                       </select>
                     </div>
 
@@ -801,9 +803,9 @@ function StaffContent() {
                       </span>
                     </div>
 
-                    {editRole === "ADMIN" ? (
+                    {editRole !== "STAFF" ? (
                       <p className="text-xs text-slate-500 italic p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-                        Administrators automatically have access to all warehouses.
+                        {editRole === "VIEWER" ? "Viewers can browse all warehouses, stock and history without making changes." : "Administrators automatically have access to all warehouses."}
                       </p>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2 pt-0.5">

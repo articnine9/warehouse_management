@@ -1,11 +1,15 @@
 import { connectDB } from "@/lib/mongodb";
-import { hashPassword, setSessionCookie, toSafeUser } from "@/lib/auth";
+import { hashPassword, requireSessionUser, toSafeUser } from "@/lib/auth";
 import User from "@/models/User";
 import Warehouse from "@/models/Warehouse";
 
 export async function POST(request: Request) {
   try {
     await connectDB();
+    const currentUser = await requireSessionUser();
+    if (currentUser.role !== "ADMIN") {
+      return Response.json({ success: false, message: "Only administrators can create login accounts" }, { status: 403 });
+    }
 
     const body = await request.json();
     const name = body.name?.trim();
@@ -88,13 +92,14 @@ export async function POST(request: Request) {
       .select("-passwordHash")
       .populate("warehouseIds", "name code");
 
-    await setSessionCookie(user._id.toString(), role);
-
     return Response.json({
       success: true,
       data: toSafeUser(populatedUser!),
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return Response.json({ success: false, message: "Not authenticated" }, { status: 401 });
+    }
     console.error("POST /api/auth/register error:", error);
 
     return Response.json(

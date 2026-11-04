@@ -19,7 +19,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     const { id } = await params;
     const { inventoryId, zoneId, rackId, sourceRackId } = await request.json();
-    if (![id, inventoryId, zoneId, rackId, sourceRackId].every((value) => typeof value === "string" && isValidObjectId(value))) {
+    const validSourceRack = sourceRackId === "" || sourceRackId === null ||
+      (typeof sourceRackId === "string" && isValidObjectId(sourceRackId));
+    if (![id, inventoryId, zoneId, rackId].every((value) => typeof value === "string" && isValidObjectId(value)) || !validSourceRack) {
       return Response.json({ success: false, message: "Select a valid source location, destination Zone and Rack" }, { status: 400 });
     }
     const inventory = await Inventory.findOne({ _id: inventoryId, productId: id });
@@ -29,10 +31,16 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     if (user.role === "STAFF" && !getUserWarehouseId(user).map(String).includes(String(inventory.warehouseId))) {
       return Response.json({ success: false, message: "You can only move products in your assigned warehouses" }, { status: 403 });
     }
-    if (String(inventory.rackId) !== sourceRackId) {
+    const currentRackId = inventory.rackId?.toString() || null;
+    // Population returns null for deleted rack references, which the UI shows
+    // as Unassigned. Accept that source only if it still has no existing rack.
+    const sourceChanged = sourceRackId
+      ? currentRackId !== sourceRackId
+      : currentRackId && await Rack.exists({ _id: currentRackId });
+    if (sourceChanged) {
       return Response.json({ success: false, message: "This product's location has changed. Refresh the product list and try again." }, { status: 409 });
     }
-    if (sourceRackId === rackId) {
+    if (currentRackId === rackId) {
       return Response.json({ success: false, message: "Select a different destination rack" }, { status: 400 });
     }
     const rack = await Rack.findOne({ _id: rackId, warehouseId: inventory.warehouseId, zoneId });
@@ -46,7 +54,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     }
     // Only change the rack; quantities and product details are never written by Move.
     const moved = await Inventory.findOneAndUpdate(
-      { _id: inventoryId, productId: id, warehouseId: inventory.warehouseId, rackId: sourceRackId },
+      { _id: inventoryId, productId: id, warehouseId: inventory.warehouseId, rackId: inventory.rackId ?? null },
       { $set: { rackId } },
       { new: true, runValidators: true }
     );
@@ -58,7 +66,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       action: "UPDATED",
       changedBy: user.id,
       changedFields: ["locations"],
-      oldValues: { locations: [{ inventoryId, warehouseId: String(inventory.warehouseId), rackId: sourceRackId, quantity: moved.quantity }] },
+      oldValues: { locations: [{ inventoryId, warehouseId: String(inventory.warehouseId), rackId: currentRackId, quantity: moved.quantity }] },
       newValues: { locations: [{ inventoryId, warehouseId: String(moved.warehouseId), zoneId, rackId, quantity: moved.quantity }] },
     });
     return Response.json({ success: true, data: moved, message: "Product moved successfully" });

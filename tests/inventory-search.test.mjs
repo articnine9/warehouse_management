@@ -53,6 +53,14 @@ function loadRoute(user = { role: "ADMIN" }) {
   return { GET: exports.GET, calls };
 }
 
+test("Viewer can browse stock in all warehouses without an assignment and filter a chosen warehouse", async () => {
+  const { GET, calls } = loadRoute({ role: "VIEWER", warehouseId: [] });
+  assert.equal((await GET(new Request("http://localhost/api/inventory"))).status, 200);
+  assert.equal(calls.filter.warehouseId, undefined);
+  assert.equal((await GET(new Request("http://localhost/api/inventory?warehouseId=warehouse-2"))).status, 200);
+  assert.equal(calls.filter.warehouseId, "warehouse-2");
+});
+
 test("search treats punctuation literally across product, rack, and warehouse fields", async () => {
   for (const term of ["Tool [XL]", "Cable (2m)", "A+B", "SKU.*", "[", "\\"]) {
     const { GET, calls } = loadRoute();

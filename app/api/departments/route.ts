@@ -1,3 +1,4 @@
+import { requireWriteUser } from "@/lib/auth";
 import { connectDB } from "@/lib/mongodb";
 import { requireSessionUser } from "@/lib/auth";
 import Department from "@/models/Department";
@@ -17,11 +18,12 @@ const INITIAL_DEPARTMENTS = [
 export async function GET() {
   try {
     await connectDB();
+    const user = await requireSessionUser();
 
     let departments = await Department.find().sort({ name: 1 });
 
     // Seed default departments if collection is empty
-    if (!departments || departments.length === 0) {
+    if (user.role !== "VIEWER" && (!departments || departments.length === 0)) {
       await Department.insertMany(INITIAL_DEPARTMENTS);
       departments = await Department.find().sort({ name: 1 });
     }
@@ -32,6 +34,9 @@ export async function GET() {
       count: departments.length,
     });
   } catch (error) {
+    if (error instanceof Error && error.message === "UNAUTHORIZED") {
+      return Response.json({ success: false, message: "Not authenticated" }, { status: 401 });
+    }
     console.error("GET /api/departments error:", error);
     return Response.json(
       {
@@ -47,7 +52,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    await requireSessionUser();
+    await requireWriteUser();
 
     const body = await request.json();
     const name = String(body.name || "").trim();
@@ -100,6 +105,9 @@ export async function POST(request: Request) {
       { status: 201 }
     );
   } catch (error) {
+    if (error instanceof Error && error.message === "FORBIDDEN") {
+      return Response.json({ success: false, message: "This account has view-only access" }, { status: 403 });
+    }
     console.error("POST /api/departments error:", error);
     return Response.json(
       {

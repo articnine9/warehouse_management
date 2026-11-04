@@ -1,4 +1,6 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
+
 
 import { FormEvent, useState, useEffect, useMemo } from "react";
 import { X, Layers, Loader2 } from "lucide-react";
@@ -135,7 +137,7 @@ export default function AddZoneModal({
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+          <WriteAccess><form onSubmit={handleSubmit} className="mt-4 space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
                 Warehouse <span className="text-red-500">*</span>
@@ -198,7 +200,7 @@ export default function AddZoneModal({
                 {loading ? "Adding..." : "+ Create Zone"}
               </button>
             </div>
-          </form>
+          </form></WriteAccess>
         </div>
       </div>
 

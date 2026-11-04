@@ -81,6 +81,7 @@ test("billing serializes real invoice lines and preserves snapshots over catalog
     { productId, productName: "Legacy drill", sku: "TOOL-2", quantity: 1, unitPrice: 10, total: 10 },
   ], subtotal: 30, grandTotal: 30 });
   const { GET } = load("../app/api/billing/route.ts", {
+    "@/lib/auth": { requireWriteUser: async () => ({ role: "ADMIN" }) },
     "@/lib/mongodb": { connectDB: async () => {} },
     "@/lib/productType": types,
     "@/models/Invoice": { find: () => ({ sort: async () => [invoice] }) },

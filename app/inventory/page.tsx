@@ -1,6 +1,8 @@
 "use client";
+import WriteAccess from "@/app/components/WriteAccess";
 
-import { FormEvent, useEffect, useState, useMemo, Suspense } from "react";
+
+import { FormEvent, Fragment, useEffect, useState, useMemo, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { AlertTriangle, Pencil, Eye, Trash2, Printer, X, Box, Plus, PackageCheck } from "lucide-react";
@@ -30,6 +32,13 @@ type Inventory = {
   rackId: Rack;
   quantity: number;
   status: "AVAILABLE" | "LOW_STOCK" | "OUT_OF_STOCK";
+};
+
+// One product together with every stock entry (rack location) it is stored in.
+type ProductGroup = {
+  product: Product;
+  entries: Inventory[];
+  totalQuantity: number;
 };
 
 function InventoryContent() {
@@ -336,11 +345,41 @@ function InventoryContent() {
     }
   }
 
-  // Counts for status cards
-  const availableCount = inventory.filter((i) => i.status === "AVAILABLE").length;
-  const lowStockCount = inventory.filter((i) => i.status === "LOW_STOCK").length;
-  const outOfStockCount = inventory.filter((i) => i.status === "OUT_OF_STOCK").length;
-  const lowOutCount = lowStockCount + outOfStockCount;
+  // A product kept in two racks is still one product, and a row whose product no
+  // longer exists is not a product at all. Every count on this page is therefore
+  // built from the distinct products behind the stock entries, never from the
+  // number of entry rows, so each card matches the list it opens.
+  const statusProductCounts = useMemo(() => {
+    const all = new Set<string>();
+    const available = new Set<string>();
+    const lowStock = new Set<string>();
+    const outOfStock = new Set<string>();
+    const lowOut = new Set<string>();
+
+    for (const item of inventory) {
+      const pid = item.productId?._id;
+      if (!pid) continue; // entry left behind by a deleted product
+      all.add(pid);
+      if (item.status === "AVAILABLE") available.add(pid);
+      if (item.status === "LOW_STOCK") lowStock.add(pid);
+      if (item.status === "OUT_OF_STOCK") outOfStock.add(pid);
+      if (item.status === "LOW_STOCK" || item.status === "OUT_OF_STOCK") lowOut.add(pid);
+    }
+
+    return {
+      ALL: all.size,
+      AVAILABLE: available.size,
+      LOW_STOCK: lowStock.size,
+      OUT_OF_STOCK: outOfStock.size,
+      LOW_OUT: lowOut.size,
+    };
+  }, [inventory]);
+
+  const distinctProductCount = statusProductCounts.ALL;
+  const availableCount = statusProductCounts.AVAILABLE;
+  const lowStockCount = statusProductCounts.LOW_STOCK;
+  const outOfStockCount = statusProductCounts.OUT_OF_STOCK;
+  const lowOutCount = statusProductCounts.LOW_OUT;
 
   // Filtered inventory list
   const filteredInventory = useMemo(() => {
@@ -385,11 +424,33 @@ function InventoryContent() {
     setCurrentPage(1);
   }, [statusFilter, selectedWarehouseFilter, searchQuery, pageSize]);
 
-  // Paginated records
-  const paginatedInventory = useMemo(() => {
+  // One entry in the list per product. Entries of the same product are grouped, so a
+  // product stored in two racks is one row holding both rack locations inside it.
+  const productGroups = useMemo(() => {
+    const groups = new Map<string, ProductGroup>();
+    for (const item of filteredInventory) {
+      const product = item.productId;
+      if (!product?._id) continue;
+      const existing = groups.get(product._id);
+      if (existing) {
+        existing.entries.push(item);
+        existing.totalQuantity += item.quantity || 0;
+      } else {
+        groups.set(product._id, {
+          product,
+          entries: [item],
+          totalQuantity: item.quantity || 0,
+        });
+      }
+    }
+    return Array.from(groups.values());
+  }, [filteredInventory]);
+
+  // Paginated products
+  const paginatedGroups = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
-    return filteredInventory.slice(start, start + pageSize);
-  }, [filteredInventory, currentPage, pageSize]);
+    return productGroups.slice(start, start + pageSize);
+  }, [productGroups, currentPage, pageSize]);
 
   const inputCls =
     "rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20";
@@ -400,16 +461,16 @@ function InventoryContent() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800 md:text-3xl">Inventory</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Manage and track product stock distribution across all warehouses and racks ({inventory.length} total entries)
+            Manage and track product stock distribution across all warehouses and racks ({distinctProductCount} total products)
           </p>
         </div>
-        <button
+        <WriteAccess><button
           type="button"
           onClick={() => setIsAddModalOpen(true)}
           className="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition self-start sm:self-auto"
         >
           <Plus className="h-4 w-4" /> Add Stock Entry
-        </button>
+        </button></WriteAccess>
       </div>
 
       {/* Stock Status Filter Cards */}
@@ -425,7 +486,7 @@ function InventoryContent() {
         >
           <p className="text-[11px] font-bold tracking-wider text-blue-900/80 uppercase">ALL</p>
           <p className="mt-1 text-sm font-bold text-blue-950">All Stock</p>
-          <p className="mt-1 text-2xl font-black text-blue-700">{inventory.length}</p>
+          <p className="mt-1 text-2xl font-black text-blue-700">{distinctProductCount}</p>
         </button>
 
         <button
@@ -486,7 +547,7 @@ function InventoryContent() {
       </div>
 
       {/* Modal for adding inventory / restock */}
-      <AddInventoryModal
+      <WriteAccess><AddInventoryModal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         products={products}
@@ -502,14 +563,14 @@ function InventoryContent() {
         onWarehousesChanged={() => void fetchWarehouses()}
         onZonesChanged={() => void fetchZones()}
         onRacksChanged={() => void fetchRacks()}
-      />
+      /></WriteAccess>
 
       {/* Inventory list */}
       <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="border-b border-slate-100 px-4 py-4 md:px-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-800">
-              Inventory Records ({filteredInventory.length})
+              Products ({productGroups.length})
             </h2>
             {statusFilter !== "ALL" && (
               <p className="text-xs text-blue-600 mt-0.5 font-medium">
@@ -554,7 +615,7 @@ function InventoryContent() {
         )}
 
         {/* Desktop table */}
-        {!fetching && paginatedInventory.length > 0 && (
+        {!fetching && paginatedGroups.length > 0 && (
           <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs font-medium uppercase text-slate-500">
@@ -568,19 +629,38 @@ function InventoryContent() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedInventory.map((item) => (
-                  <tr key={item._id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                    <td className="px-5 py-3 font-medium text-slate-800">
-                      <button
-                        type="button"
-                        onClick={() => setHistoryProductId(item.productId?._id || null)}
-                        className="font-semibold text-slate-800 hover:text-blue-600 hover:underline transition text-left block"
-                        title="Click to view complete product history"
+                {paginatedGroups.map((group) => (
+                  <Fragment key={group.product._id}>
+                    {group.entries.map((item, entryIndex) => (
+                      <tr
+                        key={item._id}
+                        className={`hover:bg-slate-50/50 ${
+                          entryIndex === 0
+                            ? "border-t border-slate-200"
+                            : "border-t border-dashed border-slate-100"
+                        }`}
                       >
-                        {item.productId?.name || "Unknown"}
-                      </button>
-                      <span className="text-xs text-slate-400">({item.productId?.sku || "-"})</span>
-                    </td>
+                        {entryIndex === 0 && (
+                          <td
+                            rowSpan={group.entries.length}
+                            className="border-r border-slate-100 px-5 py-3 align-top font-medium text-slate-800"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setHistoryProductId(group.product._id)}
+                              className="block text-left font-semibold text-slate-800 hover:text-blue-600 hover:underline transition"
+                              title="Click to view complete product history"
+                            >
+                              {group.product.name}
+                            </button>
+                            <span className="text-xs text-slate-400">({group.product.sku || "-"})</span>
+                            {group.entries.length > 1 && (
+                              <p className="mt-1 text-[11px] font-semibold text-blue-600">
+                                Kept in {group.entries.length} racks · {group.totalQuantity} units total
+                              </p>
+                            )}
+                          </td>
+                        )}
                     <td className="px-5 py-3 text-slate-600">{item.warehouseId?.name || "-"}</td>
                     <td className="px-5 py-3 text-slate-600">
                       {item.rackId?.name || "-"}{" "}
@@ -595,23 +675,23 @@ function InventoryContent() {
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1.5">
                         {item.productId?._id && (
-                          <Link
+                          <WriteAccess><Link
                             href={`/employee-issues?pId=${encodeURIComponent(item.productId._id)}`}
                             className="flex h-8 items-center gap-1 rounded-lg bg-blue-600 px-2.5 text-xs font-bold text-white shadow-2xs hover:bg-blue-700 transition active:scale-95"
                             title="Issue this product to user"
                           >
                             <PackageCheck className="h-3.5 w-3.5" />
                             <span className="hidden lg:inline">Issue</span>
-                          </Link>
+                          </Link></WriteAccess>
                         )}
-                        <button
+                        <WriteAccess><button
                           type="button"
                           onClick={() => openEdit(item)}
                           className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-blue-600 hover:bg-blue-50 transition shadow-2xs active:scale-95"
                           title="Update Stock Entry"
                         >
                           <Pencil className="h-4 w-4" />
-                        </button>
+                        </button></WriteAccess>
                         <button
                           type="button"
                           onClick={() => setViewingStockItem(item)}
@@ -621,18 +701,20 @@ function InventoryContent() {
                           <Eye className="h-4 w-4" />
                         </button>
                         {isAdmin && (
-                          <button
+                          <WriteAccess><button
                             type="button"
                             onClick={() => setDeleteId(item._id)}
                             className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-red-500 hover:bg-red-50 hover:text-red-700 transition shadow-2xs active:scale-95"
                             title="Delete Stock Entry"
                           >
                             <Trash2 className="h-4 w-4" />
-                          </button>
+                          </button></WriteAccess>
                         )}
-                      </div>
-                    </td>
-                  </tr>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
@@ -640,52 +722,70 @@ function InventoryContent() {
         )}
 
         {/* Mobile cards */}
-        {!fetching && paginatedInventory.length > 0 && (
+        {!fetching && paginatedGroups.length > 0 && (
           <div className="space-y-3 p-4 md:hidden">
-            {paginatedInventory.map((item) => (
-              <div key={item._id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
+            {paginatedGroups.map((group) => (
+              <div key={group.product._id} className="rounded-lg border border-slate-100 bg-slate-50/50 p-4">
                 <div className="flex items-start justify-between">
                   <div>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <button
                         type="button"
-                        onClick={() => setHistoryProductId(item.productId?._id || null)}
+                        onClick={() => setHistoryProductId(group.product._id)}
                         className="font-bold text-slate-800 text-left hover:text-blue-600 hover:underline"
                         title="Click to view complete product history"
                       >
-                        {item.productId?.name || "Unknown"}
+                        {group.product.name}
                       </button>
                     </div>
-                    <p className="mt-0.5 text-xs text-slate-500">{item.productId?.sku || "-"}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">{group.product.sku || "-"}</p>
                   </div>
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusBadge(item.status)}`}>
-                    {item.status.replace("_", " ")}
-                  </span>
+                  <div className="text-right">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                      Total {group.totalQuantity} units
+                    </p>
+                    <p className="text-[11px] font-semibold text-blue-600">
+                      {group.entries.length} rack {group.entries.length === 1 ? "location" : "locations"}
+                    </p>
+                  </div>
                 </div>
-                <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-                  <span>Warehouse: {item.warehouseId?.name || "-"}</span>
-                  <span>
-                    Rack: {item.rackId?.name || "-"} ({item.rackId?.code || "-"})
-                  </span>
-                  <span className="font-semibold text-slate-700">Qty: {item.quantity}</span>
-                </div>
-                <div className="mt-3 flex items-center gap-2 flex-wrap">
+
+                {/* Deep list: every rack location this product is stored in */}
+                <div className="mt-3 space-y-2">
+                  {group.entries.map((item) => (
+                    <div key={item._id} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="text-xs">
+                          <p className="font-semibold text-slate-700">
+                            Rack: {item.rackId?.name || "-"}{" "}
+                            <span className="text-slate-400">({item.rackId?.code || "-"})</span>
+                          </p>
+                          <p className="mt-0.5 text-slate-500">
+                            Warehouse: {item.warehouseId?.name || "-"}
+                          </p>
+                          <p className="mt-1 font-semibold text-slate-700">Qty: {item.quantity}</p>
+                        </div>
+                        <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${statusBadge(item.status)}`}>
+                          {item.status.replace("_", " ")}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
                   {item.productId?._id && (
-                    <Link
+                    <WriteAccess><Link
                       href={`/employee-issues?pId=${encodeURIComponent(item.productId._id)}`}
                       className="flex-1 rounded-lg bg-blue-600 text-white py-2 text-xs font-semibold hover:bg-blue-700 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
                       title="Issue this product to user"
                     >
                       <PackageCheck className="h-3.5 w-3.5" /> Issue
-                    </Link>
+                    </Link></WriteAccess>
                   )}
-                  <button
+                  <WriteAccess><button
                     type="button"
                     onClick={() => openEdit(item)}
                     className="flex-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-1.5 shadow-2xs active:scale-95"
                   >
                     <Pencil className="h-3.5 w-3.5" /> Update
-                  </button>
+                  </button></WriteAccess>
                   <button
                     type="button"
                     onClick={() => setViewingStockItem(item)}
@@ -694,15 +794,18 @@ function InventoryContent() {
                     <Eye className="h-3.5 w-3.5" /> View Slip
                   </button>
                   {isAdmin && (
-                    <button
+                    <WriteAccess><button
                       type="button"
                       onClick={() => setDeleteId(item._id)}
                       className="rounded-lg border border-slate-200 bg-white p-2 text-xs font-medium text-red-600 hover:bg-red-50 shadow-2xs active:scale-95"
                       title="Delete"
                     >
                       <Trash2 className="h-4 w-4" />
-                    </button>
+                    </button></WriteAccess>
                   )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             ))}
@@ -710,21 +813,22 @@ function InventoryContent() {
         )}
 
         {/* No results */}
-        {!fetching && filteredInventory.length === 0 && (
+        {!fetching && productGroups.length === 0 && (
           <div className="p-10 text-center text-sm text-slate-400">
-            No inventory records found matching your filters.
+            No products found matching your filters.
           </div>
         )}
 
         {/* Pagination Controls */}
-        {!fetching && filteredInventory.length > 0 && (
+        {!fetching && productGroups.length > 0 && (
           <Pagination
             currentPage={currentPage}
-            totalItems={filteredInventory.length}
+            totalItems={productGroups.length}
             pageSize={pageSize}
             onPageChange={(page) => setCurrentPage(page)}
             onPageSizeChange={(size) => setPageSize(size)}
             pageSizeOptions={[10, 25, 50, 100]}
+            itemLabel="products"
           />
         )}
       </div>
@@ -734,7 +838,7 @@ function InventoryContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-slate-200 bg-white p-5 md:p-6 shadow-xl">
             <h3 className="text-lg font-semibold text-slate-800">Edit Inventory</h3>
-            <form onSubmit={handleEditSubmit} className="mt-5 space-y-3">
+            <WriteAccess><form onSubmit={handleEditSubmit} className="mt-5 space-y-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Product</label>
                 <SearchableSelect
@@ -801,7 +905,7 @@ function InventoryContent() {
                   Cancel
                 </button>
               </div>
-            </form>
+            </form></WriteAccess>
           </div>
         </div>
       )}
@@ -815,19 +919,19 @@ function InventoryContent() {
               Are you sure you want to delete this inventory record? This action cannot be undone.
             </p>
             <div className="mt-5 flex gap-3">
-              <button
+              <WriteAccess><button
                 onClick={handleDelete}
                 disabled={deleteLoading}
                 className="flex-1 rounded-lg bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700 disabled:opacity-50"
               >
                 {deleteLoading ? "Deleting..." : "Delete"}
-              </button>
-              <button
+              </button></WriteAccess>
+              <WriteAccess><button
                 onClick={() => setDeleteId(null)}
                 className="flex-1 rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
               >
                 Cancel
-              </button>
+              </button></WriteAccess>
             </div>
           </div>
         </div>
