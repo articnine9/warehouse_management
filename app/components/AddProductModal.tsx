@@ -78,6 +78,7 @@ export default function AddProductModal({
   const [sellerName, setSellerName] = useState("");
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
+  const [conditionStatus, setConditionStatus] = useState<"GOOD_CONDITION" | "DAMAGED" | "SCRAP">("GOOD_CONDITION");
 
   // Warehouse, Zone & Rack storage allocation
   const [localZones, setLocalZones] = useState<ZoneItem[]>(zones || []);
@@ -477,6 +478,7 @@ export default function AddProductModal({
           sellerName: sellerName.trim() || undefined,
           price: price !== "" && !isNaN(Number(price)) ? Number(price) : 0,
           description: description.trim(),
+          conditionStatus,
           warehouseId,
           rackId,
           initialQuantity: Math.max(1, Number(initialQuantity) || 1),
@@ -513,6 +515,7 @@ export default function AddProductModal({
       setSellerName("");
       setPrice("");
       setDescription("");
+      setConditionStatus("GOOD_CONDITION");
       setWarehouseId("");
       setZoneId("");
       setRackId("");
@@ -713,6 +716,21 @@ export default function AddProductModal({
                   onChange={(e) => setDescription(e.target.value)}
                   className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
+                  Product Status
+                </label>
+                <select
+                  value={conditionStatus}
+                  onChange={(e) => setConditionStatus(e.target.value as "GOOD_CONDITION" | "DAMAGED" | "SCRAP")}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="GOOD_CONDITION">Good Condition</option>
+                  <option value="DAMAGED">Damaged</option>
+                  <option value="SCRAP">Scrap</option>
+                </select>
               </div>
             </div>
 

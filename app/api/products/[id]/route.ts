@@ -97,6 +97,10 @@ export async function PUT(
 
     const body = await request.json();
 
+    if (body.conditionStatus !== undefined && !["GOOD_CONDITION", "DAMAGED", "SCRAP"].includes(body.conditionStatus)) {
+      return Response.json({ success: false, message: "Select a valid product condition" }, { status: 400 });
+    }
+
     if (body.productType !== undefined && body.productType !== null && body.productType !== "" && body.productType !== "REUSABLE" && body.productType !== "NON_REUSABLE") {
       return Response.json({ success: false, message: "Select Returnable or Non-Returnable as the product type" }, { status: 400 });
     }
@@ -200,6 +204,7 @@ export async function PUT(
         price: body.price === "" || body.price === null ? 0 : body.price !== undefined && !isNaN(Number(body.price)) ? Number(body.price) : (oldProduct.price ?? 0),
         description: body.description,
         status: body.status,
+        conditionStatus: body.conditionStatus !== undefined ? body.conditionStatus : oldProduct.conditionStatus ?? "GOOD_CONDITION",
       },
       { new: true, runValidators: true }
     ).populate("categoryId", "name code");

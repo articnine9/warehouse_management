@@ -14,6 +14,10 @@ export async function GET(request: Request) {
   try {
     await connectDB();
     const user = await requireSessionUser();
+    await Product.updateMany(
+      { $or: [{ conditionStatus: { $exists: false } }, { conditionStatus: null }] },
+      { $set: { conditionStatus: "GOOD_CONDITION" } }
+    );
     // Ensure models are registered for Mongoose population
     void Warehouse;
     void Zone;
@@ -509,6 +513,7 @@ export async function POST(request: Request) {
       price: body.price !== undefined && body.price !== null && body.price !== "" && !isNaN(Number(body.price)) ? Number(body.price) : 0,
       description: body.description,
       status: body.status ?? "ACTIVE",
+      conditionStatus: body.conditionStatus ?? "GOOD_CONDITION",
     });
     // Create initial Inventory stock record if warehouse & rack were provided
     if (warehouseId && rackId && rackDoc) {

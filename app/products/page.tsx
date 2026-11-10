@@ -45,6 +45,7 @@ type Product = {
   price?: number;
   description?: string;
   status: "ACTIVE" | "INACTIVE";
+  conditionStatus?: "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
   totalStock?: number;
   locations?: ProductLocation[];
   createdAt?: string;
@@ -109,6 +110,7 @@ export default function ProductsPage() {
   const [editSellerName, setEditSellerName] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
+  const [editConditionStatus, setEditConditionStatus] = useState<"GOOD_CONDITION" | "DAMAGED" | "SCRAP">("GOOD_CONDITION");
   const [editLocations, setEditLocations] = useState<ProductLocation[]>([]);
   const [newLocWarehouseId, setNewLocWarehouseId] = useState("");
   const [newLocZoneId, setNewLocZoneId] = useState("");
@@ -406,6 +408,7 @@ export default function ProductsPage() {
     setEditSellerName(product.sellerName || "");
     setEditPrice(product.price?.toString() || "");
     setEditStatus(product.status);
+    setEditConditionStatus(product.conditionStatus || "GOOD_CONDITION");
     const enrichedLocations = (product.locations || []).map((l) => {
       let zId = l.zoneId;
       let zName = l.zoneName;
@@ -462,6 +465,7 @@ export default function ProductsPage() {
           price: editPrice !== "" && !isNaN(Number(editPrice)) ? Number(editPrice) : 0,
           description: editDescription,
           status: editStatus,
+          conditionStatus: editConditionStatus,
           locations: editLocations,
         }),
       });
@@ -1336,6 +1340,21 @@ export default function ProductsPage() {
                           >
                             <option value="ACTIVE">ACTIVE (Available for issuing)</option>
                             <option value="INACTIVE">INACTIVE (Hidden / Archived)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
+                            Product Condition
+                          </label>
+                          <select
+                            value={editConditionStatus}
+                            onChange={(e) => setEditConditionStatus(e.target.value as "GOOD_CONDITION" | "DAMAGED" | "SCRAP")}
+                            className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-semibold text-slate-800"
+                          >
+                            <option value="GOOD_CONDITION">Good Condition</option>
+                            <option value="DAMAGED">Damaged</option>
+                            <option value="SCRAP">Scrap</option>
                           </select>
                         </div>
 

@@ -14,6 +14,7 @@ export interface IProduct {
     price?: number;
     description?: string;
     status: "ACTIVE" | "INACTIVE";
+    conditionStatus: "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -96,6 +97,12 @@ const productSchema = new Schema<IProduct>(
             type: String,
             enum: ["ACTIVE", "INACTIVE"],
             default: "ACTIVE",
+        },
+
+        conditionStatus: {
+            type: String,
+            enum: ["GOOD_CONDITION", "DAMAGED", "SCRAP"],
+            default: "GOOD_CONDITION",
         },
     },
     {
