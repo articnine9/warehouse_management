@@ -1,6 +1,7 @@
 import { connectDB } from "@/lib/mongodb";
 import { getUserWarehouseId, requireSessionUser } from "@/lib/auth";
 import { productStockStatus } from "@/lib/productStock";
+import { validConditionQuantities } from "@/lib/productCondition";
 import type { ProductExportLocation } from "@/lib/productExportTypes";
 import Product from "@/models/Product";
 import ProductHistory from "@/models/ProductHistory";
@@ -492,6 +493,9 @@ export async function POST(request: Request) {
       );
     }
     const warehouseDoc = await Warehouse.findById(warehouseId);
+    if (body.conditionQuantities !== undefined && !validConditionQuantities(body.conditionQuantities, Number(initialQuantity) || 0)) {
+      return Response.json({ success: false, message: "Good, Damaged and Scrap quantities must be non-negative whole numbers and add up to initial stock." }, { status: 400 });
+    }
     let categoryId = body.categoryId;
     if (!categoryId && categoryName) {
       const catDoc = await Category.findOne({
@@ -514,6 +518,7 @@ export async function POST(request: Request) {
       description: body.description,
       status: body.status ?? "ACTIVE",
       conditionStatus: body.conditionStatus ?? "GOOD_CONDITION",
+      conditionQuantities: body.conditionQuantities,
     });
     // Create initial Inventory stock record if warehouse & rack were provided
     if (warehouseId && rackId && rackDoc) {

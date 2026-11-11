@@ -1,5 +1,7 @@
 "use client";
 import WriteAccess from "@/app/components/WriteAccess";
+import ProductCondition from "./ProductCondition";
+import type { ConditionQuantities } from "@/lib/productCondition";
 
 
 import { useEffect, useState, useMemo, useCallback } from "react";
@@ -49,6 +51,8 @@ import {
 
 export interface ProductHistoryData {
   product: {
+    conditionStatus?: "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
+    conditionQuantities?: ConditionQuantities;
     id: string;
     name: string;
     sku: string;
@@ -975,6 +979,8 @@ export default function ProductHistoryModal({
                         </div>
                       )}
                     </div>
+
+                    <ProductCondition product={product} total={data.summary.totalInStock} />
 
                     {/* Specifications 2-column grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 pt-2 border-t border-slate-100 text-xs">

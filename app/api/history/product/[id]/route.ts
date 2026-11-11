@@ -467,6 +467,8 @@ export async function GET(
         product: {
           id: product._id.toString(),
           name: product.name,
+          conditionStatus: product.conditionStatus,
+          conditionQuantities: product.conditionQuantities,
           sku: product.sku,
           category: product.category,
           price: product.price,

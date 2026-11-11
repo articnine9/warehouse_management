@@ -9,6 +9,7 @@ import Rack from "@/models/Rack";
 import StockMovement from "@/models/StockMovement";
 import Category from "@/models/Category";
 import Zone from "@/models/Zone";
+import { validConditionQuantities } from "@/lib/productCondition";
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -180,6 +181,18 @@ export async function PUT(
       }
     }
 
+    if (body.conditionQuantities !== undefined) {
+      const inventories = await Inventory.find({ productId: id });
+      let total = inventories.reduce((sum, inv) => sum + (inv.quantity || 0), 0);
+      for (const loc of body.locations || []) {
+        const existing = loc.inventoryId ? inventories.find(inv => String(inv._id) === String(loc.inventoryId)) : undefined;
+        total += Number(loc.quantity) - (existing?.quantity || 0);
+      }
+      if (!validConditionQuantities(body.conditionQuantities, total)) {
+        return Response.json({ success: false, message: `Good, Damaged and Scrap quantities must be non-negative whole numbers and add up to total stock (${total}). Refresh stock if it has changed.` }, { status: 400 });
+      }
+    }
+
     let categoryId = body.categoryId;
     const categoryName = body.category !== undefined ? String(body.category).trim() : oldProduct.category;
     if (!categoryId && categoryName) {
@@ -205,6 +218,7 @@ export async function PUT(
         description: body.description,
         status: body.status,
         conditionStatus: body.conditionStatus !== undefined ? body.conditionStatus : oldProduct.conditionStatus ?? "GOOD_CONDITION",
+        ...(body.conditionQuantities !== undefined ? { conditionQuantities: body.conditionQuantities } : {}),
       },
       { new: true, runValidators: true }
     ).populate("categoryId", "name code");

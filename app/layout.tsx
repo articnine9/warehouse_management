@@ -27,7 +27,8 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body>
+      {/* Browser extensions may add body attributes before React hydrates. */}
+      <body suppressHydrationWarning>
         <AuthProvider>
           <div className="flex min-h-screen flex-col md:flex-row">
             <Sidebar />

@@ -1,5 +1,7 @@
 "use client";
 import WriteAccess from "@/app/components/WriteAccess";
+import { ConditionQuantityFields } from "./ProductCondition";
+import { validConditionQuantities, type ConditionQuantities } from "@/lib/productCondition";
 
 
 import { FormEvent, useState, useMemo, useEffect, useCallback, useId, useRef } from "react";
@@ -78,7 +80,7 @@ export default function AddProductModal({
   const [sellerName, setSellerName] = useState("");
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
-  const [conditionStatus, setConditionStatus] = useState<"GOOD_CONDITION" | "DAMAGED" | "SCRAP">("GOOD_CONDITION");
+  const [conditionCounts, setConditionCounts] = useState<Pick<ConditionQuantities, "damaged" | "scrap">>({ damaged: 0, scrap: 0 });
 
   // Warehouse, Zone & Rack storage allocation
   const [localZones, setLocalZones] = useState<ZoneItem[]>(zones || []);
@@ -86,6 +88,10 @@ export default function AddProductModal({
   const [zoneId, setZoneId] = useState("");
   const [rackId, setRackId] = useState("");
   const [initialQuantity, setInitialQuantity] = useState("");
+  const conditionQuantities: ConditionQuantities = {
+    ...conditionCounts,
+    good: Math.max(0, (Number(initialQuantity) || 0) - conditionCounts.damaged - conditionCounts.scrap),
+  };
 
   const [loading, setLoading] = useState(false);
   const [warningOpen, setWarningOpen] = useState(false);
@@ -460,6 +466,12 @@ export default function AddProductModal({
       serviceInterval === CUSTOM_INTERVAL_VALUE ? customServiceInterval : serviceInterval
     );
 
+    if (!validConditionQuantities(conditionQuantities, Number(initialQuantity))) {
+      setWarningMessage("Good + Damaged + Scrap must equal initial stock. Enter non-negative whole numbers.");
+      setWarningOpen(true);
+      setLoading(false);
+      return;
+    }
     const selectedCat = categories.find((c) => c.name.toLowerCase() === category.trim().toLowerCase());
     const categoryId = selectedCat?._id;
 
@@ -478,7 +490,7 @@ export default function AddProductModal({
           sellerName: sellerName.trim() || undefined,
           price: price !== "" && !isNaN(Number(price)) ? Number(price) : 0,
           description: description.trim(),
-          conditionStatus,
+          conditionQuantities,
           warehouseId,
           rackId,
           initialQuantity: Math.max(1, Number(initialQuantity) || 1),
@@ -515,7 +527,7 @@ export default function AddProductModal({
       setSellerName("");
       setPrice("");
       setDescription("");
-      setConditionStatus("GOOD_CONDITION");
+      setConditionCounts({ damaged: 0, scrap: 0 });
       setWarehouseId("");
       setZoneId("");
       setRackId("");
@@ -718,20 +730,6 @@ export default function AddProductModal({
                 />
               </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 uppercase mb-1">
-                  Product Status
-                </label>
-                <select
-                  value={conditionStatus}
-                  onChange={(e) => setConditionStatus(e.target.value as "GOOD_CONDITION" | "DAMAGED" | "SCRAP")}
-                  className="w-full rounded-lg border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-                >
-                  <option value="GOOD_CONDITION">Good Condition</option>
-                  <option value="DAMAGED">Damaged</option>
-                  <option value="SCRAP">Scrap</option>
-                </select>
-              </div>
             </div>
 
             {/* Storage Location & Initial Stock */}
@@ -838,6 +836,13 @@ export default function AddProductModal({
                 </div>
               </div>
             </div>
+
+            <ConditionQuantityFields
+              value={conditionQuantities}
+              total={Number(initialQuantity) || 0}
+              autoGood
+              onChange={({ damaged, scrap }) => setConditionCounts({ damaged, scrap })}
+            />
 
             {/* Actions */}
             <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">

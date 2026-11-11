@@ -12,6 +12,8 @@ const editSource = compiled("../app/api/products/[id]/route.ts");
 const productsSource = compiled("../app/api/products/route.ts");
 const productStock = {};
 new Function("exports", compiled("../lib/productStock.ts"))(productStock);
+const productCondition = {};
+new Function("exports", compiled("../lib/productCondition.ts"))(productCondition);
 
 function setup(options = {}) {
   const writes = [];
@@ -19,6 +21,7 @@ function setup(options = {}) {
   const inventory = { _id: ids.inventory, productId: ids.product, warehouseId: options.sourceWarehouse || ids.warehouse, rackId: options.missingRack ? undefined : options.nullRack ? null : ids.oldRack, quantity: 12, async save() { writes.push(["inventory", { ...this }]); } };
   const models = {
     Product: {
+      updateMany: async () => ({}),
       findById: () => ({ lean: async () => product }),
       findByIdAndUpdate: (id, values, config) => ({ populate: async () => {
         writes.push(["product", values, config]);
@@ -44,11 +47,12 @@ function setup(options = {}) {
       },
       create: async (values) => { writes.push(["inventory", values]); return values; },
       find: () => {
-        const query = { populate: () => query, then: (resolve, reject) => Promise.resolve([]).then(resolve, reject) };
+        const query = { populate: () => query, then: (resolve, reject) => Promise.resolve(options.stock ? [inventory] : []).then(resolve, reject) };
         return query;
       },
     },
     Rack: {
+      findById: async () => ({ _id: ids.rack, name: "Rack B" }),
       exists: async () => options.deletedRack ? null : { _id: ids.oldRack },
       findOne: async (filter) => options.invalidRack || (filter.zoneId && options.wrongZone) ? null : { _id: ids.rack, name: "Rack B", warehouseId: ids.warehouse, zoneId: options.wrongZone ? ids.category : ids.zone },
     },
@@ -60,6 +64,7 @@ function setup(options = {}) {
   };
   const modules = {
     "@/lib/productStock": productStock,
+    "@/lib/productCondition": productCondition,
     mongoose: { isValidObjectId },
     "@/lib/mongodb": { connectDB: async () => {} },
     "@/lib/auth": {
@@ -82,6 +87,40 @@ function setup(options = {}) {
 
 const request = (body, method = "PUT") => new Request("http://localhost/api/products", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 const context = { params: Promise.resolve({ id: ids.product }) };
+
+test("condition quantities support mixed stock on create and edit and are included in history", async () => {
+  const { products, edit, writes, location } = setup({ stock: true });
+  const counts = { good: 30, damaged: 20, scrap: 0 };
+  const created = await products.POST(request({ name: "Mixed Drill", sku: "MIX-1", category: "Tools", warehouseId: ids.warehouse, rackId: ids.rack, initialQuantity: 50, conditionQuantities: counts }, "POST"));
+  assert.equal(created.status, 201);
+  assert.deepEqual(writes.find(([type]) => type === "product")[1].conditionQuantities, counts);
+  writes.length = 0;
+  const updated = await edit.PUT(request({ locations: [{ ...location, quantity: 50 }], conditionQuantities: counts }), context);
+  assert.equal(updated.status, 200);
+  assert.deepEqual(writes.find(([type]) => type === "product")[1].conditionQuantities, counts);
+  assert.deepEqual(writes.find(([type]) => type === "history")[1].newValues.conditionQuantities, counts);
+});
+
+test("invalid or stale condition totals are rejected before any writes", async () => {
+  for (const counts of [{ good: 30, damaged: 20, scrap: 0 }, { good: -1, damaged: 13, scrap: 0 }, { good: 11.5, damaged: 0.5, scrap: 0 }, { good: "12", damaged: 0, scrap: 0 }, { good: 12 }, null]) {
+    const { edit, products, writes } = setup({ stock: true });
+    const updated = await edit.PUT(request({ conditionQuantities: counts }), context);
+    assert.equal(updated.status, 400, JSON.stringify(counts));
+    assert.deepEqual(writes, []);
+    const created = await products.POST(request({ name: "Mixed Drill", sku: "MIX-1", category: "Tools", warehouseId: ids.warehouse, rackId: ids.rack, initialQuantity: 12, conditionQuantities: counts }, "POST"));
+    assert.equal(created.status, 400, JSON.stringify(counts));
+    assert.deepEqual(writes, []);
+  }
+});
+
+test("legacy conditions populate counts and saved assessments stay intact after stock changes", () => {
+  assert.deepEqual(productCondition.productConditionQuantities({}, 50), { good: 50, damaged: 0, scrap: 0 });
+  assert.deepEqual(productCondition.productConditionQuantities({ conditionStatus: "DAMAGED" }, 50), { good: 0, damaged: 50, scrap: 0 });
+  assert.deepEqual(productCondition.productConditionQuantities({ conditionStatus: "SCRAP" }, 50), { good: 0, damaged: 0, scrap: 50 });
+  const counts = { good: 30, damaged: 20, scrap: 0 };
+  assert.deepEqual(productCondition.productConditionQuantities({ conditionQuantities: counts }, 40), counts);
+  assert.equal(productCondition.validConditionQuantities(counts, 40), false);
+});
 
 test("relocating stock preserves quantity and records the old and new rack", async () => {
   const { edit, writes, inventory, location } = setup();

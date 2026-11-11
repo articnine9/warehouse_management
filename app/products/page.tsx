@@ -13,6 +13,8 @@ import WarningPopup from "@/app/components/WarningPopup";
 import AddProductModal from "@/app/components/AddProductModal";
 import AddCategoryModal from "@/app/components/AddCategoryModal";
 import ProductHistoryModal from "@/app/components/ProductHistoryModal";
+import ProductCondition, { ConditionQuantityFields } from "@/app/components/ProductCondition";
+import { productConditionQuantities, validConditionQuantities, type ConditionQuantities } from "@/lib/productCondition";
 import ProductsExcelExportButton from "@/app/components/ProductsExcelExportButton";
 import MoveProductModal from "@/app/components/MoveProductModal";
 import {
@@ -47,6 +49,7 @@ type Product = {
   status: "ACTIVE" | "INACTIVE";
   conditionStatus?: "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
   totalStock?: number;
+  conditionQuantities?: ConditionQuantities;
   locations?: ProductLocation[];
   createdAt?: string;
   updatedAt?: string;
@@ -110,7 +113,7 @@ export default function ProductsPage() {
   const [editSellerName, setEditSellerName] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
-  const [editConditionStatus, setEditConditionStatus] = useState<"GOOD_CONDITION" | "DAMAGED" | "SCRAP">("GOOD_CONDITION");
+  const [editConditionQuantities, setEditConditionQuantities] = useState<ConditionQuantities>({ good: 0, damaged: 0, scrap: 0 });
   const [editLocations, setEditLocations] = useState<ProductLocation[]>([]);
   const [newLocWarehouseId, setNewLocWarehouseId] = useState("");
   const [newLocZoneId, setNewLocZoneId] = useState("");
@@ -408,7 +411,7 @@ export default function ProductsPage() {
     setEditSellerName(product.sellerName || "");
     setEditPrice(product.price?.toString() || "");
     setEditStatus(product.status);
-    setEditConditionStatus(product.conditionStatus || "GOOD_CONDITION");
+    setEditConditionQuantities(productConditionQuantities(product, product.totalStock ?? 0));
     const enrichedLocations = (product.locations || []).map((l) => {
       let zId = l.zoneId;
       let zName = l.zoneName;
@@ -440,6 +443,11 @@ export default function ProductsPage() {
       return;
     }
 
+    if (!validConditionQuantities(editConditionQuantities, totalEditStock)) {
+      setWarningMessage("Good + Damaged + Scrap must equal total stock. Enter non-negative whole numbers.");
+      setWarningOpen(true);
+      return;
+    }
     setEditLoading(true);
 
     const intervalVal = normalizeIntervalMonths(
@@ -465,7 +473,7 @@ export default function ProductsPage() {
           price: editPrice !== "" && !isNaN(Number(editPrice)) ? Number(editPrice) : 0,
           description: editDescription,
           status: editStatus,
-          conditionStatus: editConditionStatus,
+          conditionQuantities: editConditionQuantities,
           locations: editLocations,
         }),
       });
@@ -837,6 +845,7 @@ export default function ProductsPage() {
                         >
                           {product.name}
                         </button>
+                        <div className="mt-2"><ProductCondition product={product} total={product.totalStock ?? 0} /></div>
                       </td>
                       <td className="px-5 py-3 font-mono text-xs text-slate-600">{product.sku}</td>
                       <td className="px-5 py-3">
@@ -1020,6 +1029,7 @@ export default function ProductsPage() {
                         {product.name}
                       </button>
                       <p className="mt-0.5 text-xs font-mono text-slate-500">SKU: {product.sku}</p>
+                      <div className="mt-2"><ProductCondition product={product} total={product.totalStock ?? 0} /></div>
                     </div>
                     <span
                       className={`ml-2 shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
@@ -1343,19 +1353,8 @@ export default function ProductsPage() {
                           </select>
                         </div>
 
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1">
-                            Product Condition
-                          </label>
-                          <select
-                            value={editConditionStatus}
-                            onChange={(e) => setEditConditionStatus(e.target.value as "GOOD_CONDITION" | "DAMAGED" | "SCRAP")}
-                            className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 font-semibold text-slate-800"
-                          >
-                            <option value="GOOD_CONDITION">Good Condition</option>
-                            <option value="DAMAGED">Damaged</option>
-                            <option value="SCRAP">Scrap</option>
-                          </select>
+                        <div className="sm:col-span-2">
+                          <ConditionQuantityFields value={editConditionQuantities} total={totalEditStock} onChange={setEditConditionQuantities} />
                         </div>
 
                         <div>

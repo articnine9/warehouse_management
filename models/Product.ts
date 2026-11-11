@@ -15,6 +15,7 @@ export interface IProduct {
     description?: string;
     status: "ACTIVE" | "INACTIVE";
     conditionStatus: "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
+    conditionQuantities?: { good: number; damaged: number; scrap: number };
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -103,6 +104,14 @@ const productSchema = new Schema<IProduct>(
             type: String,
             enum: ["GOOD_CONDITION", "DAMAGED", "SCRAP"],
             default: "GOOD_CONDITION",
+        },
+        conditionQuantities: {
+            type: new Schema({
+                good: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
+                damaged: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
+                scrap: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
+            }, { _id: false }),
+            default: undefined,
         },
     },
     {
