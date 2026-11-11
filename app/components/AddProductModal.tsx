@@ -80,7 +80,7 @@ export default function AddProductModal({
   const [sellerName, setSellerName] = useState("");
   const [price, setPrice] = useState("");
   const [description, setDescription] = useState("");
-  const [conditionCounts, setConditionCounts] = useState<Pick<ConditionQuantities, "damaged" | "scrap">>({ damaged: 0, scrap: 0 });
+  const [conditionCounts, setConditionCounts] = useState<Pick<ConditionQuantities, "used" | "damaged" | "scrap">>({ used: 0, damaged: 0, scrap: 0 });
 
   // Warehouse, Zone & Rack storage allocation
   const [localZones, setLocalZones] = useState<ZoneItem[]>(zones || []);
@@ -90,7 +90,7 @@ export default function AddProductModal({
   const [initialQuantity, setInitialQuantity] = useState("");
   const conditionQuantities: ConditionQuantities = {
     ...conditionCounts,
-    good: Math.max(0, (Number(initialQuantity) || 0) - conditionCounts.damaged - conditionCounts.scrap),
+    new: Math.max(0, (Number(initialQuantity) || 0) - conditionCounts.used - conditionCounts.damaged - conditionCounts.scrap),
   };
 
   const [loading, setLoading] = useState(false);
@@ -467,7 +467,7 @@ export default function AddProductModal({
     );
 
     if (!validConditionQuantities(conditionQuantities, Number(initialQuantity))) {
-      setWarningMessage("Good + Damaged + Scrap must equal initial stock. Enter non-negative whole numbers.");
+      setWarningMessage("New + Used + Damaged + Scrap must equal initial stock. Enter non-negative whole numbers.");
       setWarningOpen(true);
       setLoading(false);
       return;
@@ -527,7 +527,7 @@ export default function AddProductModal({
       setSellerName("");
       setPrice("");
       setDescription("");
-      setConditionCounts({ damaged: 0, scrap: 0 });
+      setConditionCounts({ used: 0, damaged: 0, scrap: 0 });
       setWarehouseId("");
       setZoneId("");
       setRackId("");
@@ -840,8 +840,8 @@ export default function AddProductModal({
             <ConditionQuantityFields
               value={conditionQuantities}
               total={Number(initialQuantity) || 0}
-              autoGood
-              onChange={({ damaged, scrap }) => setConditionCounts({ damaged, scrap })}
+              autoNew
+              onChange={({ used, damaged, scrap }) => setConditionCounts({ used, damaged, scrap })}
             />
 
             {/* Actions */}

@@ -1,4 +1,5 @@
 import mongoose, { Schema, Model } from "mongoose";
+import type { SavedConditionQuantities } from "@/lib/productCondition";
 
 export interface IProduct {
     name: string;
@@ -14,8 +15,8 @@ export interface IProduct {
     price?: number;
     description?: string;
     status: "ACTIVE" | "INACTIVE";
-    conditionStatus: "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
-    conditionQuantities?: { good: number; damaged: number; scrap: number };
+    conditionStatus: "NEW" | "USED" | "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
+    conditionQuantities?: SavedConditionQuantities;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -102,12 +103,14 @@ const productSchema = new Schema<IProduct>(
 
         conditionStatus: {
             type: String,
-            enum: ["GOOD_CONDITION", "DAMAGED", "SCRAP"],
-            default: "GOOD_CONDITION",
+            enum: ["NEW", "USED", "GOOD_CONDITION", "DAMAGED", "SCRAP"],
+            default: "NEW",
         },
         conditionQuantities: {
             type: new Schema({
-                good: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
+                new: { type: Number, min: 0, validate: Number.isSafeInteger },
+                used: { type: Number, min: 0, validate: Number.isSafeInteger },
+                good: { type: Number, min: 0, validate: Number.isSafeInteger },
                 damaged: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
                 scrap: { type: Number, required: true, min: 0, validate: Number.isSafeInteger },
             }, { _id: false }),

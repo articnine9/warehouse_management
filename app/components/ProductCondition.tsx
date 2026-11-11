@@ -1,38 +1,39 @@
-import { conditionLabels, conditionTotal, productConditionQuantities, type ConditionQuantities } from "@/lib/productCondition";
+import { conditionLabels, conditionTotal, productConditionQuantities, type ConditionQuantities, type SavedConditionQuantities } from "@/lib/productCondition";
 
-export function ConditionQuantityFields({ value, total, onChange, autoGood = false }: {
+export function ConditionQuantityFields({ value, total, onChange, autoNew = false }: {
   value: ConditionQuantities;
   total: number;
   onChange: (value: ConditionQuantities) => void;
-  autoGood?: boolean;
+  autoNew?: boolean;
 }) {
   const matches = conditionTotal(value) === total;
   return <fieldset className="space-y-2">
     <legend className="text-xs font-bold text-slate-700 uppercase mb-2">Product condition quantities</legend>
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
       {(Object.keys(conditionLabels) as (keyof ConditionQuantities)[]).map(key => <label key={key} className="text-xs font-semibold text-slate-600">
-        {conditionLabels[key]}{autoGood && key === "good" ? " (Auto)" : ""}
-        <input type="number" min="0" step="1" required readOnly={autoGood && key === "good"} value={value[key]} onChange={event => onChange({ ...value, [key]: Number(event.target.value) })}
+        {conditionLabels[key]}{autoNew && key === "new" ? " (Auto)" : ""}
+        <input type="number" min="0" step="1" required readOnly={autoNew && key === "new"} value={value[key]} onChange={event => onChange({ ...value, [key]: Number(event.target.value) })}
           className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900" />
       </label>)}
     </div>
     <p className={`text-xs ${matches ? "text-slate-500" : "text-rose-600"}`} aria-live="polite">
-      {autoGood
-        ? matches ? `Good = Initial Stock (${total}) − Damaged (${value.damaged}) − Scrap (${value.scrap}).` : "Damaged + Scrap cannot exceed Initial Stock. Enter non-negative whole numbers."
-        : `${conditionTotal(value)} / ${total} units classified. Good + Damaged + Scrap must equal stock quantity.`}
+      {autoNew
+        ? matches ? `New = Initial Stock (${total}) - Used (${value.used}) - Damaged (${value.damaged}) - Scrap (${value.scrap}).` : "Used + Damaged + Scrap cannot exceed Initial Stock. Enter non-negative whole numbers."
+        : `${conditionTotal(value)} / ${total} units classified. New + Used + Damaged + Scrap must equal stock quantity.`}
     </p>
   </fieldset>;
 }
 
 export default function ProductCondition({ product, total }: {
-  product: { conditionQuantities?: ConditionQuantities | null; conditionStatus?: string };
+  product: { conditionQuantities?: SavedConditionQuantities | null; conditionStatus?: string };
   total: number;
 }) {
   const value = productConditionQuantities(product, total);
   return <div className="space-y-1.5">
     <p className="text-xs font-bold text-slate-600">Product condition</p>
     <div className="flex flex-wrap gap-2 text-xs font-semibold">
-      <span className="rounded-lg bg-emerald-50 px-2 py-1 text-emerald-700">Good: {value.good}</span>
+      <span className="rounded-lg bg-emerald-50 px-2 py-1 text-emerald-700">New: {value.new}</span>
+      <span className="rounded-lg bg-blue-50 px-2 py-1 text-blue-700">Used: {value.used}</span>
       <span className="rounded-lg bg-amber-50 px-2 py-1 text-amber-700">Damaged: {value.damaged}</span>
       <span className="rounded-lg bg-rose-50 px-2 py-1 text-rose-700">Scrap: {value.scrap}</span>
     </div>

@@ -51,7 +51,7 @@ import {
 
 export interface ProductHistoryData {
   product: {
-    conditionStatus?: "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
+    conditionStatus?: "NEW" | "USED" | "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
     conditionQuantities?: ConditionQuantities;
     id: string;
     name: string;

@@ -493,8 +493,11 @@ export async function POST(request: Request) {
       );
     }
     const warehouseDoc = await Warehouse.findById(warehouseId);
+    if (body.conditionStatus !== undefined && !["NEW", "USED", "GOOD_CONDITION", "DAMAGED", "SCRAP"].includes(body.conditionStatus)) {
+      return Response.json({ success: false, message: "Select a valid product condition" }, { status: 400 });
+    }
     if (body.conditionQuantities !== undefined && !validConditionQuantities(body.conditionQuantities, Number(initialQuantity) || 0)) {
-      return Response.json({ success: false, message: "Good, Damaged and Scrap quantities must be non-negative whole numbers and add up to initial stock." }, { status: 400 });
+      return Response.json({ success: false, message: "New, Used, Damaged and Scrap quantities must be non-negative whole numbers and add up to initial stock." }, { status: 400 });
     }
     let categoryId = body.categoryId;
     if (!categoryId && categoryName) {
@@ -517,7 +520,7 @@ export async function POST(request: Request) {
       price: body.price !== undefined && body.price !== null && body.price !== "" && !isNaN(Number(body.price)) ? Number(body.price) : 0,
       description: body.description,
       status: body.status ?? "ACTIVE",
-      conditionStatus: body.conditionStatus ?? "GOOD_CONDITION",
+      conditionStatus: body.conditionStatus ?? "NEW",
       conditionQuantities: body.conditionQuantities,
     });
     // Create initial Inventory stock record if warehouse & rack were provided

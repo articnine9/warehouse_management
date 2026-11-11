@@ -47,7 +47,7 @@ type Product = {
   price?: number;
   description?: string;
   status: "ACTIVE" | "INACTIVE";
-  conditionStatus?: "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
+  conditionStatus?: "NEW" | "USED" | "GOOD_CONDITION" | "DAMAGED" | "SCRAP";
   totalStock?: number;
   conditionQuantities?: ConditionQuantities;
   locations?: ProductLocation[];
@@ -113,7 +113,7 @@ export default function ProductsPage() {
   const [editSellerName, setEditSellerName] = useState("");
   const [editPrice, setEditPrice] = useState("");
   const [editStatus, setEditStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
-  const [editConditionQuantities, setEditConditionQuantities] = useState<ConditionQuantities>({ good: 0, damaged: 0, scrap: 0 });
+  const [editConditionQuantities, setEditConditionQuantities] = useState<ConditionQuantities>({ new: 0, used: 0, damaged: 0, scrap: 0 });
   const [editLocations, setEditLocations] = useState<ProductLocation[]>([]);
   const [newLocWarehouseId, setNewLocWarehouseId] = useState("");
   const [newLocZoneId, setNewLocZoneId] = useState("");
@@ -444,7 +444,7 @@ export default function ProductsPage() {
     }
 
     if (!validConditionQuantities(editConditionQuantities, totalEditStock)) {
-      setWarningMessage("Good + Damaged + Scrap must equal total stock. Enter non-negative whole numbers.");
+      setWarningMessage("New + Used + Damaged + Scrap must equal total stock. Enter non-negative whole numbers.");
       setWarningOpen(true);
       return;
     }

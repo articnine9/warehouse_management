@@ -98,7 +98,7 @@ export async function PUT(
 
     const body = await request.json();
 
-    if (body.conditionStatus !== undefined && !["GOOD_CONDITION", "DAMAGED", "SCRAP"].includes(body.conditionStatus)) {
+    if (body.conditionStatus !== undefined && !["NEW", "USED", "GOOD_CONDITION", "DAMAGED", "SCRAP"].includes(body.conditionStatus)) {
       return Response.json({ success: false, message: "Select a valid product condition" }, { status: 400 });
     }
 
@@ -189,7 +189,7 @@ export async function PUT(
         total += Number(loc.quantity) - (existing?.quantity || 0);
       }
       if (!validConditionQuantities(body.conditionQuantities, total)) {
-        return Response.json({ success: false, message: `Good, Damaged and Scrap quantities must be non-negative whole numbers and add up to total stock (${total}). Refresh stock if it has changed.` }, { status: 400 });
+        return Response.json({ success: false, message: `New, Used, Damaged and Scrap quantities must be non-negative whole numbers and add up to total stock (${total}). Refresh stock if it has changed.` }, { status: 400 });
       }
     }
 

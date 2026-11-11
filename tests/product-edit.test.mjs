@@ -90,7 +90,7 @@ const context = { params: Promise.resolve({ id: ids.product }) };
 
 test("condition quantities support mixed stock on create and edit and are included in history", async () => {
   const { products, edit, writes, location } = setup({ stock: true });
-  const counts = { good: 30, damaged: 20, scrap: 0 };
+  const counts = { new: 10, used: 20, damaged: 20, scrap: 0 };
   const created = await products.POST(request({ name: "Mixed Drill", sku: "MIX-1", category: "Tools", warehouseId: ids.warehouse, rackId: ids.rack, initialQuantity: 50, conditionQuantities: counts }, "POST"));
   assert.equal(created.status, 201);
   assert.deepEqual(writes.find(([type]) => type === "product")[1].conditionQuantities, counts);
@@ -102,7 +102,7 @@ test("condition quantities support mixed stock on create and edit and are includ
 });
 
 test("invalid or stale condition totals are rejected before any writes", async () => {
-  for (const counts of [{ good: 30, damaged: 20, scrap: 0 }, { good: -1, damaged: 13, scrap: 0 }, { good: 11.5, damaged: 0.5, scrap: 0 }, { good: "12", damaged: 0, scrap: 0 }, { good: 12 }, null]) {
+  for (const counts of [{ new: 10, used: 20, damaged: 20, scrap: 0 }, { new: -1, used: 0, damaged: 13, scrap: 0 }, { new: 11.5, used: 0, damaged: 0.5, scrap: 0 }, { new: "12", used: 0, damaged: 0, scrap: 0 }, { new: 12 }, null]) {
     const { edit, products, writes } = setup({ stock: true });
     const updated = await edit.PUT(request({ conditionQuantities: counts }), context);
     assert.equal(updated.status, 400, JSON.stringify(counts));
@@ -114,10 +114,13 @@ test("invalid or stale condition totals are rejected before any writes", async (
 });
 
 test("legacy conditions populate counts and saved assessments stay intact after stock changes", () => {
-  assert.deepEqual(productCondition.productConditionQuantities({}, 50), { good: 50, damaged: 0, scrap: 0 });
-  assert.deepEqual(productCondition.productConditionQuantities({ conditionStatus: "DAMAGED" }, 50), { good: 0, damaged: 50, scrap: 0 });
-  assert.deepEqual(productCondition.productConditionQuantities({ conditionStatus: "SCRAP" }, 50), { good: 0, damaged: 0, scrap: 50 });
-  const counts = { good: 30, damaged: 20, scrap: 0 };
+  assert.deepEqual(productCondition.productConditionQuantities({}, 50), { new: 0, used: 50, damaged: 0, scrap: 0 });
+  assert.deepEqual(productCondition.productConditionQuantities({ conditionStatus: "DAMAGED" }, 50), { new: 0, used: 0, damaged: 50, scrap: 0 });
+  assert.deepEqual(productCondition.productConditionQuantities({ conditionStatus: "SCRAP" }, 50), { new: 0, used: 0, damaged: 0, scrap: 50 });
+  assert.deepEqual(productCondition.productConditionQuantities({ conditionStatus: "NEW" }, 50), { new: 50, used: 0, damaged: 0, scrap: 0 });
+  assert.deepEqual(productCondition.productConditionQuantities({ conditionStatus: "USED" }, 50), { new: 0, used: 50, damaged: 0, scrap: 0 });
+  assert.deepEqual(productCondition.productConditionQuantities({ conditionQuantities: { good: 30, damaged: 20, scrap: 0 } }, 50), { new: 0, used: 30, damaged: 20, scrap: 0 });
+  const counts = { new: 10, used: 20, damaged: 20, scrap: 0 };
   assert.deepEqual(productCondition.productConditionQuantities({ conditionQuantities: counts }, 40), counts);
   assert.equal(productCondition.validConditionQuantities(counts, 40), false);
 });
